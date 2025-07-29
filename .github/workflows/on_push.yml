@@ -1,4 +1,4 @@
-name: Build and Test Eidos
+name: Build and Test Deep ROS
 
 on:
   push:

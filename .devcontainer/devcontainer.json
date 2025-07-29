@@ -1,5 +1,5 @@
 {
-  "name": "eidos-dev",
+  "name": "deep_ros-dev",
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
@@ -17,5 +17,5 @@
       ]
     }
   },
-  "workspaceFolder": "/workspaces/eidos"
+  "workspaceFolder": "/workspaces/deep_ros"
 }

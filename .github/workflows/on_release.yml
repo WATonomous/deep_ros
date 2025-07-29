@@ -1,4 +1,4 @@
-name: Release Eidos
+name: Release Deep ROS
 
 on:
   push:
@@ -108,12 +108,12 @@ jobs:
 
       - name: 📝 Update Debian changelog
         run: |
-          dch --create --package ros-${{ env.ROS_DISTRO }}-eidos \
+          dch --create --package ros-${{ env.ROS_DISTRO }}-deep_ros \
               --newversion "${VERSION}-${REVISION}" \
-              "Auto-generated release for Eidos"
+              "Auto-generated release for Deep ROS"
 
       - name: 🧱 Build package
-        run: colcon build --merge-install --packages-select eidos
+        run: colcon build --merge-install --packages-select deep_ros
 
       - name: 📦 Generate .deb package
         run: |
@@ -137,14 +137,14 @@ jobs:
             gzip -9c Packages > Packages.gz
             popd > /dev/null
 
-            echo "Origin: Eidos"                          >  "$RELEASE_DIR/Release"
-            echo "Label: Eidos"                          >> "$RELEASE_DIR/Release"
+            echo "Origin: Deep ROS"                          >  "$RELEASE_DIR/Release"
+            echo "Label: Deep ROS"                          >> "$RELEASE_DIR/Release"
             echo "Suite: stable"                         >> "$RELEASE_DIR/Release"
             echo "Version: $version"                     >> "$RELEASE_DIR/Release"
-            echo "Codename: eidos"                       >> "$RELEASE_DIR/Release"
+            echo "Codename: deep_ros"                       >> "$RELEASE_DIR/Release"
             echo "Architectures: all"                    >> "$RELEASE_DIR/Release"
             echo "Components: main"                      >> "$RELEASE_DIR/Release"
-            echo "Description: Eidos ROS 2 SLAM System"  >> "$RELEASE_DIR/Release"
+            echo "Description: Deep ROS ROS 2 SLAM System"  >> "$RELEASE_DIR/Release"
           done
 
       - name: ☁️ Upload APT repo to S3

@@ -14,7 +14,7 @@ RUN apt update && apt install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working dir (matches VSCode workspace)
-WORKDIR /workspaces/eidos
+WORKDIR /workspaces/deep_ros
 
 # Cater image to user
 ARG USERNAME

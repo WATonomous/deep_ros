@@ -1,5 +1,5 @@
 name: Build and Test
-description: Common build and test logic for Eidos
+description: Common build and test logic for Deep ROS
 
 runs:
   using: "composite"
