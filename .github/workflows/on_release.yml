@@ -1,0 +1,160 @@
+name: Release Eidos
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  ROS_DISTRO: humble
+  DEBIAN_FRONTEND: noninteractive
+
+jobs:
+  validate-tag:
+    name: ✅ Validate tag and extract version info
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      revision: ${{ steps.extract.outputs.revision }}
+
+    steps:
+      - name: 🧪 Validate tag format
+        run: |
+          TAG="${GITHUB_REF_NAME#refs/tags/}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-r[0-9]+)?$ ]]; then
+            echo "❌ Invalid tag format: $TAG"
+            echo "✅ Expected: v<major>.<minor>.<patch> or v<major>.<minor>.<patch>-r<revision>"
+            exit 1
+          fi
+          echo "✅ Tag format OK: $TAG"
+
+      - name: 📦 Extract version, revision and check package.xmls
+        id: extract
+        run: |
+          set -euo pipefail
+
+          TAG="${GITHUB_REF_NAME#refs/tags/v}"
+          VERSION=$(echo "$TAG" | cut -d'-' -f1)
+          REVISION=$(echo "$TAG" | grep -o 'r[0-9]*$' | sed 's/r//')
+          REVISION=${REVISION:-1}
+
+          echo "📦 Extracted version: $VERSION"
+          echo "📦 Extracted revision: $REVISION"
+
+          MISMATCH=0
+          for pkg_xml in $(find . -name package.xml); do
+            PKG_VERSION=$(xmlstarlet sel -t -v "//version" "$pkg_xml")
+            echo "🔍 $pkg_xml → $PKG_VERSION"
+            if [[ "$PKG_VERSION" != "$VERSION" ]]; then
+              echo "❌ Mismatch: expected $VERSION"
+              MISMATCH=1
+            fi
+          done
+
+          if [[ "$MISMATCH" -ne 0 ]]; then
+            echo "❌ One or more package.xml files do not match the tag version."
+            exit 1
+          fi
+
+          echo "✅ All package.xml versions match."
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
+
+  build-and-test:
+    name: 🔨 Build & Test
+    runs-on: ubuntu-22.04
+    needs: validate-tag
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: ${{ env.ROS_DISTRO }}
+      - uses: ./.github/actions/build-and-test
+
+  release:
+    name: 📦 Package & ☁️ Upload to S3
+    runs-on: ubuntu-22.04
+    needs: [validate-tag, build-and-test]
+    env:
+      VERSION: ${{ needs.validate-tag.outputs.version }}
+      REVISION: ${{ needs.validate-tag.outputs.revision }}
+
+    steps:
+      - name: 🔄 Checkout repository
+        uses: actions/checkout@v3
+
+      - name: 🛠 Setup ROS 2
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: ${{ env.ROS_DISTRO }}
+
+      - name: 🧰 Install packaging dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            python3-colcon-common-extensions \
+            python3-catkin-pkg \
+            python3-bloom \
+            build-essential \
+            fakeroot \
+            dpkg-dev \
+            dpkg-scanpackages \
+            devscripts \
+            gnupg \
+            apt-utils \
+            xmlstarlet \
+            awscli
+
+      - name: 📝 Update Debian changelog
+        run: |
+          dch --create --package ros-${{ env.ROS_DISTRO }}-eidos \
+              --newversion "${VERSION}-${REVISION}" \
+              "Auto-generated release for Eidos"
+
+      - name: 🧱 Build package
+        run: colcon build --merge-install --packages-select eidos
+
+      - name: 📦 Generate .deb package
+        run: |
+          mkdir -p apt_repo/dists/latest/main/binary-all
+          mkdir -p apt_repo/dists/$VERSION/main/binary-all
+          bloom-generate rosdebian --ros-distro $ROS_DISTRO
+          fakeroot debian/rules binary
+          mv ../*.deb apt_repo/dists/latest/main/binary-all/
+          cp apt_repo/dists/latest/main/binary-all/*.deb \
+             apt_repo/dists/$VERSION/main/binary-all/
+
+      - name: 📜 Generate APT metadata
+        run: |
+          for version in latest "$VERSION"; do
+            BIN_DIR="apt_repo/dists/$version/main/binary-all"
+            RELEASE_DIR="apt_repo/dists/$version"
+
+            mkdir -p "$BIN_DIR"
+            pushd "$BIN_DIR" > /dev/null
+            dpkg-scanpackages . /dev/null > Packages
+            gzip -9c Packages > Packages.gz
+            popd > /dev/null
+
+            echo "Origin: Eidos"                          >  "$RELEASE_DIR/Release"
+            echo "Label: Eidos"                          >> "$RELEASE_DIR/Release"
+            echo "Suite: stable"                         >> "$RELEASE_DIR/Release"
+            echo "Version: $version"                     >> "$RELEASE_DIR/Release"
+            echo "Codename: eidos"                       >> "$RELEASE_DIR/Release"
+            echo "Architectures: all"                    >> "$RELEASE_DIR/Release"
+            echo "Components: main"                      >> "$RELEASE_DIR/Release"
+            echo "Description: Eidos ROS 2 SLAM System"  >> "$RELEASE_DIR/Release"
+          done
+
+      - name: ☁️ Upload APT repo to S3
+        uses: jakejarvis/s3-sync-action@v0.5.1
+        with:
+          args: --acl public-read --follow-symlinks
+        env:
+          AWS_S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          SOURCE_DIR: apt_repo
+          DEST_DIR: .

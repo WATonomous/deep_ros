@@ -1,0 +1,21 @@
+name: Build and Test Eidos
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  ROS_DISTRO: humble
+
+jobs:
+  build-and-test:
+    name: 🔨 Build & Test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: ${{ env.ROS_DISTRO }}
+      - uses: ./.github/actions/build-and-test
