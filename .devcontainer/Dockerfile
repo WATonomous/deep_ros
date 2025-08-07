@@ -6,6 +6,7 @@ FROM ros:${ROS_DISTRO}-ros-base
 RUN apt-get update && apt-get install -y \
     python3-colcon-common-extensions \
     python3-rosdep \
+    openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Initialize rosdep
