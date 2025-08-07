@@ -1,0 +1,224 @@
+#!/bin/bash
+# Model Farm - Project management and infrastructure navigation
+
+set -e
+
+FARM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECTS_DIR="$FARM_DIR/projects"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+usage() {
+    cat << EOF
+Model Farm - ML Project Infrastructure Manager
+
+Usage: ./farm <command> [options]
+
+Commands:
+    list                  List available projects
+    create <name>         Create new project from template
+    build <project>       Build Docker environment for project
+    run <project> <cmd>   Run command in project environment
+    shell <project>       Open interactive shell in project
+    clean <project>       Remove project's Docker artifacts
+
+Examples:
+    ./farm list
+    ./farm create yolo_detection
+    ./farm build yolo_detection
+    ./farm run yolo_detection python convert_to_onnx.py model.pt model.onnx
+    ./farm shell yolo_detection
+
+EOF
+}
+
+list_projects() {
+    echo -e "${BLUE}Available projects:${NC}"
+    if [ -d "$PROJECTS_DIR" ]; then
+        for project in "$PROJECTS_DIR"/*; do
+            if [ -d "$project" ]; then
+                echo "  - $(basename "$project")"
+            fi
+        done
+    else
+        echo "  No projects found"
+    fi
+}
+
+create_project() {
+    local name="$1"
+    if [ -z "$name" ]; then
+        echo -e "${RED}Error: Project name required${NC}"
+        exit 1
+    fi
+    
+    local project_dir="$PROJECTS_DIR/$name"
+    if [ -d "$project_dir" ]; then
+        echo -e "${RED}Error: Project $name already exists${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}Creating project: $name${NC}"
+    mkdir -p "$project_dir/src"
+    
+    # Create basic Dockerfile
+    cat > "$project_dir/Dockerfile" << 'EOF'
+FROM python:3.9-slim
+
+WORKDIR /workspace
+
+# Install common ML dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy project files
+COPY . /workspace/project/
+
+# Install Python dependencies if requirements.txt exists
+RUN if [ -f "/workspace/project/requirements.txt" ]; then \
+        pip install --no-cache-dir -r /workspace/project/requirements.txt; \
+    fi
+
+# Install ONNX for conversion
+RUN pip install --no-cache-dir onnx
+
+# Set working directory to project
+WORKDIR /workspace/project
+
+CMD ["/bin/bash"]
+EOF
+
+    # Create requirements.txt template
+    cat > "$project_dir/requirements.txt" << EOF
+# Add your project dependencies here
+# Example:
+# torch==2.0.0
+# numpy
+# onnx
+EOF
+
+    # Create example conversion script
+    cat > "$project_dir/convert_to_onnx.py" << 'EOF'
+#!/usr/bin/env python3
+"""
+Example ONNX conversion script - modify for your specific model
+"""
+import argparse
+import sys
+
+def convert_model(input_path, output_path):
+    """
+    Implement your model-specific conversion logic here
+    """
+    print(f"Converting {input_path} to {output_path}")
+    print("Error: Implement your conversion logic here")
+    sys.exit(1)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Convert model to ONNX")
+    parser.add_argument("input", help="Input model path")
+    parser.add_argument("output", help="Output ONNX path")
+    args = parser.parse_args()
+    
+    convert_model(args.input, args.output)
+EOF
+    
+    chmod +x "$project_dir/convert_to_onnx.py"
+    echo -e "${GREEN}Project $name created successfully${NC}"
+}
+
+build_project() {
+    local project="$1"
+    if [ -z "$project" ]; then
+        echo -e "${RED}Error: Project name required${NC}"
+        exit 1
+    fi
+    
+    local project_dir="$PROJECTS_DIR/$project"
+    if [ ! -d "$project_dir" ]; then
+        echo -e "${RED}Error: Project $project not found${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}Building Docker image for: $project${NC}"
+    docker build -t "deep_farm_$project" "$project_dir"
+}
+
+run_in_project() {
+    local project="$1"
+    shift
+    
+    if [ -z "$project" ]; then
+        echo -e "${RED}Error: Project name required${NC}"
+        exit 1
+    fi
+    
+    local project_dir="$PROJECTS_DIR/$project"
+    if [ ! -d "$project_dir" ]; then
+        echo -e "${RED}Error: Project $project not found${NC}"
+        exit 1
+    fi
+    
+    # Check if image exists
+    if ! docker image inspect "deep_farm_$project" >/dev/null 2>&1; then
+        echo -e "${BLUE}Image not found, building...${NC}"
+        build_project "$project"
+    fi
+    
+    # Mount conversion scripts
+    docker run --rm -it \
+        -v "$project_dir:/workspace/project" \
+        -v "$FARM_DIR/conversion_scripts:/workspace/conversion_scripts:ro" \
+        -w /workspace/project \
+        "deep_farm_$project" \
+        "$@"
+}
+
+shell_project() {
+    local project="$1"
+    run_in_project "$project" /bin/bash
+}
+
+clean_project() {
+    local project="$1"
+    if [ -z "$project" ]; then
+        echo -e "${RED}Error: Project name required${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}Cleaning Docker artifacts for: $project${NC}"
+    docker rmi "deep_farm_$project" 2>/dev/null || true
+}
+
+# Main command dispatcher
+case "$1" in
+    list)
+        list_projects
+        ;;
+    create)
+        create_project "$2"
+        ;;
+    build)
+        build_project "$2"
+        ;;
+    run)
+        shift
+        run_in_project "$@"
+        ;;
+    shell)
+        shell_project "$2"
+        ;;
+    clean)
+        clean_project "$2"
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac

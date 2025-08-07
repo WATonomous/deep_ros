@@ -3,19 +3,25 @@
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
+      "ROS_DISTRO": "${localEnv:ROS_DISTRO:humble}",
       "USERNAME": "${localEnv:USER}"
     }
+  },
+  "containerEnv": {
+    "ROS_DISTRO": "${localEnv:ROS_DISTRO:humble}"
   },
   "customizations": {
     "vscode": {
       "extensions": [
-        "ms-iot.vscode-ros",
         "ms-vscode.cpptools",
         "ms-vscode.cmake-tools",
-        "twxs.cmake",
-        "ms-azuretools.vscode-docker"
+        "ms-python.python",
+        "redhat.vscode-xml"
       ]
     }
   },
-  "workspaceFolder": "/workspaces/deep_ros"
+  "workspaceFolder": "/deep_ros_ws",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/deep_ros_ws,type=bind",
+  "containerName": "deep-ros-devcontainer",
+  "hostname": "devcontainer"
 }

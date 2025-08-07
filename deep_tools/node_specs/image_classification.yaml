@@ -1,0 +1,10 @@
+# Node compatibility specification for image classification
+name: "Image Classification Node"
+inputs:
+  - name: "image"
+    shape: [null, 3, null, null]  # [batch, channels, height, width]
+    dtype: ["float32"]
+outputs:
+  - name: "logits" 
+    shape: [null, null]           # [batch, num_classes]
+    dtype: ["float32"]

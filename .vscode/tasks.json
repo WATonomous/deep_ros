@@ -2,14 +2,25 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Generate .env for devcontainer",
+      "label": "Setup Devcontainer",
       "type": "shell",
-      "command": "./.devcontainer/gen_env.sh",
+      "command": "./.devcontainer/gen_env.sh ${input:rosDistro}",
       "problemMatcher": [],
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      }
+      "group": "build"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "rosDistro",
+      "type": "pickString",
+      "description": "Select ROS2 distribution",
+      "options": [
+        "humble",
+        "iron",
+        "jazzy",
+        "rolling"
+      ],
+      "default": "humble"
     }
   ]
 }

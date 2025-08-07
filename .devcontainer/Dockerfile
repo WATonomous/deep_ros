@@ -1,20 +1,18 @@
-ARG BASE_IMAGE
-FROM $BASE_IMAGE
+# Multi-version ROS2 development container
+ARG ROS_DISTRO=humble
+FROM ros:${ROS_DISTRO}-ros-base
 
-# Basic build tools
-RUN apt update && apt install -y \
-    build-essential \
-    cmake \
-    git \
-    wget \
-    lsb-release \
-    curl \
-    sudo \
-    python3-pip \
+# Install only essential ROS development tools not in base image
+RUN apt-get update && apt-get install -y \
+    python3-colcon-common-extensions \
+    python3-rosdep \
     && rm -rf /var/lib/apt/lists/*
 
+# Initialize rosdep
+RUN rosdep init || true
+
 # Set working dir (matches VSCode workspace)
-WORKDIR /workspaces/deep_ros
+WORKDIR /deep_ros_ws
 
 # Cater image to user
 ARG USERNAME
@@ -34,3 +32,6 @@ RUN source /tmp/.env && rm /tmp/.env \
 
 # Set the default user. Omit if you want to keep the default as root.
 USER $USERNAME
+
+# Source ROS in user's bashrc
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/$USERNAME/.bashrc
