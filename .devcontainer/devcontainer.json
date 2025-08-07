@@ -8,8 +8,12 @@
     }
   },
   "containerEnv": {
-    "ROS_DISTRO": "${localEnv:ROS_DISTRO:humble}"
+    "ROS_DISTRO": "${localEnv:ROS_DISTRO:humble}",
+    "SSH_AUTH_SOCK": "/ssh-agent"
   },
+  "mounts": [
+    "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind"
+  ],
   "customizations": {
     "vscode": {
       "extensions": [
