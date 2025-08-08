@@ -12,7 +12,7 @@
     "SSH_AUTH_SOCK": "/ssh-agent"
   },
   "mounts": [
-    "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind"
+    "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind",
   ],
   "customizations": {
     "vscode": {
@@ -20,12 +20,13 @@
         "ms-vscode.cpptools",
         "ms-vscode.cmake-tools",
         "ms-python.python",
-        "redhat.vscode-xml"
+        "redhat.vscode-xml",
+        "anthropics.claude-for-vscode"
       ]
     }
   },
   "workspaceFolder": "/deep_ros_ws",
   "workspaceMount": "source=${localWorkspaceFolder},target=/deep_ros_ws,type=bind",
   "containerName": "deep-ros-devcontainer",
-  "hostname": "devcontainer"
+  "runArgs": ["--hostname=deep-devcontainer"]
 }
