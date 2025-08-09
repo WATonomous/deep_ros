@@ -28,5 +28,7 @@
   "workspaceFolder": "/deep_ros_ws",
   "workspaceMount": "source=${localWorkspaceFolder},target=/deep_ros_ws,type=bind",
   "containerName": "deep-ros-devcontainer",
-  "runArgs": ["--hostname=deep-devcontainer"]
+  "runArgs": [
+    "--hostname=deep-devcontainer"
+  ]
 }
