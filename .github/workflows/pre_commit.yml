@@ -8,7 +8,7 @@ on:
 
 jobs:
   run-pre-commit:
-    name: Pre-commit Check
+    name: ✅ Pre-commit Check
     runs-on: ubuntu-latest
 
     steps:
