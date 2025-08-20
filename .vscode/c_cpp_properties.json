@@ -1,0 +1,30 @@
+{
+  "configurations": [
+    {
+      "name": "ROS2 Humble",
+      "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/onnx_example_node/include/**",
+        "${workspaceFolder}/onnx_example_node/third_party/onnxruntime-linux-x64-1.16.3/include/**",
+        "${workspaceFolder}/deep_core/include/**",
+        "${workspaceFolder}/deep_backends/**/include/**",
+        "/opt/ros/humble/include/**"
+      ],
+      "defines": [],
+      "compilerPath": "/usr/bin/g++",
+      "cStandard": "c99",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "linux-gcc-x64",
+      "browse": {
+        "path": [
+          "${workspaceFolder}",
+          "/opt/ros/humble/include"
+        ],
+        "limitSymbolsToIncludedHeaders": true,
+        "databaseFilename": "${workspaceFolder}/.vscode/browse.vc.db"
+      }
+    }
+  ],
+  "version": 4
+}
