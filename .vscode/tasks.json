@@ -5,7 +5,10 @@
       "label": "Setup Devcontainer (CPU Only)",
       "type": "shell",
       "command": "./.devcontainer/generate_devcontainer.sh",
-      "args": ["${input:rosDistro}", "cpu"],
+      "args": [
+        "${input:rosDistro}",
+        "cpu"
+      ],
       "problemMatcher": [],
       "group": "build",
       "presentation": {
@@ -21,7 +24,12 @@
       "label": "Setup Devcontainer (GPU)",
       "type": "shell",
       "command": "./.devcontainer/generate_devcontainer.sh",
-      "args": ["${input:rosDistro}", "gpu", "${input:cudaVersion}", "${input:ubuntuVersion}"],
+      "args": [
+        "${input:rosDistro}",
+        "gpu",
+        "${input:cudaVersion}",
+        "${input:ubuntuVersion}"
+      ],
       "problemMatcher": [],
       "group": "build",
       "presentation": {
