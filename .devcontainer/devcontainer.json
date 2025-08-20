@@ -1,34 +1,36 @@
 {
-  "name": "deep_ros-dev",
+  "name": "ROS2 Development Container (CPU)",
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
-      "ROS_DISTRO": "${localEnv:ROS_DISTRO:humble}",
-      "USERNAME": "${localEnv:USER}"
+      "ROS_DISTRO": "humble",
+      "USERNAME": "eddy",
+      "TARGETARCH": "cpu",
+      "USER_UID": "1000",
+      "USER_GID": "1000"
     }
   },
-  "containerEnv": {
-    "ROS_DISTRO": "${localEnv:ROS_DISTRO:humble}",
-    "SSH_AUTH_SOCK": "/ssh-agent"
-  },
+  "runArgs": [
+    "--network=host"
+  ],
   "mounts": [
-    "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind",
+    "source=${localWorkspaceFolder},target=/deep_ros_ws,type=bind,consistency=cached"
   ],
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-vscode.cpptools",
-        "ms-vscode.cmake-tools",
         "ms-python.python",
-        "redhat.vscode-xml",
-        "anthropics.claude-for-vscode"
-      ]
+        "ms-vscode.cmake-tools",
+        "redhat.vscode-yaml",
+        "ms-iot.vscode-ros"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/bin/python3",
+        "terminal.integrated.shell.linux": "/bin/bash"
+      }
     }
   },
-  "workspaceFolder": "/deep_ros_ws",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/deep_ros_ws,type=bind",
-  "containerName": "deep-ros-devcontainer",
-  "runArgs": [
-    "--hostname=deep-devcontainer"
-  ]
+  "postCreateCommand": "sudo rosdep update",
+  "remoteUser": "eddy"
 }

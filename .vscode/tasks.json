@@ -2,11 +2,36 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Setup Devcontainer",
+      "label": "Setup Devcontainer (CPU Only)",
       "type": "shell",
-      "command": "./.devcontainer/gen_env.sh ${input:rosDistro}",
+      "command": "./.devcontainer/generate_devcontainer.sh",
+      "args": ["${input:rosDistro}", "cpu"],
       "problemMatcher": [],
-      "group": "build"
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      }
+    },
+    {
+      "label": "Setup Devcontainer (GPU)",
+      "type": "shell",
+      "command": "./.devcontainer/generate_devcontainer.sh",
+      "args": ["${input:rosDistro}", "gpu", "${input:cudaVersion}", "${input:ubuntuVersion}"],
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      }
     }
   ],
   "inputs": [
@@ -21,6 +46,55 @@
         "rolling"
       ],
       "default": "humble"
+    },
+    {
+      "id": "containerType",
+      "type": "pickString",
+      "description": "Select container type",
+      "options": [
+        {
+          "label": "CPU Only",
+          "value": "cpu"
+        },
+        {
+          "label": "GPU Enabled (NVIDIA)",
+          "value": "gpu"
+        }
+      ],
+      "default": "cpu"
+    },
+    {
+      "id": "cudaVersion",
+      "type": "pickString",
+      "description": "Select CUDA version",
+      "options": [
+        "12.6.2",
+        "12.4.0",
+        "12.2.2",
+        "12.1.1",
+        "11.8.0"
+      ],
+      "default": "12.4.0"
+    },
+    {
+      "id": "ubuntuVersion",
+      "type": "pickString",
+      "description": "Select Ubuntu version",
+      "options": [
+        {
+          "label": "Ubuntu 24.04 (Noble)",
+          "value": "24.04"
+        },
+        {
+          "label": "Ubuntu 22.04 (Jammy)",
+          "value": "22.04"
+        },
+        {
+          "label": "Ubuntu 20.04 (Focal)",
+          "value": "20.04"
+        }
+      ],
+      "default": "22.04"
     }
   ]
 }

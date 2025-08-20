@@ -1,6 +1,40 @@
-# Multi-version ROS2 development container
+# Multi-stage ROS2 development container (CPU/GPU compatible)
 ARG ROS_DISTRO=humble
-FROM ros:${ROS_DISTRO}-ros-base
+ARG CUDA_VERSION=12.4.0
+ARG UBUNTU_VERSION=22.04
+
+# ===============================================
+# CPU Base - Standard ROS2 image
+# ===============================================
+FROM ros:${ROS_DISTRO}-ros-base as cpu-base
+
+# ===============================================
+# GPU Base - CUDA with manual ROS2 install
+# ===============================================
+FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} as gpu-base
+ARG ROS_DISTRO
+
+# Install ROS2 manually since we're not using the ros: base image
+# Set non-interactive to avoid geographic area prompts
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    gnupg2 \
+    lsb-release \
+    tzdata \
+    && ln -fs /usr/share/zoneinfo/Etc/UTC /etc/localtime \
+    && dpkg-reconfigure --frontend noninteractive tzdata \
+    && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    ros-${ROS_DISTRO}-ros-base \
+    && rm -rf /var/lib/apt/lists/*
+ENV DEBIAN_FRONTEND=interactive
+
+# ===============================================
+# Install Common Development Tools from Either Base
+# ===============================================
+FROM ${TARGETARCH:-cpu}-base as dev-tools
 
 # Install development tools not in base image
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -8,6 +42,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-colcon-common-extensions \
     python3-rosdep \
     openssh-client \
+    git \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -21,7 +56,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code CLI via npm
-RUN npm install -g @anthropic-ai/claude-code@1.0.0
+# hadolint ignore=DL3016
+RUN npm install -g @anthropic-ai/claude-code
 
 # Initialize rosdep
 RUN rosdep init || true
@@ -29,9 +65,14 @@ RUN rosdep init || true
 # Set working dir (matches VSCode workspace)
 WORKDIR /deep_ros_ws
 
-# Cater image to user
+# ===============================================
+# Add User Configuration
+# ===============================================
+FROM dev-tools as user-conf
 ARG USERNAME
+ARG ROS_DISTRO
 
+# Cater image to user
 SHELL ["/bin/bash", "-c"]
 COPY .env /tmp/.env
 # hadolint ignore=SC2086
