@@ -4,3 +4,4 @@ install/
 log/
 
 .devcontainer/devcontainer.json
+.devcontainer/.env
