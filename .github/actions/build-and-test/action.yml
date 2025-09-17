@@ -1,6 +1,12 @@
 name: Build and Test
 description: Common build and test logic for Deep ROS
 
+inputs:
+  ros-distro:
+    description: 'ROS distribution to use'
+    required: true
+    default: 'humble'
+
 runs:
   using: "composite"
   steps:
@@ -14,11 +20,14 @@ runs:
 
     - name: 🧱 Build workspace
       shell: bash
-      run: colcon build --merge-install
+      run: |
+        source /opt/ros/${{ inputs.ros-distro }}/setup.bash
+        colcon build --merge-install
 
     - name: ✅ Run tests
       shell: bash
       run: |
+        source /opt/ros/${{ inputs.ros-distro }}/setup.bash
         colcon test --merge-install --event-handlers console_cohesion+
         colcon test-result --verbose
 
