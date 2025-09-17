@@ -79,17 +79,17 @@ WORKDIR /deep_ros_ws
 # ===============================================
 # Add User Configuration
 # ===============================================
-FROM dev-tools AS user-conf
+FROM dev-tools as user-conf
 ARG USERNAME
+ARG USER_GID
+ARG USER_UID
 ARG ROS_DISTRO
 
 # Cater image to user
 SHELL ["/bin/bash", "-c"]
-COPY .env /tmp/.env
 # hadolint ignore=SC2086
-RUN source /tmp/.env && rm /tmp/.env \
-    && groupadd --gid $USER_GID $USERNAME \
-    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME --shell /bin/bash \
+RUN groupadd --gid ${USER_GID} ${USERNAME} \
+    && useradd --uid ${USER_UID} --gid ${USER_GID} -m $USERNAME --shell /bin/bash \
     && apt-get update \
     && apt-get install -y --no-install-recommends sudo \
     && echo $USERNAME ALL=\(ALL\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
@@ -104,3 +104,4 @@ USER $USERNAME
 
 # Source ROS in user's bashrc
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/$USERNAME/.bashrc
+
