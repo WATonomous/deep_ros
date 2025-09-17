@@ -1,3 +1,16 @@
+# Copyright (c) 2025-present WATonomous. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # Copyright (c) 2025-present Polymath Robotics, Inc. All rights reserved
 # Proprietary. Any unauthorized copying, distribution, or modification of this software is strictly prohibited.
 cmake_minimum_required(VERSION 3.22)
@@ -53,24 +66,24 @@ install(DIRECTORY include/
 if(BUILD_TESTING)
   # Include our custom test function
   include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/add_deep_test.cmake)
-  
+
   # Find test dependencies
   find_package(std_msgs REQUIRED)
   find_package(std_srvs REQUIRED)
-  
+
   # Add the basic example test
-  add_deep_test(test_basic_example 
+  add_deep_test(test_basic_example
     test/test_basic_example.cpp
-    LIBRARIES 
+    LIBRARIES
       ${DEEP_TEST_LIB}
       ${std_msgs_TARGETS}
       ${std_srvs_TARGETS}
   )
-  
+
   # Add ROS test with multiple library dependencies
   add_deep_test(test_with_ros
     test/test_with_ros.cpp
-    LIBRARIES 
+    LIBRARIES
       ${DEEP_TEST_LIB}
       ${std_msgs_TARGETS}
   )

@@ -40,7 +40,7 @@ struct ROS2Initializer
 /**
  * @brief Test Executor Fixture
  *
- * Catch2 test fixture that manages a single executor and thread for spinning 
+ * Catch2 test fixture that manages a single executor and thread for spinning
  * multiple test nodes.
  */
 class TestExecutorFixture : private ROS2Initializer

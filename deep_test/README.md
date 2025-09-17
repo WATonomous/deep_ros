@@ -19,7 +19,7 @@ TEST_CASE_METHOD(deep_ros::test::TestExecutorFixture, "My ROS Test", "[ros]") {
   auto node = std::make_shared<rclcpp::Node>("test_node");
   add_node(node);
   start_spinning();
-  
+
   // Your test code here as sections
   SECTION("My test") {
     REQUIRE(node->get_name() == "test_node");
@@ -34,7 +34,7 @@ find_package(deep_test REQUIRED)
 
 add_deep_test(my_test
   test/my_test.cpp
-  LIBRARIES 
+  LIBRARIES
     my_package::my_library
     std_msgs::std_msgs
 )

@@ -29,7 +29,7 @@ namespace deep_ros::test
 /**
  * @brief Subscriber Test Node
  *
- * Templated subscription test node providing 
+ * Templated subscription test node providing
  * message futures to facilitate event-driven testing.
  *
  * @tparam MessageType The ROS message type to subscribe to
