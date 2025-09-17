@@ -25,6 +25,11 @@ CUDA_VERSION=${3:-12.4.0}
 UBUNTU_VERSION=${4:-22.04}
 USERNAME=${USER:-vscode}
 
+# TensorRT configuration
+TENSORRT_RUNTIME_VERSION="10.9.0.34"
+# Truncate CUDA version to major.minor for TensorRT
+TENSORRT_CUDA_VERSION="12.8"
+
 echo "Generating devcontainer configuration..."
 echo "ROS Distribution: $ROS_DISTRO"
 echo "Container Type: $CONTAINER_TYPE"
@@ -32,6 +37,8 @@ echo "Container Type: $CONTAINER_TYPE"
 if [ "$CONTAINER_TYPE" = "gpu" ]; then
     echo "CUDA Version: $CUDA_VERSION"
     echo "Ubuntu Version: $UBUNTU_VERSION"
+    echo "TensorRT Runtime Version: $TENSORRT_RUNTIME_VERSION"
+    echo "TensorRT CUDA Version: $TENSORRT_CUDA_VERSION"
 fi
 
 # Generate container name and build args based on type
@@ -42,6 +49,8 @@ if [ "$CONTAINER_TYPE" = "gpu" ]; then
       "TARGETARCH": "gpu",
       "CUDA_VERSION": "'$CUDA_VERSION'",
       "UBUNTU_VERSION": "'$UBUNTU_VERSION'",
+      "TENSORRT_RUNTIME_VERSION": "'$TENSORRT_RUNTIME_VERSION'",
+      "TENSORRT_CUDA_VERSION": "'$TENSORRT_CUDA_VERSION'",
       "USER_UID": "'$(id -u)'",
       "USER_GID": "'$(id -g)'"'
     RUN_ARGS='"--network=host",

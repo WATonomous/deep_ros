@@ -10,3 +10,8 @@ log/
 # Claude helpers
 .claude/
 CLAUDE.md
+
+# VScode artifacts
+browse.vc.db
+browse.vc.db-shm
+browse.vc.db-wal
