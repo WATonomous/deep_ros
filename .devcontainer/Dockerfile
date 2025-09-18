@@ -104,4 +104,3 @@ USER $USERNAME
 
 # Source ROS in user's bashrc
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/$USERNAME/.bashrc
-
