@@ -1,6 +1,10 @@
-# Deep Object Detection ROS2 Package
+# Deep Object Detection
 
-A high-performance ROS2 package for camera-based object detection using TensorRT inference with support for batched processing and multiple camera streams.
+A ROS 2 package for real-time object detection using ONNX Runtime with GPU acceleration.
+
+## Overview
+
+This package provides an abstracted inference interface that supports ONNX models with GPU acceleration via the `onnxruntime_gpu_vendor` package. The design abstracts away the inference engine implementation, making it easy to switch between different inference backends.
 
 ## Features
 
@@ -21,26 +25,23 @@ A high-performance ROS2 package for camera-based object detection using TensorRT
 
 ## Installation
 
-1. Clone this package into your ROS2 workspace:
-```bash
-cd ~/ros2_ws/src
-git clone <repository_url>
-```
+1. Install dependencies:
 
-2. Install dependencies:
 ```bash
-cd ~/ros2_ws
+cd ~/deep_ros
 rosdep install --from-paths src --ignore-src -r -y
 ```
 
-3. Build the package:
+1. Build the package:
+
 ```bash
 colcon build --packages-select deep_object_detection
 ```
 
-4. Source the workspace:
+1. Source the workspace:
+
 ```bash
-source ~/ros2_ws/install/setup.bash
+source ~/deep_ros/install/setup.bash
 ```
 
 ## Usage
@@ -72,6 +73,7 @@ class_names: ["person", "car", "bicycle", ...]  # Your model's classes
 ### 3. Launch the Node
 
 #### Single Camera:
+
 ```bash
 ros2 launch deep_object_detection object_detection.launch.py \
     model_engine_path:=/path/to/your/model.engine \
@@ -79,6 +81,7 @@ ros2 launch deep_object_detection object_detection.launch.py \
 ```
 
 #### Multiple Cameras:
+
 ```bash
 ros2 launch deep_object_detection multi_camera_detection.launch.py \
     model_engine_path:=/path/to/your/model.engine \
@@ -86,6 +89,7 @@ ros2 launch deep_object_detection multi_camera_detection.launch.py \
 ```
 
 #### With Custom Parameters:
+
 ```bash
 ros2 run deep_object_detection object_detection_node \
     --ros-args \
@@ -169,6 +173,7 @@ ros2 run deep_object_detection object_detection_node \
 
 ### Debug Mode
 Enable debug mode for detailed performance metrics:
+
 ```bash
 ros2 param set /object_detection_node enable_debug true
 ```

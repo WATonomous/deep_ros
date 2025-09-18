@@ -19,6 +19,7 @@
   <depend>message_filters</depend>
   <depend>opencv2</depend>
   <depend>yaml-cpp</depend>
+  <depend>onnxruntime_gpu_vendor</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
