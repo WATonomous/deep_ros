@@ -57,118 +57,118 @@ class Tensor
 {
 public:
   /**
-     * @brief Default constructor - creates an empty tensor
-     */
+   * @brief Default constructor - creates an empty tensor
+   */
   Tensor();
 
   /**
-     * @brief Create a new tensor with specified shape and data type
-     * @param shape Dimensions of the tensor
-     * @param dtype Data type of tensor elements
-     */
+   * @brief Create a new tensor with specified shape and data type
+   * @param shape Dimensions of the tensor
+   * @param dtype Data type of tensor elements
+   */
   Tensor(const std::vector<size_t> & shape, DataType dtype);
 
   /**
-     * @brief Wrap existing data in a tensor (non-owning)
-     * @param data Pointer to existing data
-     * @param shape Dimensions of the tensor
-     * @param dtype Data type of tensor elements
-     */
+   * @brief Wrap existing data in a tensor (non-owning)
+   * @param data Pointer to existing data
+   * @param shape Dimensions of the tensor
+   * @param dtype Data type of tensor elements
+   */
   Tensor(void * data, const std::vector<size_t> & shape, DataType dtype);
 
   /**
-     * @brief Destructor - frees owned memory
-     */
+   * @brief Destructor - frees owned memory
+   */
   ~Tensor();
 
   /**
-     * @brief Copy constructor - creates a deep copy
-     */
+   * @brief Copy constructor - creates a deep copy
+   */
   Tensor(const Tensor & other);
 
   /**
-     * @brief Copy assignment - creates a deep copy
-     */
+   * @brief Copy assignment - creates a deep copy
+   */
   Tensor & operator=(const Tensor & other);
 
   /**
-     * @brief Move constructor
-     */
+   * @brief Move constructor
+   */
   Tensor(Tensor && other) noexcept;
 
   /**
-     * @brief Move assignment
-     */
+   * @brief Move assignment
+   */
   Tensor & operator=(Tensor && other) noexcept;
 
   /**
-     * @brief Get tensor dimensions
-     * @return Vector of dimension sizes
-     */
+   * @brief Get tensor dimensions
+   * @return Vector of dimension sizes
+   */
   const std::vector<size_t> & shape() const
   {
     return shape_;
   }
 
   /**
-     * @brief Get memory strides for each dimension
-     * @return Vector of stride sizes in bytes
-     */
+   * @brief Get memory strides for each dimension
+   * @return Vector of stride sizes in bytes
+   */
   const std::vector<size_t> & strides() const
   {
     return strides_;
   }
 
   /**
-     * @brief Get number of dimensions
-     * @return Number of dimensions
-     */
+   * @brief Get number of dimensions
+   * @return Number of dimensions
+   */
   size_t rank() const
   {
     return shape_.size();
   }
 
   /**
-     * @brief Get data type of tensor elements
-     * @return Data type enum
-     */
+   * @brief Get data type of tensor elements
+   * @return Data type enum
+   */
   DataType dtype() const
   {
     return dtype_;
   }
 
   /**
-     * @brief Get total size of tensor data in bytes
-     * @return Size in bytes
-     */
+   * @brief Get total size of tensor data in bytes
+   * @return Size in bytes
+   */
   size_t byte_size() const
   {
     return byte_size_;
   }
 
   /**
-     * @brief Get raw data pointer
-     * @return Pointer to tensor data
-     */
+   * @brief Get raw data pointer
+   * @return Pointer to tensor data
+   */
   void * data()
   {
     return data_;
   }
 
   /**
-     * @brief Get raw data pointer (const)
-     * @return Const pointer to tensor data
-     */
+   * @brief Get raw data pointer (const)
+   * @return Const pointer to tensor data
+   */
   const void * data() const
   {
     return data_;
   }
 
   /**
-     * @brief Get typed data pointer
-     * @tparam T Data type to cast to
-     * @return Typed pointer to tensor data
-     */
+   * @brief Get typed data pointer
+   * @tparam T Data type to cast to
+   * @return Typed pointer to tensor data
+   */
   template <typename T>
   T * data_as()
   {
@@ -176,10 +176,10 @@ public:
   }
 
   /**
-     * @brief Get typed data pointer (const)
-     * @tparam T Data type to cast to
-     * @return Const typed pointer to tensor data
-     */
+   * @brief Get typed data pointer (const)
+   * @tparam T Data type to cast to
+   * @return Const typed pointer to tensor data
+   */
   template <typename T>
   const T * data_as() const
   {
@@ -187,22 +187,22 @@ public:
   }
 
   /**
-     * @brief Create a new tensor with different shape but same data
-     * @param new_shape New dimensions (total size must match)
-     * @return New tensor view with different shape
-     */
+   * @brief Create a new tensor with different shape but same data
+   * @param new_shape New dimensions (total size must match)
+   * @return New tensor view with different shape
+   */
   Tensor reshape(const std::vector<size_t> & new_shape) const;
 
   /**
-     * @brief Get total number of elements
-     * @return Number of elements
-     */
+   * @brief Get total number of elements
+   * @return Number of elements
+   */
   size_t size() const;
 
   /**
-     * @brief Check if tensor data is stored contiguously in memory
-     * @return True if contiguous, false otherwise
-     */
+   * @brief Check if tensor data is stored contiguously in memory
+   * @return True if contiguous, false otherwise
+   */
   bool is_contiguous() const;
 
 private:
