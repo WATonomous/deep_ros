@@ -98,7 +98,7 @@ TEST_CASE("Image to tensor conversion", "[ros_conversions]")
 
     auto tensor = deep_ros::ros_conversions::from_image(image);
 
-    REQUIRE(tensor.shape() == std::vector<size_t>{2, 2, 3});
+    REQUIRE(tensor.shape() == std::vector<size_t>{1, 2, 2, 3});
     REQUIRE(tensor.dtype() == deep_ros::DataType::UINT8);
     REQUIRE(tensor.size() == 12);
 
@@ -119,7 +119,7 @@ TEST_CASE("Image to tensor conversion", "[ros_conversions]")
 
     auto tensor = deep_ros::ros_conversions::from_image(image);
 
-    REQUIRE(tensor.shape() == std::vector<size_t>{2, 3});
+    REQUIRE(tensor.shape() == std::vector<size_t>{1, 2, 3});
     REQUIRE(tensor.dtype() == deep_ros::DataType::UINT8);
     REQUIRE(tensor.size() == 6);
 
@@ -142,7 +142,7 @@ TEST_CASE("Image to tensor conversion", "[ros_conversions]")
 
     auto tensor = deep_ros::ros_conversions::from_image(image);
 
-    REQUIRE(tensor.shape() == std::vector<size_t>{1, 2});
+    REQUIRE(tensor.shape() == std::vector<size_t>{1, 1, 2});
     REQUIRE(tensor.dtype() == deep_ros::DataType::FLOAT32);
 
     auto data = tensor.data_as<float>();
@@ -150,21 +150,22 @@ TEST_CASE("Image to tensor conversion", "[ros_conversions]")
     REQUIRE(data[1] == -2.5f);
   }
 
-  SECTION("Normalized uint8 image")
+  SECTION("Batch of single image")
   {
     sensor_msgs::msg::Image image;
     image.width = 2;
     image.height = 1;
     image.encoding = "mono8";
     image.step = 2;
-    image.data = {0, 255};
+    image.data = {100, 200};
 
-    auto tensor = deep_ros::ros_conversions::from_image(image, true);
+    auto tensor = deep_ros::ros_conversions::from_image(image);
 
-    REQUIRE(tensor.dtype() == deep_ros::DataType::FLOAT32);
-    auto data = tensor.data_as<float>();
-    REQUIRE(data[0] == 0.0f);
-    REQUIRE(data[1] == 1.0f);
+    REQUIRE(tensor.shape() == std::vector<size_t>{1, 1, 2});
+    REQUIRE(tensor.dtype() == deep_ros::DataType::UINT8);
+    auto data = tensor.data_as<uint8_t>();
+    REQUIRE(data[0] == 100);
+    REQUIRE(data[1] == 200);
   }
 }
 
@@ -172,7 +173,7 @@ TEST_CASE("Tensor to image conversion", "[ros_conversions]")
 {
   SECTION("RGB tensor to image")
   {
-    std::vector<size_t> shape = {2, 2, 3};
+    std::vector<size_t> shape = {1, 2, 2, 3};
     deep_ros::Tensor tensor(shape, deep_ros::DataType::UINT8);
 
     auto data = tensor.data_as<uint8_t>();
@@ -189,7 +190,8 @@ TEST_CASE("Tensor to image conversion", "[ros_conversions]")
     data[10] = 128;
     data[11] = 128;  // Gray
 
-    auto image = deep_ros::ros_conversions::to_image(tensor, "rgb8");
+    sensor_msgs::msg::Image image;
+    deep_ros::ros_conversions::to_image(tensor, image, "rgb8");
 
     REQUIRE(image.width == 2);
     REQUIRE(image.height == 2);
@@ -202,7 +204,7 @@ TEST_CASE("Tensor to image conversion", "[ros_conversions]")
 
   SECTION("Grayscale tensor to image")
   {
-    std::vector<size_t> shape = {1, 3};
+    std::vector<size_t> shape = {1, 1, 3};
     deep_ros::Tensor tensor(shape, deep_ros::DataType::UINT8);
 
     auto data = tensor.data_as<uint8_t>();
@@ -210,7 +212,8 @@ TEST_CASE("Tensor to image conversion", "[ros_conversions]")
     data[1] = 150;
     data[2] = 200;
 
-    auto image = deep_ros::ros_conversions::to_image(tensor, "mono8");
+    sensor_msgs::msg::Image image;
+    deep_ros::ros_conversions::to_image(tensor, image, "mono8");
 
     REQUIRE(image.width == 3);
     REQUIRE(image.height == 1);
@@ -221,18 +224,20 @@ TEST_CASE("Tensor to image conversion", "[ros_conversions]")
 
   SECTION("Type mismatch error")
   {
-    std::vector<size_t> shape = {2, 2};
+    std::vector<size_t> shape = {1, 2, 2};
     deep_ros::Tensor tensor(shape, deep_ros::DataType::FLOAT32);
 
-    REQUIRE_THROWS_AS(deep_ros::ros_conversions::to_image(tensor, "mono8"), std::invalid_argument);
+    sensor_msgs::msg::Image image;
+    REQUIRE_THROWS_AS(deep_ros::ros_conversions::to_image(tensor, image, "mono8"), std::invalid_argument);
   }
 
   SECTION("Channel mismatch error")
   {
-    std::vector<size_t> shape = {2, 2, 3};
+    std::vector<size_t> shape = {1, 2, 2, 3};
     deep_ros::Tensor tensor(shape, deep_ros::DataType::UINT8);
 
-    REQUIRE_THROWS_AS(deep_ros::ros_conversions::to_image(tensor, "mono8"), std::invalid_argument);
+    sensor_msgs::msg::Image image;
+    REQUIRE_THROWS_AS(deep_ros::ros_conversions::to_image(tensor, image, "mono8"), std::invalid_argument);
   }
 }
 
@@ -336,7 +341,7 @@ TEST_CASE("Image batch conversion", "[ros_conversions]")
     images[1].step = 2;
     images[1].data = {200, 250};
 
-    auto tensor = deep_ros::ros_conversions::from_image_batch(images);
+    auto tensor = deep_ros::ros_conversions::from_image(images);
 
     REQUIRE(tensor.shape() == std::vector<size_t>{2, 1, 2});
     REQUIRE(tensor.dtype() == deep_ros::DataType::UINT8);
@@ -362,7 +367,7 @@ TEST_CASE("Image batch conversion", "[ros_conversions]")
     images[1].encoding = "mono8";
     images[1].data = {200, 250, 255};
 
-    REQUIRE_THROWS_AS(deep_ros::ros_conversions::from_image_batch(images), std::invalid_argument);
+    REQUIRE_THROWS_AS(deep_ros::ros_conversions::from_image(images), std::invalid_argument);
   }
 }
 

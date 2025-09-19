@@ -16,6 +16,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace deep_ros
@@ -111,12 +112,12 @@ ImageEncoding get_image_encoding_info(const std::string & encoding)
   throw std::runtime_error("Unsupported image encoding: " + encoding);
 }
 
-Tensor from_image(const sensor_msgs::msg::Image & image, bool normalize)
+Tensor from_image(const sensor_msgs::msg::Image & image)
 {
   auto encoding_info = get_image_encoding_info(image.encoding);
 
-  // Create tensor with proper shape
-  std::vector<size_t> shape = {image.height, image.width};
+  // Create tensor with proper shape - always include batch dimension (size 1 for single image)
+  std::vector<size_t> shape = {1, image.height, image.width};
   if (encoding_info.channels > 1) {
     shape.push_back(encoding_info.channels);
   }
@@ -129,37 +130,74 @@ Tensor from_image(const sensor_msgs::msg::Image & image, bool normalize)
       std::to_string(image.data.size()));
   }
 
-  if (normalize && encoding_info.dtype == DataType::UINT8) {
-    // Convert to float32 and normalize
-    Tensor tensor(shape, DataType::FLOAT32);
-    auto * dst = tensor.data_as<float>();
-    const auto * src = image.data.data();
-
-    for (size_t i = 0; i < image.data.size(); ++i) {
-      dst[i] = static_cast<float>(src[i]) / 255.0f;
-    }
-    return tensor;
-  } else {
-    // Direct copy
-    Tensor tensor(shape, encoding_info.dtype);
-    std::memcpy(tensor.data(), image.data.data(), image.data.size());
-    return tensor;
-  }
+  // Direct copy
+  Tensor tensor(shape, encoding_info.dtype);
+  std::memcpy(tensor.data(), image.data.data(), image.data.size());
+  return tensor;
 }
 
-sensor_msgs::msg::Image to_image(
-  const Tensor & tensor, const std::string & encoding, const std_msgs::msg::Header & header)
+Tensor from_image(const std::vector<sensor_msgs::msg::Image> & images)
 {
-  sensor_msgs::msg::Image image;
-  image.header = header;
-
-  if (tensor.rank() < 2 || tensor.rank() > 3) {
-    throw std::invalid_argument("Tensor must be 2D or 3D for image conversion");
+  if (images.empty()) {
+    throw std::invalid_argument("Image batch is empty");
   }
+
+  // Get encoding info from first image
+  auto encoding_info = get_image_encoding_info(images[0].encoding);
+
+  // Create batch shape: [batch_size, height, width, channels] or [batch_size, height, width]
+  std::vector<size_t> shape = {images.size(), images[0].height, images[0].width};
+  if (encoding_info.channels > 1) {
+    shape.push_back(encoding_info.channels);
+  }
+
+  // Validate all images have same dimensions and encoding
+  size_t expected_size = images[0].height * images[0].width * encoding_info.channels * encoding_info.bytes_per_channel;
+  for (size_t i = 0; i < images.size(); ++i) {
+    if (images[i].height != images[0].height || images[i].width != images[0].width) {
+      throw std::invalid_argument("All images in batch must have same dimensions");
+    }
+    if (images[i].encoding != images[0].encoding) {
+      throw std::invalid_argument("All images in batch must have same encoding");
+    }
+    if (images[i].data.size() != expected_size) {
+      throw std::runtime_error(
+        "Image " + std::to_string(i) + " data size mismatch. Expected " + std::to_string(expected_size) + " but got " +
+        std::to_string(images[i].data.size()));
+    }
+  }
+
+  // Direct copy
+  Tensor tensor(shape, encoding_info.dtype);
+  auto * dst = static_cast<uint8_t *>(tensor.data());
+
+  for (size_t i = 0; i < images.size(); ++i) {
+    std::memcpy(dst + i * images[i].data.size(), images[i].data.data(), images[i].data.size());
+  }
+  return tensor;
+}
+
+void to_image(
+  const Tensor & tensor,
+  sensor_msgs::msg::Image & image,
+  const std::string & encoding,
+  const std_msgs::msg::Header & header)
+{
+  if (tensor.rank() < 3 || tensor.rank() > 4) {
+    throw std::invalid_argument(
+      "Tensor must be 3D [batch, height, width] or 4D [batch, height, width, channels] for image conversion");
+  }
+
+  if (tensor.shape()[0] != 1) {
+    throw std::invalid_argument(
+      "This overload only supports single images (batch size must be 1). Use vector overload for multiple images.");
+  }
+
+  image.header = header;
 
   // Verify encoding matches tensor
   auto encoding_info = get_image_encoding_info(encoding);
-  size_t tensor_channels = (tensor.rank() == 3) ? tensor.shape()[2] : 1;
+  size_t tensor_channels = (tensor.rank() == 4) ? tensor.shape()[3] : 1;
 
   if (encoding_info.channels != tensor_channels) {
     throw std::invalid_argument(
@@ -171,8 +209,8 @@ sensor_msgs::msg::Image to_image(
     throw std::invalid_argument("Encoding data type doesn't match tensor data type");
   }
 
-  image.height = tensor.shape()[0];
-  image.width = tensor.shape()[1];
+  image.height = tensor.shape()[1];  // Skip batch dimension
+  image.width = tensor.shape()[2];  // Skip batch dimension
   image.encoding = encoding;
 
   // Calculate step (bytes per row)
@@ -181,12 +219,65 @@ sensor_msgs::msg::Image to_image(
   // Set big endian flag (false for little endian)
   image.is_bigendian = false;
 
-  // Copy tensor data to image
-  size_t data_size = tensor.byte_size();
-  image.data.resize(data_size);
-  std::memcpy(image.data.data(), tensor.data(), data_size);
+  // Copy tensor data to image (skip batch dimension)
+  size_t image_size = image.height * image.width * encoding_info.channels * encoding_info.bytes_per_channel;
+  image.data.resize(image_size);
+  std::memcpy(image.data.data(), tensor.data(), image_size);
+}
 
-  return image;
+void to_image(
+  const Tensor & tensor,
+  std::vector<sensor_msgs::msg::Image> & images,
+  const std::string & encoding,
+  const std_msgs::msg::Header & header)
+{
+  if (tensor.rank() < 3 || tensor.rank() > 4) {
+    throw std::invalid_argument(
+      "Tensor must be 3D [batch, height, width] or 4D [batch, height, width, channels] for image conversion");
+  }
+
+  size_t batch_size = tensor.shape()[0];
+  if (batch_size == 0) {
+    throw std::invalid_argument("Batch size cannot be 0");
+  }
+
+  // Verify encoding matches tensor
+  auto encoding_info = get_image_encoding_info(encoding);
+  size_t tensor_channels = (tensor.rank() == 4) ? tensor.shape()[3] : 1;
+
+  if (encoding_info.channels != tensor_channels) {
+    throw std::invalid_argument(
+      "Encoding channels (" + std::to_string(encoding_info.channels) + ") doesn't match tensor channels (" +
+      std::to_string(tensor_channels) + ")");
+  }
+
+  if (encoding_info.dtype != tensor.dtype()) {
+    throw std::invalid_argument("Encoding data type doesn't match tensor data type");
+  }
+
+  size_t height = tensor.shape()[1];
+  size_t width = tensor.shape()[2];
+  size_t image_size = height * width * encoding_info.channels * encoding_info.bytes_per_channel;
+
+  images.clear();
+  images.reserve(batch_size);
+
+  const auto * src = static_cast<const uint8_t *>(tensor.data());
+
+  for (size_t i = 0; i < batch_size; ++i) {
+    sensor_msgs::msg::Image image;
+    image.header = header;
+    image.height = height;
+    image.width = width;
+    image.encoding = encoding;
+    image.step = width * encoding_info.channels * encoding_info.bytes_per_channel;
+    image.is_bigendian = false;
+
+    image.data.resize(image_size);
+    std::memcpy(image.data.data(), src + i * image_size, image_size);
+
+    images.push_back(std::move(image));
+  }
 }
 
 Tensor from_pointcloud2(const sensor_msgs::msg::PointCloud2 & cloud)
@@ -280,41 +371,6 @@ Tensor from_imu(const sensor_msgs::msg::Imu & imu)
   data[9] = imu.angular_velocity.z;
 
   return tensor;
-}
-
-Tensor from_image_batch(const std::vector<sensor_msgs::msg::Image> & images, bool normalize)
-{
-  if (images.empty()) {
-    throw std::invalid_argument("Image batch is empty");
-  }
-
-  // Get dimensions from first image
-  auto first_tensor = from_image(images[0], normalize);
-  auto shape = first_tensor.shape();
-
-  // Create batch shape
-  std::vector<size_t> batch_shape = {images.size()};
-  batch_shape.insert(batch_shape.end(), shape.begin(), shape.end());
-
-  Tensor batch_tensor(batch_shape, first_tensor.dtype());
-
-  // Copy each image
-  size_t image_size = first_tensor.byte_size();
-  uint8_t * dst = static_cast<uint8_t *>(batch_tensor.data());
-
-  std::memcpy(dst, first_tensor.data(), image_size);
-
-  for (size_t i = 1; i < images.size(); ++i) {
-    auto img_tensor = from_image(images[i], normalize);
-    if (img_tensor.shape() != shape) {
-      throw std::invalid_argument("All images in batch must have same dimensions");
-    }
-
-    dst += image_size;
-    std::memcpy(dst, img_tensor.data(), image_size);
-  }
-
-  return batch_tensor;
 }
 
 }  // namespace ros_conversions
