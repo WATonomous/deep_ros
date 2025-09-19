@@ -67,6 +67,58 @@ TEST_CASE("Image encoding info parsing", "[ros_conversions]")
     REQUIRE(bayer_info.bytes_per_channel == 1);
   }
 
+  SECTION("YUV formats - 8-bit")
+  {
+    auto yuv422_info = deep_ros::ros_conversions::get_image_encoding_info("yuv422");
+    REQUIRE(yuv422_info.dtype == deep_ros::DataType::UINT8);
+    REQUIRE(yuv422_info.channels == 2);
+    REQUIRE(yuv422_info.bytes_per_channel == 1);
+
+    auto yuv444_info = deep_ros::ros_conversions::get_image_encoding_info("yuv444");
+    REQUIRE(yuv444_info.dtype == deep_ros::DataType::UINT8);
+    REQUIRE(yuv444_info.channels == 3);
+    REQUIRE(yuv444_info.bytes_per_channel == 1);
+  }
+
+  SECTION("YUV formats - 16-bit")
+  {
+    auto yuv422_16_info = deep_ros::ros_conversions::get_image_encoding_info("yuv422_16");
+    REQUIRE(yuv422_16_info.dtype == deep_ros::DataType::UINT16);
+    REQUIRE(yuv422_16_info.channels == 2);
+    REQUIRE(yuv422_16_info.bytes_per_channel == 2);
+
+    auto yuv444_16_info = deep_ros::ros_conversions::get_image_encoding_info("yuv444_16");
+    REQUIRE(yuv444_16_info.dtype == deep_ros::DataType::UINT16);
+    REQUIRE(yuv444_16_info.channels == 3);
+    REQUIRE(yuv444_16_info.bytes_per_channel == 2);
+  }
+
+  SECTION("YUV formats - 10-bit")
+  {
+    auto yuv422_10_info = deep_ros::ros_conversions::get_image_encoding_info("yuv422_10");
+    REQUIRE(yuv422_10_info.dtype == deep_ros::DataType::UINT16);
+    REQUIRE(yuv422_10_info.channels == 2);
+    REQUIRE(yuv422_10_info.bytes_per_channel == 2);
+
+    auto yuv444_10_info = deep_ros::ros_conversions::get_image_encoding_info("yuv444_10");
+    REQUIRE(yuv444_10_info.dtype == deep_ros::DataType::UINT16);
+    REQUIRE(yuv444_10_info.channels == 3);
+    REQUIRE(yuv444_10_info.bytes_per_channel == 2);
+  }
+
+  SECTION("YUV formats - 12-bit")
+  {
+    auto yuv422_12_info = deep_ros::ros_conversions::get_image_encoding_info("yuv422_12");
+    REQUIRE(yuv422_12_info.dtype == deep_ros::DataType::UINT16);
+    REQUIRE(yuv422_12_info.channels == 2);
+    REQUIRE(yuv422_12_info.bytes_per_channel == 2);
+
+    auto yuv444_12_info = deep_ros::ros_conversions::get_image_encoding_info("yuv444_12");
+    REQUIRE(yuv444_12_info.dtype == deep_ros::DataType::UINT16);
+    REQUIRE(yuv444_12_info.channels == 3);
+    REQUIRE(yuv444_12_info.bytes_per_channel == 2);
+  }
+
   SECTION("Unsupported encoding")
   {
     REQUIRE_THROWS_AS(deep_ros::ros_conversions::get_image_encoding_info("invalid_encoding"), std::runtime_error);
