@@ -60,13 +60,13 @@ Tensor::Tensor()
 : dtype_(DataType::FLOAT32)
 , byte_size_(0)
 , data_(nullptr)
-, owns_data_(false)
+, is_view_(false)
 {}
 
 Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype)
 : shape_(shape)
 , dtype_(dtype)
-, owns_data_(true)
+, is_view_(true)
 {
   calculate_strides();
 
@@ -80,7 +80,7 @@ Tensor::Tensor(void * data, const std::vector<size_t> & shape, DataType dtype)
 : shape_(shape)
 , dtype_(dtype)
 , data_(data)
-, owns_data_(false)
+, is_view_(false)
 {
   calculate_strides();
 
@@ -98,7 +98,7 @@ Tensor::Tensor(const Tensor & other)
 , strides_(other.strides_)
 , dtype_(other.dtype_)
 , byte_size_(other.byte_size_)
-, owns_data_(true)
+, is_view_(true)
 {
   allocate_memory();
   if (other.data_ && data_) {
@@ -115,7 +115,7 @@ Tensor & Tensor::operator=(const Tensor & other)
     strides_ = other.strides_;
     dtype_ = other.dtype_;
     byte_size_ = other.byte_size_;
-    owns_data_ = true;
+    is_view_ = true;
 
     allocate_memory();
     if (other.data_ && data_) {
@@ -131,10 +131,10 @@ Tensor::Tensor(Tensor && other) noexcept
 , dtype_(other.dtype_)
 , byte_size_(other.byte_size_)
 , data_(other.data_)
-, owns_data_(other.owns_data_)
+, is_view_(other.is_view_)
 {
   other.data_ = nullptr;
-  other.owns_data_ = false;
+  other.is_view_ = false;
   other.byte_size_ = 0;
 }
 
@@ -148,10 +148,10 @@ Tensor & Tensor::operator=(Tensor && other) noexcept
     dtype_ = other.dtype_;
     byte_size_ = other.byte_size_;
     data_ = other.data_;
-    owns_data_ = other.owns_data_;
+    is_view_ = other.is_view_;
 
     other.data_ = nullptr;
-    other.owns_data_ = false;
+    other.is_view_ = false;
     other.byte_size_ = 0;
   }
   return *this;
@@ -170,7 +170,7 @@ void Tensor::calculate_strides()
 
 void Tensor::allocate_memory()
 {
-  if (byte_size_ > 0 && owns_data_) {
+  if (byte_size_ > 0 && is_view_) {
     data_ = std::aligned_alloc(32, byte_size_);
     if (!data_) {
       throw std::bad_alloc();
@@ -180,7 +180,7 @@ void Tensor::allocate_memory()
 
 void Tensor::deallocate_memory()
 {
-  if (owns_data_ && data_) {
+  if (is_view_ && data_) {
     std::free(data_);
     data_ = nullptr;
   }
