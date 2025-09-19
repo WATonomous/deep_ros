@@ -11,8 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# Copyright (c) 2025-present Polymath Robotics, Inc. All rights reserved
+# Proprietary. Any unauthorized copying, distribution, or modification of this software is strictly prohibited.
 cmake_minimum_required(VERSION 3.22)
-project(deep_test)
+project(deep_core)
 
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
@@ -26,26 +28,28 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
+find_package(deep_test REQUIRED)
 
 set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# deep_test library
-set(DEEP_TEST_LIB ${PROJECT_NAME}_lib)
-add_library(${DEEP_TEST_LIB} SHARED
-  src/test_executor_fixture.cpp
+# deep_core library
+set(DEEP_CORE_LIB ${PROJECT_NAME}_lib)
+add_library(${DEEP_CORE_LIB} SHARED
+  src/deep_node_base.cpp
 )
-target_include_directories(${DEEP_TEST_LIB} PUBLIC
+target_include_directories(${DEEP_CORE_LIB} PUBLIC
   $<BUILD_INTERFACE:${include_dir}>
   $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(${DEEP_TEST_LIB}
+target_link_libraries(${DEEP_CORE_LIB}
   PRIVATE
     rclcpp::rclcpp
     rclcpp_lifecycle::rclcpp_lifecycle
+    deep_test::deep_test
 )
 
 install(TARGETS
-  ${DEEP_TEST_LIB}
+  ${DEEP_CORE_LIB}
   EXPORT ${PROJECT_NAME}Targets
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -61,23 +65,14 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
-install(FILES cmake/add_deep_test.cmake
-  DESTINATION share/${PROJECT_NAME}/cmake
-)
-
 if(BUILD_TESTING)
-  # Include our custom test function
-  include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/add_deep_test.cmake)
-
-  # Find test dependencies
-  find_package(std_msgs REQUIRED)
-  find_package(std_srvs REQUIRED)
+  find_package(deep_test REQUIRED)
 
   # Add the basic example test
   add_deep_test(test_basic_example
     test/test_basic_example.cpp
     LIBRARIES
-      ${DEEP_TEST_LIB}
+      ${DEEP_CORE_LIB}
       ${std_msgs_TARGETS}
       ${std_srvs_TARGETS}
   )
@@ -86,7 +81,7 @@ if(BUILD_TESTING)
   add_deep_test(test_with_ros
     test/test_with_ros.cpp
     LIBRARIES
-      ${DEEP_TEST_LIB}
+      ${DEEP_CORE_LIB}
       ${std_msgs_TARGETS}
   )
 endif()
