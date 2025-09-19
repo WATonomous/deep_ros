@@ -81,11 +81,19 @@ ImageEncoding get_image_encoding_info(const std::string & encoding)
     {"64FC3", {DataType::FLOAT64, 3, 8}},
     {"64FC4", {DataType::FLOAT64, 4, 8}},
 
-    // YUV formats (treat as 2 channel for YUV422)
+    // YUV formats - 8-bit
     {"yuv422", {DataType::UINT8, 2, 1}},
     {"YUV422_YUY2", {DataType::UINT8, 2, 1}},
     {"UYVY", {DataType::UINT8, 2, 1}},
     {"YUYV", {DataType::UINT8, 2, 1}},
+    {"yuv444", {DataType::UINT8, 3, 1}},
+    {"YUV444", {DataType::UINT8, 3, 1}},
+
+    // YUV formats - 16-bit
+    {"yuv422_16", {DataType::UINT16, 2, 2}},
+    {"yuv444_16", {DataType::UINT16, 3, 2}},
+    {"YUV422_16", {DataType::UINT16, 2, 2}},
+    {"YUV444_16", {DataType::UINT16, 3, 2}},
   };
 
   auto it = encoding_map.find(encoding);
