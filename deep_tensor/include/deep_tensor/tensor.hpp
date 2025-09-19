@@ -211,7 +211,7 @@ private:
   DataType dtype_;
   size_t byte_size_;
   void * data_;
-  bool owns_data_;
+  bool is_view_;
 
   void calculate_strides();
   void allocate_memory();
