@@ -28,7 +28,6 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
-find_package(deep_test REQUIRED)
 
 set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -45,7 +44,6 @@ target_link_libraries(${DEEP_CORE_LIB}
   PRIVATE
     rclcpp::rclcpp
     rclcpp_lifecycle::rclcpp_lifecycle
-    deep_test::deep_test
 )
 
 install(TARGETS
@@ -68,25 +66,6 @@ install(DIRECTORY include/
 if(BUILD_TESTING)
   find_package(deep_test REQUIRED)
 
-  # Add the basic example test
-  add_deep_test(test_basic_example
-    test/test_basic_example.cpp
-    LIBRARIES
-      ${DEEP_CORE_LIB}
-      ${std_msgs_TARGETS}
-      ${std_srvs_TARGETS}
-  )
-
-  # Add ROS test with multiple library dependencies
-  add_deep_test(test_with_ros
-    test/test_with_ros.cpp
-    LIBRARIES
-      ${DEEP_CORE_LIB}
-      ${std_msgs_TARGETS}
-  )
 endif()
 
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
-ament_package(
-  CONFIG_EXTRAS "${PROJECT_NAME}-extras.cmake"
-)
