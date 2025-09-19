@@ -48,20 +48,42 @@ ImageEncoding get_image_encoding_info(const std::string & encoding);
 /**
  * @brief Convert sensor_msgs::msg::Image to Tensor
  * @param image ROS Image message
- * @param normalize Optional normalization (e.g., divide by 255 for uint8)
- * @return Tensor with shape [height, width, channels] or [height, width]
+ * @return Tensor with shape [1, height, width, channels] or [1, height, width]
  */
-Tensor from_image(const sensor_msgs::msg::Image & image, bool normalize = false);
+Tensor from_image(const sensor_msgs::msg::Image & image);
 
 /**
- * @brief Convert Tensor to sensor_msgs::msg::Image
- * @param tensor Tensor with shape [height, width] or [height, width, channels]
+ * @brief Convert vector of sensor_msgs::msg::Image to batched Tensor
+ * @param images Vector of ROS Image messages
+ * @return Tensor with shape [batch_size, height, width, channels] or [batch_size, height, width]
+ */
+Tensor from_image(const std::vector<sensor_msgs::msg::Image> & images);
+
+/**
+ * @brief Convert Tensor to sensor_msgs::msg::Image (single image from batch)
+ * @param tensor Tensor with shape [1, height, width] or [1, height, width, channels]
+ * @param image Output ROS Image message
  * @param encoding Image encoding (must match tensor dtype and shape)
  * @param header Optional header to set timestamp
- * @return ROS Image message
  */
-sensor_msgs::msg::Image to_image(
-  const Tensor & tensor, const std::string & encoding, const std_msgs::msg::Header & header = std_msgs::msg::Header());
+void to_image(
+  const Tensor & tensor,
+  sensor_msgs::msg::Image & image,
+  const std::string & encoding,
+  const std_msgs::msg::Header & header = std_msgs::msg::Header());
+
+/**
+ * @brief Convert batched Tensor to vector of sensor_msgs::msg::Image
+ * @param tensor Tensor with shape [batch_size, height, width] or [batch_size, height, width, channels]
+ * @param images Output vector of ROS Image messages
+ * @param encoding Image encoding (must match tensor dtype and shape)
+ * @param header Optional header to set timestamp
+ */
+void to_image(
+  const Tensor & tensor,
+  std::vector<sensor_msgs::msg::Image> & images,
+  const std::string & encoding,
+  const std_msgs::msg::Header & header = std_msgs::msg::Header());
 
 /**
  * @brief Convert sensor_msgs::msg::PointCloud2 to Tensor
@@ -83,14 +105,6 @@ Tensor from_laserscan(const sensor_msgs::msg::LaserScan & scan);
  * @return Tensor with shape [10] containing [qx,qy,qz,qw,ax,ay,az,gx,gy,gz]
  */
 Tensor from_imu(const sensor_msgs::msg::Imu & imu);
-
-/**
- * @brief Batch convert multiple images to a single tensor
- * @param images Vector of ROS Image messages
- * @param normalize Optional normalization
- * @return Tensor with shape [batch_size, height, width, channels]
- */
-Tensor from_image_batch(const std::vector<sensor_msgs::msg::Image> & images, bool normalize = false);
 
 }  // namespace ros_conversions
 }  // namespace deep_ros

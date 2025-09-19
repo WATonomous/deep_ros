@@ -66,20 +66,21 @@ bool contiguous = tensor.is_contiguous();
 
 using namespace deep_ros::ros_conversions;
 
-// Convert ROS Image to Tensor
+// Convert single ROS Image to Tensor
 sensor_msgs::msg::Image image_msg;
 // ... populate image_msg ...
 
-// Basic conversion
 Tensor tensor = from_image(image_msg);
-
-// With normalization (uint8 → float32, divided by 255)
-Tensor normalized_tensor = from_image(image_msg, true);
+// Result shape: [1, height, width, channels] - always includes batch dimension
 
 // Convert Tensor back to ROS Image
+sensor_msgs::msg::Image output_image;
+to_image(tensor, output_image, "rgb8");  // tensor must have batch size = 1
+
+// With optional header
 std_msgs::msg::Header header;
 header.stamp = rclcpp::Clock().now();
-auto image_out = to_image(tensor, "rgb8", header);
+to_image(tensor, output_image, "rgb8", header);
 ```
 
 ### Batch Image Processing
@@ -89,8 +90,12 @@ auto image_out = to_image(tensor, "rgb8", header);
 std::vector<sensor_msgs::msg::Image> images;
 // ... populate images ...
 
-Tensor batch_tensor = from_image_batch(images, true);
+Tensor batch_tensor = from_image(images);  // Function overloading handles vector input
 // Result shape: [batch_size, height, width, channels]
+
+// Convert batch tensor back to vector of images
+std::vector<sensor_msgs::msg::Image> output_images;
+to_image(batch_tensor, output_images, "rgb8");  // Overload handles vector output
 ```
 
 ### Point Cloud Conversions
