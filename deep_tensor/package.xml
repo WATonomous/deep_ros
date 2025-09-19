@@ -3,9 +3,9 @@
 <package format="3">
   <name>deep_tensor</name>
   <version>0.1.0</version>
-  <description>Temporary ROS 2 tensor type implementation for deep learning applications</description>
-  <maintainer email="your_email@example.com">Your Name</maintainer>
-  <license>Apache-2.0</license>
+  <description>ROS 2 tensor type implementation for deep learning applications</description>
+  <maintainer email="hello@watonomous.ca">WATonomous</maintainer>
+  <license>Apache 2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
