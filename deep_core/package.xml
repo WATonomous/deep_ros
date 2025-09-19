@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>deep_test</name>
+  <version>0.1.0</version>
+  <description>C++ language generic utilities, independent of any other dependencies or frameworks</description>
+  <maintainer email="hello@watonomous.ca">WATonomous</maintainer>
+  <license>Apache 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_lifecycle</depend>
+
+  <test_depend>deep_test</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
