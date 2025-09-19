@@ -34,6 +34,7 @@ set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(DEEP_TENSOR_LIB ${PROJECT_NAME}_lib)
 add_library(${DEEP_TENSOR_LIB} SHARED
   src/tensor.cpp
+  src/ros_conversions.cpp
 )
 
 target_include_directories(${DEEP_TENSOR_LIB} PUBLIC
