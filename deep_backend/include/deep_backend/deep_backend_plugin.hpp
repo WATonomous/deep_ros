@@ -14,15 +14,8 @@
 
 #pragma once
 
-#include <filesystem>
-#include <memory>
-#include <optional>
-#include <string>
-#include <utility>
-#include <vector>
-
-#include "deep_tensor/memory_allocator.hpp"
-#include "deep_tensor/tensor.hpp"
+#include "deep_backend/memory_allocator.hpp"
+#include "deep_backend/inference_manager.hpp"
 
 namespace deep_ros
 {
@@ -33,21 +26,14 @@ class DeepBackendPlugin
 public:
   virtual ~DeepBackendPlugin() = default;
 
-  // Load model from file path
-  virtual bool load_model(const std::filesystem::path & model_path) = 0;
-
-  // Pure inference with detailed error handling
-  virtual Tensor inference(Tensor inputs) = 0;
-
-  // Cleanup
-  virtual void unload_model() = 0;
-
   // Plugin metadata
   virtual std::string backend_name() const = 0;
-  virtual std::vector<std::string> supported_model_formats() const = 0;
 
   // Memory allocator provided by this plugin
   virtual std::shared_ptr<MemoryAllocator> get_allocator() const = 0;
+
+  // Inference manager provided by this plugin
+  virtual std::shared_ptr<InferenceManager> get_manager() const = 0;
 };
 
 }  // namespace deep_ros

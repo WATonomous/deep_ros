@@ -1,5 +1,0 @@
-<library path="onnxruntime_plugin">
-  <class name="onnxruntime" type="onnxruntime::OnnxRuntimePlugin" base_class_type="deep_ros::DeepBackendPlugin">
-    <description>ONNX Runtime CPU backend with optimized CPU memory allocator</description>
-  </class>
-</library>

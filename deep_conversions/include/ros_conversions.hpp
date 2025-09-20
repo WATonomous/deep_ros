@@ -27,7 +27,7 @@
 #include <sensor_msgs/msg/laser_scan.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
-#include "deep_tensor/memory_allocator.hpp"
+#include "deep_backend/memory_allocator.hpp"
 #include "deep_tensor/tensor.hpp"
 
 namespace deep_ros

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 cmake_minimum_required(VERSION 3.22)
-project(deep_tensor)
+project(deep_conversions)
 
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
@@ -25,13 +25,15 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(deep_tensor REQUIRED)
+find_package(deep_backend REQUIRED)
 
 set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# deep_tensor library
+# deep_conversions library
 set(DEEP_TENSOR_LIB ${PROJECT_NAME}_lib)
 add_library(${DEEP_TENSOR_LIB} SHARED
-  src/tensor.cpp
+  src/ros_conversions.cpp
 )
 
 target_include_directories(${DEEP_TENSOR_LIB} PUBLIC
@@ -42,9 +44,8 @@ target_include_directories(${DEEP_TENSOR_LIB} PUBLIC
 target_link_libraries(${DEEP_TENSOR_LIB}
   PUBLIC
     rclcpp::rclcpp
-  PRIVATE
-    ${sensor_msgs_TARGETS}
-    ${std_msgs_TARGETS}
+    deep_backend::deep_backend
+    deep_tensor::deep_tensor
 )
 
 install(TARGETS
@@ -66,12 +67,6 @@ install(DIRECTORY include/
 
 if(BUILD_TESTING)
   find_package(deep_test REQUIRED)
-
-  add_deep_test(test_tensor
-    test/test_tensor.cpp
-    LIBRARIES
-      ${DEEP_TENSOR_LIB}
-  )
 
   add_deep_test(test_ros_conversions
     test/test_ros_conversions.cpp

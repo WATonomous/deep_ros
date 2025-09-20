@@ -81,28 +81,4 @@ public:
   virtual std::string device_name() const = 0;
 };
 
-/**
- * @brief Default CPU memory allocator
- *
- * Uses standard malloc/free for allocation and memcpy for copying.
- * Always available as fallback.
- */
-class CpuAllocator : public MemoryAllocator
-{
-public:
-  void * allocate(size_t bytes) override;
-  void deallocate(void * ptr) override;
-  void copy_from_host(void * dst, const void * src, size_t bytes) override;
-  void copy_to_host(void * dst, const void * src, size_t bytes) override;
-  void copy_device_to_device(void * dst, const void * src, size_t bytes) override;
-  bool is_device_memory() const override;
-  std::string device_name() const override;
-};
-
-/**
- * @brief Get the default CPU allocator instance
- * @return Shared pointer to CPU allocator
- */
-std::shared_ptr<MemoryAllocator> get_cpu_allocator();
-
 }  // namespace deep_ros

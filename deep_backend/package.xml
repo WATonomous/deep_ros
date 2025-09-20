@@ -1,22 +1,20 @@
 <?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>onnxruntime</name>
+  <name>deep_tensor</name>
   <version>0.1.0</version>
-  <description>ONNX Runtime CPU backend plugin for deep_ros</description>
+  <description>ROS 2 tensor type implementation for deep learning applications</description>
   <maintainer email="hello@watonomous.ca">WATonomous</maintainer>
   <license>Apache 2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>deep_core</depend>
-  <depend>deep_tensor</depend>
-  <depend>pluginlib</depend>
   <depend>rclcpp</depend>
+  <depend>deep_tensor</depend>
 
   <test_depend>deep_test</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
-    <pluginlib plugin="${prefix}/plugins.xml" />
   </export>
 </package>

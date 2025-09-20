@@ -1,5 +1,0 @@
-<library path="onnxruntime-gpu_plugin">
-  <class name="onnxruntime-gpu" type="onnxruntime_gpu::OnnxRuntimeGpuPlugin" base_class_type="deep_ros::DeepBackendPlugin">
-    <description>ONNX Runtime GPU backend with CUDA memory allocator</description>
-  </class>
-</library>
