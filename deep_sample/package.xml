@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>deep_sample</name>
+  <version>0.1.0</version>
+  <description>Sample package demonstrating deep_core and deep_ort_backend_plugin usage</description>
+
+  <maintainer email="watonomous@example.com">WATonomous</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>pluginlib</depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>rclcpp_components</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+
+  <depend>deep_core</depend>
+  <depend>deep_conversions</depend>
+  <depend>bondcpp</depend>
+
+  <exec_depend>nav2_lifecycle_manager</exec_depend>
+  <test_depend>deep_test</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
