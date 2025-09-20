@@ -14,113 +14,228 @@
 
 #pragma once
 
-#include <filesystem>
-#include <format>
+#include <cstddef>
 #include <memory>
-#include <numeric>
-#include <optional>
-#include <stdexcept>
-#include <string>
 #include <vector>
+
+#include "deep_core/plugin_interfaces/backend_memory_allocator.hpp"
 
 namespace deep_ros
 {
 
+/**
+ * @brief Supported data types for tensor elements
+ */
 enum class DataType : uint8_t
 {
-  FLOAT32,
-  FLOAT64,
-  INT32,
-  INT64,
-  UINT8,
-  BOOL
+  FLOAT32 = 1,
+  FLOAT64 = 2,
+  INT8 = 3,
+  INT16 = 4,
+  INT32 = 5,
+  INT64 = 6,
+  UINT8 = 7,
+  UINT16 = 8,
+  UINT32 = 9,
+  UINT64 = 10,
+  BOOL = 11
 };
 
-class TensorError : public std::runtime_error
-{
-public:
-  explicit TensorError(const std::string & message)
-  : std::runtime_error(message)
-  {}
-};
+/**
+ * @brief Get the size in bytes of a data type
+ * @param dtype The data type
+ * @return Size in bytes
+ */
+size_t get_dtype_size(DataType dtype);
 
+/**
+ * @brief A multi-dimensional array container with automatic memory management
+ *
+ * The Tensor class provides a lightweight container for multi-dimensional arrays
+ * with support for different data types. It handles memory allocation automatically
+ * and supports both owned and borrowed memory patterns.
+ */
 class Tensor
 {
 public:
-  // Factory methods for type safety
-  static std::unique_ptr<Tensor> create_float32(std::vector<int64_t> shape, std::vector<float> data);
+  /**
+   * @brief Default constructor - creates an empty tensor
+   */
+  Tensor();
 
-  static std::unique_ptr<Tensor> create_int32(std::vector<int64_t> shape, std::vector<int32_t> data);
+  /**
+   * @brief Create a new tensor with specified shape and data type
+   * @param shape Dimensions of the tensor
+   * @param dtype Data type of tensor elements
+   */
+  Tensor(const std::vector<size_t> & shape, DataType dtype);
 
-  // Move semantics for efficiency
-  Tensor(Tensor &&) noexcept = default;
-  Tensor & operator=(Tensor &&) noexcept = default;
+  /**
+   * @brief Create a new tensor with specified shape, data type, and allocator
+   * @param shape Dimensions of the tensor
+   * @param dtype Data type of tensor elements
+   * @param allocator Memory allocator to use (uses CPU allocator if nullptr)
+   */
+  Tensor(const std::vector<size_t> & shape, DataType dtype, std::shared_ptr<BackendMemoryAllocator> allocator);
 
-  // Prevent expensive copying with clear error message
-  Tensor(const Tensor &) = delete;
-  Tensor & operator=(const Tensor &) = delete;
-  std::unique_ptr<Tensor> clone() const;
+  /**
+   * @brief Wrap existing data in a tensor (non-owning)
+   * @param data Pointer to existing data
+   * @param shape Dimensions of the tensor
+   * @param dtype Data type of tensor elements
+   */
+  Tensor(void * data, const std::vector<size_t> & shape, DataType dtype);
 
-  // Const-correct accessors with detailed error messages
-  const std::vector<int64_t> & shape() const noexcept
+  /**
+   * @brief Destructor - frees owned memory
+   */
+  ~Tensor();
+
+  /**
+   * @brief Copy constructor - creates a deep copy
+   */
+  Tensor(const Tensor & other);
+
+  /**
+   * @brief Copy assignment - creates a deep copy
+   */
+  Tensor & operator=(const Tensor & other);
+
+  /**
+   * @brief Move constructor
+   */
+  Tensor(Tensor && other) noexcept;
+
+  /**
+   * @brief Move assignment
+   */
+  Tensor & operator=(Tensor && other) noexcept;
+
+  /**
+   * @brief Get tensor dimensions
+   * @return Vector of dimension sizes
+   */
+  const std::vector<size_t> & shape() const
   {
     return shape_;
   }
 
-  DataType dtype() const noexcept
+  /**
+   * @brief Get memory strides for each dimension
+   * @return Vector of stride sizes in bytes
+   */
+  const std::vector<size_t> & strides() const
+  {
+    return strides_;
+  }
+
+  /**
+   * @brief Get number of dimensions
+   * @return Number of dimensions
+   */
+  size_t rank() const
+  {
+    return shape_.size();
+  }
+
+  /**
+   * @brief Get data type of tensor elements
+   * @return Data type enum
+   */
+  DataType dtype() const
   {
     return dtype_;
   }
 
+  /**
+   * @brief Get total size of tensor data in bytes
+   * @return Size in bytes
+   */
+  size_t byte_size() const
+  {
+    return byte_size_;
+  }
+
+  /**
+   * @brief Get raw data pointer
+   * @return Pointer to tensor data
+   */
+  void * data()
+  {
+    return data_;
+  }
+
+  /**
+   * @brief Get raw data pointer (const)
+   * @return Const pointer to tensor data
+   */
   const void * data() const
   {
-    if (!data_) {
-      throw TensorError("Tensor data is null - tensor may have been moved or uninitialized");
-    }
-    return data_.get();
+    return data_;
   }
 
-  size_t size_bytes() const noexcept
-  {
-    return size_bytes_;
-  }
-
-  // Utility methods with validation
-  size_t element_count() const noexcept;
-
-  bool is_valid() const noexcept
-  {
-    return data_ != nullptr;
-  }
-
-  // Bounds-checked typed data access
+  /**
+   * @brief Get typed data pointer
+   * @tparam T Data type to cast to
+   * @return Typed pointer to tensor data
+   */
   template <typename T>
-  const T * typed_data() const
+  T * data_as()
   {
-    if (!data_) {
-      throw TensorError("Cannot access typed data - tensor data is null");
-    }
+    return static_cast<T *>(data_);
+  }
 
-    if (!validate_type<T>()) {
-      throw TensorError(
-        std::format("Type mismatch - requested type doesn't match tensor dtype {}", static_cast<int>(dtype_)));
-    }
+  /**
+   * @brief Get typed data pointer (const)
+   * @tparam T Data type to cast to
+   * @return Const typed pointer to tensor data
+   */
+  template <typename T>
+  const T * data_as() const
+  {
+    return static_cast<const T *>(data_);
+  }
 
-    return reinterpret_cast<const T *>(data_.get());
+  /**
+   * @brief Create a new tensor with different shape but same data
+   * @param new_shape New dimensions (total size must match)
+   * @return New tensor view with different shape
+   */
+  Tensor reshape(const std::vector<size_t> & new_shape) const;
+
+  /**
+   * @brief Get total number of elements
+   * @return Number of elements
+   */
+  size_t size() const;
+
+  /**
+   * @brief Check if tensor data is stored contiguously in memory
+   * @return True if contiguous, false otherwise
+   */
+  bool is_contiguous() const;
+
+  /**
+   * @brief Get the memory allocator used by this tensor
+   * @return Shared pointer to memory allocator, or nullptr if using external data
+   */
+  std::shared_ptr<BackendMemoryAllocator> allocator() const
+  {
+    return allocator_;
   }
 
 private:
-  Tensor(std::vector<int64_t> shape, DataType dtype, size_t size_bytes);
-
-  template <typename T>
-  bool validate_type() const;
-
-  static void validate_shape_and_data(const std::vector<int64_t> & shape, size_t data_size);
-
-  std::vector<int64_t> shape_;
+  std::vector<size_t> shape_;
+  std::vector<size_t> strides_;
   DataType dtype_;
-  std::unique_ptr<uint8_t[]> data_;
-  size_t size_bytes_;
+  size_t byte_size_;
+  void * data_;
+  bool is_view_;
+  std::shared_ptr<BackendMemoryAllocator> allocator_;
+
+  void calculate_strides();
+  void allocate_memory();
+  void deallocate_memory();
 };
 
 }  // namespace deep_ros
