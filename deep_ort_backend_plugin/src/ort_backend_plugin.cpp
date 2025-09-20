@@ -14,6 +14,9 @@
 
 #include "deep_ort_backend_plugin/ort_backend_plugin.hpp"
 
+#include <memory>
+#include <string>
+
 #include <pluginlib/class_list_macros.hpp>
 
 #include "deep_ort_backend_plugin/ort_backend_executor.hpp"

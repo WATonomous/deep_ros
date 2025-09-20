@@ -227,19 +227,20 @@ deep_ort_backend_plugin/
    ```
 
 2. **Model loading fails**:
-   
+
 ```bash
    # Check file permissions and path
    ls -la /path/to/model.onnx
    ```
 
-3. **Memory alignment errors**:
-   
+1. **Memory alignment errors**:
+
    ```cpp
 // Ensure tensor size >= 128 bytes (ONNX Runtime requirement)
    if (tensor.size() * tensor.element_size() < 128) {
        // Use smaller data types or add padding
    }
+
    ```
 
 ## Future Enhancements

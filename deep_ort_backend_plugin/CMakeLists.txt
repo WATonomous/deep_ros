@@ -80,7 +80,7 @@ if(BUILD_TESTING)
   find_package(deep_test REQUIRED)
 
   add_deep_test(test_ort_backend test/test_ort_backend.cpp
-    LIBRARIES ${DEEP_ORT_LIB}
+    LIBRARIES ${DEEP_ORT_LIB} onnxruntime_vendor::onnxruntime_lib
   )
 
 endif()

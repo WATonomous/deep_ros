@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include <catch2/catch.hpp>
 #include <deep_core/deep_node_base.hpp>
 #include <deep_core/types/tensor.hpp>
@@ -26,8 +31,11 @@ class MockMemoryAllocator : public BackendMemoryAllocator
 public:
   void * allocate(size_t bytes) override
   {
+    if (bytes == 0) return nullptr;
+
     allocated_bytes_ += bytes;
-    return std::aligned_alloc(64, bytes);  // 64-byte alignment
+    void * ptr = std::malloc(bytes);
+    return ptr;
   }
 
   void deallocate(void * ptr) override
@@ -147,7 +155,12 @@ public:
     // Mock inference: return tensor with same shape but all zeros
     auto allocator = std::make_shared<MockMemoryAllocator>();
     Tensor output(input.shape(), input.dtype(), allocator);
-    std::memset(output.data(), 0, output.size() * sizeof(float));
+
+    // Calculate correct byte size based on data type
+    size_t dtype_size = get_dtype_size(input.dtype());
+    size_t byte_size = output.size() * dtype_size;
+
+    std::memset(output.data(), 0, byte_size);
     return output;
   }
 
@@ -234,10 +247,10 @@ TEST_CASE("Backend inference workflow", "[plugin][inference]")
   Tensor input(shape, DataType::FLOAT32, allocator);
 
   // Run inference
-  auto output = executor->run_inference(input);
+  auto output = executor->run_inference(std::move(input));
 
-  REQUIRE(output.shape() == input.shape());
-  REQUIRE(output.dtype() == input.dtype());
+  REQUIRE(output.shape() == shape);
+  REQUIRE(output.dtype() == DataType::FLOAT32);
 
   // Unload model
   executor->unload_model();
@@ -246,7 +259,7 @@ TEST_CASE("Backend inference workflow", "[plugin][inference]")
 class TestInferenceNode : public DeepNodeBase
 {
 public:
-  TestInferenceNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
+  explicit TestInferenceNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
   : DeepNodeBase("test_inference_node", options)
   {}
 

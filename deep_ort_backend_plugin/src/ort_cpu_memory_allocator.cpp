@@ -18,6 +18,7 @@
 #include <cstring>
 #include <memory>
 #include <stdexcept>
+#include <string>
 
 namespace deep_ort_backend
 {

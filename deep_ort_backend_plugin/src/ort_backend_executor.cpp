@@ -14,7 +14,10 @@
 
 #include "deep_ort_backend_plugin/ort_backend_executor.hpp"
 
+#include <memory>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 #include "deep_ort_backend_plugin/ort_cpu_memory_allocator.hpp"
 
@@ -100,7 +103,6 @@ deep_ros::Tensor OrtBackendExecutor::run_inference(deep_ros::Tensor input)
     session_->Run(run_options, binding);
 
     return output;
-
   } catch (const std::exception & e) {
     throw std::runtime_error("ONNX Runtime inference failed: " + std::string(e.what()));
   }
@@ -172,7 +174,6 @@ std::vector<size_t> OrtBackendExecutor::get_output_shape(const std::vector<size_
     }
 
     return output_shape;
-
   } catch (const std::exception & e) {
     throw std::runtime_error("Failed to get output shape from model: " + std::string(e.what()));
   }

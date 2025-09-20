@@ -201,7 +201,7 @@ void Tensor::calculate_strides()
 
 void Tensor::allocate_memory()
 {
-  if (byte_size_ > 0 && is_view_) {
+  if (byte_size_ > 0 && !is_view_) {
     if (allocator_) {
       data_ = allocator_->allocate(byte_size_);
     } else {
@@ -215,7 +215,7 @@ void Tensor::allocate_memory()
 
 void Tensor::deallocate_memory()
 {
-  if (is_view_ && data_) {
+  if (!is_view_ && data_) {
     if (allocator_) {
       allocator_->deallocate(data_);
     } else {

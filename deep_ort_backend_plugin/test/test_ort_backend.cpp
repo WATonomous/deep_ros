@@ -14,7 +14,9 @@
 
 #include <chrono>
 #include <filesystem>
+#include <string>
 #include <thread>
+#include <vector>
 
 #include <catch2/catch.hpp>
 #include <deep_ort_backend_plugin/ort_backend_executor.hpp>

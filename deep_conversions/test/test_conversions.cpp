@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <memory>
+#include <string>
+#include <vector>
+
 #include <catch2/catch.hpp>
 #include <deep_conversions/ros_conversions.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -31,8 +35,12 @@ class MockMemoryAllocator : public BackendMemoryAllocator
 public:
   void * allocate(size_t bytes) override
   {
-    allocated_bytes_ += bytes;
-    return std::aligned_alloc(64, bytes);
+    if (bytes == 0) return nullptr;
+
+    // Ensure size is a multiple of alignment for std::aligned_alloc
+    size_t aligned_size = ((bytes + 63) / 64) * 64;
+    allocated_bytes_ += aligned_size;
+    return std::aligned_alloc(64, aligned_size);  // 64-byte alignment
   }
 
   void deallocate(void * ptr) override
@@ -113,7 +121,7 @@ TEST_CASE("Image encoding info parsing", "[conversions][image]")
   SECTION("MONO16 encoding")
   {
     auto info = get_image_encoding_info("mono16");
-    REQUIRE(info.dtype == DataType::UINT8);  // May need adjustment based on implementation
+    REQUIRE(info.dtype == DataType::UINT16);
     REQUIRE(info.channels == 1);
     REQUIRE(info.bytes_per_channel == 2);
   }
