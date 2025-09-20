@@ -13,7 +13,7 @@
 # limitations under the License.
 
 cmake_minimum_required(VERSION 3.22)
-project(deep_test)
+project(deep_core)
 
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
@@ -27,26 +27,29 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
+find_package(pluginlib REQUIRED)
 
 set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# deep_test library
-set(DEEP_TEST_LIB ${PROJECT_NAME}_lib)
-add_library(${DEEP_TEST_LIB} SHARED
-  src/test_executor_fixture.cpp
+# deep_core library
+set(DEEP_CORE_LIB ${PROJECT_NAME}_lib)
+add_library(${DEEP_CORE_LIB} SHARED
+  src/deep_node_base.cpp
+  src/tensor.cpp
 )
-target_include_directories(${DEEP_TEST_LIB} PUBLIC
+target_include_directories(${DEEP_CORE_LIB} PUBLIC
   $<BUILD_INTERFACE:${include_dir}>
   $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(${DEEP_TEST_LIB}
-  PRIVATE
+target_link_libraries(${DEEP_CORE_LIB}
+  PUBLIC
     rclcpp::rclcpp
     rclcpp_lifecycle::rclcpp_lifecycle
+    pluginlib::pluginlib
 )
 
 install(TARGETS
-  ${DEEP_TEST_LIB}
+  ${DEEP_CORE_LIB}
   EXPORT ${PROJECT_NAME}Targets
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -62,37 +65,14 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
-install(FILES cmake/add_deep_test.cmake
-  DESTINATION share/${PROJECT_NAME}/cmake
-)
-
 if(BUILD_TESTING)
-  # Include our custom test function
-  include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/add_deep_test.cmake)
+  find_package(deep_test REQUIRED)
 
-  # Find test dependencies
-  find_package(std_msgs REQUIRED)
-  find_package(std_srvs REQUIRED)
-
-  # Add the basic example test
-  add_deep_test(test_basic_example
-    test/test_basic_example.cpp
-    LIBRARIES
-      ${DEEP_TEST_LIB}
-      ${std_msgs_TARGETS}
-      ${std_srvs_TARGETS}
+  add_deep_test(test_deep_core test/test_deep_core.cpp
+    LIBRARIES ${DEEP_CORE_LIB}
   )
 
-  # Add ROS test with multiple library dependencies
-  add_deep_test(test_with_ros
-    test/test_with_ros.cpp
-    LIBRARIES
-      ${DEEP_TEST_LIB}
-      ${std_msgs_TARGETS}
-  )
 endif()
 
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
-ament_package(
-  CONFIG_EXTRAS "${PROJECT_NAME}-extras.cmake"
-)
+ament_package()

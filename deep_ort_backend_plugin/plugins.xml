@@ -1,0 +1,5 @@
+<library path="deep_ort_backend_plugin_lib">
+  <class name="onnxruntime_cpu" type="deep_ort_backend::OrtBackendPlugin" base_class_type="deep_ros::DeepBackendPlugin">
+    <description>ONNX Runtime CPU backend with optimized memory allocation and inference execution</description>
+  </class>
+</library>

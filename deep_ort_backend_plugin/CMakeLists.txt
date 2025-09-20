@@ -13,7 +13,7 @@
 # limitations under the License.
 
 cmake_minimum_required(VERSION 3.22)
-project(deep_test)
+project(deep_ort_backend_plugin)
 
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
@@ -25,28 +25,38 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
+find_package(deep_core REQUIRED)
+find_package(onnxruntime_vendor REQUIRED)
+find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 
 set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# deep_test library
-set(DEEP_TEST_LIB ${PROJECT_NAME}_lib)
-add_library(${DEEP_TEST_LIB} SHARED
-  src/test_executor_fixture.cpp
+# deep_ort_backend_plugin library
+set(DEEP_ORT_LIB ${PROJECT_NAME}_lib)
+add_library(${DEEP_ORT_LIB} SHARED
+  src/ort_cpu_memory_allocator.cpp
+  src/ort_backend_executor.cpp
+  src/ort_backend_plugin.cpp
 )
-target_include_directories(${DEEP_TEST_LIB} PUBLIC
+
+target_include_directories(${DEEP_ORT_LIB} PUBLIC
   $<BUILD_INTERFACE:${include_dir}>
   $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(${DEEP_TEST_LIB}
-  PRIVATE
+
+target_link_libraries(${DEEP_ORT_LIB}
+  PUBLIC
+    deep_core::deep_core_lib
+    pluginlib::pluginlib
     rclcpp::rclcpp
-    rclcpp_lifecycle::rclcpp_lifecycle
+  PRIVATE
+    onnxruntime_vendor::onnxruntime_lib
 )
 
 install(TARGETS
-  ${DEEP_TEST_LIB}
+  ${DEEP_ORT_LIB}
   EXPORT ${PROJECT_NAME}Targets
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -62,37 +72,18 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
-install(FILES cmake/add_deep_test.cmake
-  DESTINATION share/${PROJECT_NAME}/cmake
+install(FILES plugins.xml
+  DESTINATION share/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)
-  # Include our custom test function
-  include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/add_deep_test.cmake)
+  find_package(deep_test REQUIRED)
 
-  # Find test dependencies
-  find_package(std_msgs REQUIRED)
-  find_package(std_srvs REQUIRED)
-
-  # Add the basic example test
-  add_deep_test(test_basic_example
-    test/test_basic_example.cpp
-    LIBRARIES
-      ${DEEP_TEST_LIB}
-      ${std_msgs_TARGETS}
-      ${std_srvs_TARGETS}
+  add_deep_test(test_ort_backend test/test_ort_backend.cpp
+    LIBRARIES ${DEEP_ORT_LIB} onnxruntime_vendor::onnxruntime_lib
   )
 
-  # Add ROS test with multiple library dependencies
-  add_deep_test(test_with_ros
-    test/test_with_ros.cpp
-    LIBRARIES
-      ${DEEP_TEST_LIB}
-      ${std_msgs_TARGETS}
-  )
 endif()
 
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
-ament_package(
-  CONFIG_EXTRAS "${PROJECT_NAME}-extras.cmake"
-)
+ament_package()
