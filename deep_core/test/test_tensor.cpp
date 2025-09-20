@@ -18,7 +18,7 @@
 
 #include <catch2/catch.hpp>
 
-#include "deep_tensor/tensor.hpp"
+#include "deep_core/types/tensor.hpp"
 
 TEST_CASE("deep_ros::Tensor default constructor", "[tensor]")
 {

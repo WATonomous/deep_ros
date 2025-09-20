@@ -16,7 +16,7 @@
 
 #include <catch2/catch.hpp>
 
-#include "deep_tensor/ros_conversions.hpp"
+#include "deep_conversions/ros_conversions.hpp"
 
 TEST_CASE("Image encoding info parsing", "[ros_conversions]")
 {
