@@ -11,6 +11,7 @@
   <depend>rclcpp</depend>
   <depend>rclcpp_lifecycle</depend>
   <depend>pluginlib</depend>
+  <depend>bondcpp</depend>
 
   <test_depend>deep_test</test_depend>
 

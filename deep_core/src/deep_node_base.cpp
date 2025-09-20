@@ -35,11 +35,19 @@ void DeepNodeBase::declare_parameters()
 {
   declare_parameter("Backend.plugin", "");
   declare_parameter("model_path", "");
+
+  // Bond parameters
+  declare_parameter("Bond.enable", false);
+  declare_parameter("Bond.bond_timeout", 4.0);
+  declare_parameter("Bond.bond_heartbeat_period", 0.1);
 }
 
 CallbackReturn DeepNodeBase::on_configure(const rclcpp_lifecycle::State & state)
 {
   RCLCPP_INFO(get_logger(), "Configuring DeepNodeBase");
+
+  // Setup bond if enabled
+  setup_bond();
 
   std::string backend_plugin = get_parameter("Backend.plugin").as_string();
   if (!backend_plugin.empty()) {
@@ -63,6 +71,13 @@ CallbackReturn DeepNodeBase::on_configure(const rclcpp_lifecycle::State & state)
 CallbackReturn DeepNodeBase::on_activate(const rclcpp_lifecycle::State & state)
 {
   RCLCPP_INFO(get_logger(), "Activating DeepNodeBase");
+
+  // Start bond if enabled
+  if (bond_enabled_ && bond_) {
+    bond_->start();
+    RCLCPP_INFO(get_logger(), "Bond started");
+  }
+
   return on_activate_impl(state);
 }
 
@@ -75,6 +90,13 @@ CallbackReturn DeepNodeBase::on_deactivate(const rclcpp_lifecycle::State & state
 CallbackReturn DeepNodeBase::on_cleanup(const rclcpp_lifecycle::State & state)
 {
   RCLCPP_INFO(get_logger(), "Cleaning up DeepNodeBase");
+
+  // Stop bond if active
+  if (bond_) {
+    bond_.reset();
+    RCLCPP_INFO(get_logger(), "Bond stopped and cleaned up");
+  }
+
   unload_model();
   plugin_.reset();
   return on_cleanup_impl(state);
@@ -83,6 +105,13 @@ CallbackReturn DeepNodeBase::on_cleanup(const rclcpp_lifecycle::State & state)
 CallbackReturn DeepNodeBase::on_shutdown(const rclcpp_lifecycle::State & state)
 {
   RCLCPP_INFO(get_logger(), "Shutting down DeepNodeBase");
+
+  // Stop bond if active
+  if (bond_) {
+    bond_.reset();
+    RCLCPP_INFO(get_logger(), "Bond stopped and cleaned up");
+  }
+
   unload_model();
   plugin_.reset();
   return on_shutdown_impl(state);
@@ -185,6 +214,30 @@ std::vector<std::string> DeepNodeBase::discover_available_plugins()
 pluginlib::UniquePtr<DeepBackendPlugin> DeepNodeBase::load_plugin_library(const std::string & plugin_name)
 {
   return plugin_loader_->createUniqueInstance(plugin_name);
+}
+
+void DeepNodeBase::setup_bond()
+{
+  bond_enabled_ = get_parameter("Bond.enable").as_bool();
+  bond_timeout_ = get_parameter("Bond.bond_timeout").as_double();
+  bond_heartbeat_period_ = get_parameter("Bond.bond_heartbeat_period").as_double();
+
+  if (bond_enabled_) {
+    RCLCPP_INFO(
+      get_logger(), "Setting up bond with timeout: %.1fs, heartbeat: %.1fs", bond_timeout_, bond_heartbeat_period_);
+
+    // Create bond with standard topic name and node name as bond ID
+    std::string bond_topic = "/bond";
+    bond_ = std::make_unique<bond::Bond>(bond_topic, get_name(), shared_from_this());
+
+    // Configure bond parameters
+    bond_->setHeartbeatPeriod(bond_heartbeat_period_);
+    bond_->setHeartbeatTimeout(bond_timeout_);
+
+    RCLCPP_INFO(get_logger(), "Bond configured on topic: %s", bond_topic.c_str());
+  } else {
+    RCLCPP_INFO(get_logger(), "Bond disabled");
+  }
 }
 
 }  // namespace deep_ros

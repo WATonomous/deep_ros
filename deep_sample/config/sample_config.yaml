@@ -1,7 +1,0 @@
-sample_inference_node:
-  ros__parameters:
-    Backend:
-      plugin: "deep_ort_backend_plugin::OrtBackendPlugin"
-    model_path: "$(find-pkg-share deep_sample)/models/simple_model.onnx"
-    input_topic: "/camera/image_raw"
-    output_topic: "/inference/output"

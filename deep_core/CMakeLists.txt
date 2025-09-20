@@ -28,6 +28,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(pluginlib REQUIRED)
+find_package(bondcpp REQUIRED)
 
 set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -46,6 +47,7 @@ target_link_libraries(${DEEP_CORE_LIB}
     rclcpp::rclcpp
     rclcpp_lifecycle::rclcpp_lifecycle
     pluginlib::pluginlib
+    bondcpp::bondcpp
 )
 
 install(TARGETS
@@ -69,7 +71,8 @@ if(BUILD_TESTING)
   find_package(deep_test REQUIRED)
 
   add_deep_test(test_deep_core test/test_deep_core.cpp
-    LIBRARIES ${DEEP_CORE_LIB}
+    LIBRARIES
+      ${DEEP_CORE_LIB}
   )
 
 endif()

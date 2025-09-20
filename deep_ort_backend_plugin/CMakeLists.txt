@@ -48,10 +48,10 @@ target_include_directories(${DEEP_ORT_LIB} PUBLIC
 
 target_link_libraries(${DEEP_ORT_LIB}
   PUBLIC
-    deep_core::deep_core_lib
     pluginlib::pluginlib
     rclcpp::rclcpp
   PRIVATE
+    deep_core::deep_core_lib
     onnxruntime_vendor::onnxruntime_lib
 )
 
@@ -76,14 +76,21 @@ install(FILES plugins.xml
   DESTINATION share/${PROJECT_NAME}
 )
 
+# Export plugin description file to ament index
+pluginlib_export_plugin_description_file(deep_core plugins.xml)
+
 if(BUILD_TESTING)
   find_package(deep_test REQUIRED)
 
   add_deep_test(test_ort_backend test/test_ort_backend.cpp
-    LIBRARIES ${DEEP_ORT_LIB} onnxruntime_vendor::onnxruntime_lib
+    LIBRARIES
+      ${DEEP_ORT_LIB}
+      deep_core::deep_core_lib
+      onnxruntime_vendor::onnxruntime_lib
   )
 
 endif()
 
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
+ament_export_libraries(${DEEP_ORT_LIB})
 ament_package()

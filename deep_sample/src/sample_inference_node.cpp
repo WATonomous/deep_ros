@@ -155,18 +155,5 @@ std_msgs::msg::Float32MultiArray SampleInferenceNode::tensor_to_output(const dee
 
 }  // namespace deep_sample
 
-int main(int argc, char * argv[])
-{
-  rclcpp::init(argc, argv);
-
-  rclcpp::executors::SingleThreadedExecutor executor;
-
-  auto node = std::make_shared<deep_sample::SampleInferenceNode>();
-  executor.add_node(node->get_node_base_interface());
-
-  RCLCPP_INFO(node->get_logger(), "Starting SampleInferenceNode");
-  executor.spin();
-
-  rclcpp::shutdown();
-  return 0;
-}
+#include <rclcpp_components/register_node_macro.hpp>
+RCLCPP_COMPONENTS_REGISTER_NODE(deep_sample::SampleInferenceNode)

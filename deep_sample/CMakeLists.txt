@@ -26,37 +26,49 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(deep_core REQUIRED)
 find_package(deep_conversions REQUIRED)
-find_package(deep_ort_backend_plugin REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(bondcpp REQUIRED)
 
-# Sample inference node
-add_executable(sample_inference_node
+# Sample inference component library
+add_library(sample_inference_component SHARED
   src/sample_inference_node.cpp
 )
 
-target_include_directories(sample_inference_node PUBLIC
+target_include_directories(sample_inference_component PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(sample_inference_node
-  deep_core::deep_core_lib
-  deep_conversions::deep_conversions_lib
-  deep_ort_backend_plugin::deep_ort_backend_plugin_lib
-  pluginlib::pluginlib
-  rclcpp::rclcpp
-  rclcpp_lifecycle::rclcpp_lifecycle
-  ${sensor_msgs_TARGETS}
-  ${std_msgs_TARGETS}
+target_link_libraries(sample_inference_component
+  PUBLIC
+    pluginlib::pluginlib
+    rclcpp::rclcpp
+    rclcpp_lifecycle::rclcpp_lifecycle
+    rclcpp_components::component
+    ${sensor_msgs_TARGETS}
+    ${std_msgs_TARGETS}
+    bondcpp::bondcpp
+  PRIVATE
+    deep_core::deep_core_lib
+    deep_conversions::deep_conversions_lib
 )
 
-# Install executable
-install(TARGETS sample_inference_node
-  DESTINATION lib/${PROJECT_NAME}
+# Register the component and create executable
+rclcpp_components_register_node(sample_inference_component
+  PLUGIN deep_sample::SampleInferenceNode
+  EXECUTABLE sample_inference_node
+)
+
+# Install component library and executable
+install(TARGETS sample_inference_component
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 
 # Install config and launch files
@@ -65,8 +77,7 @@ install(DIRECTORY config launch models
 )
 
 if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  ament_lint_auto_find_test_dependencies()
+
 endif()
 
 ament_package()

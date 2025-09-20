@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include <bondcpp/bond.hpp>
 #include <pluginlib/class_list_macros.hpp>
 #include <pluginlib/class_loader.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
@@ -191,8 +192,15 @@ private:
   std::string current_plugin_name_;
   std::filesystem::path current_model_path_;
 
+  // Bond support
+  std::unique_ptr<bond::Bond> bond_;
+  bool bond_enabled_;
+  double bond_timeout_;
+  double bond_heartbeat_period_;
+
   // ROS parameters
   void declare_parameters();
+  void setup_bond();
 };
 
 }  // namespace deep_ros
