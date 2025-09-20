@@ -42,7 +42,7 @@ def generate_launch_description():
 
     use_compressed_arg = DeclareLaunchArgument(
         "use_compressed",
-        default_value="true",
+        default_value="false",
         description="Whether to use compressed images (sensor_msgs/CompressedImage) instead of raw (sensor_msgs/Image)",
     )
 
