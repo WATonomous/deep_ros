@@ -31,15 +31,63 @@ namespace deep_ort_backend
 class OrtCpuMemoryAllocator : public deep_ros::BackendMemoryAllocator
 {
 public:
+  /**
+   * @brief Constructor
+   */
   OrtCpuMemoryAllocator();
+
+  /**
+   * @brief Destructor
+   */
   ~OrtCpuMemoryAllocator() override = default;
 
+  /**
+   * @brief Allocate aligned memory for CPU operations
+   * @param bytes Number of bytes to allocate
+   * @return Pointer to 64-byte aligned memory, or nullptr on failure
+   */
   void * allocate(size_t bytes) override;
+
+  /**
+   * @brief Deallocate memory
+   * @param ptr Pointer to memory allocated by this allocator
+   */
   void deallocate(void * ptr) override;
+
+  /**
+   * @brief Copy from host memory (same as device for CPU)
+   * @param dst Destination pointer
+   * @param src Source pointer
+   * @param bytes Number of bytes to copy
+   */
   void copy_from_host(void * dst, const void * src, size_t bytes) override;
+
+  /**
+   * @brief Copy to host memory (same as device for CPU)
+   * @param dst Destination pointer
+   * @param src Source pointer
+   * @param bytes Number of bytes to copy
+   */
   void copy_to_host(void * dst, const void * src, size_t bytes) override;
+
+  /**
+   * @brief Copy between CPU memory locations
+   * @param dst Destination pointer
+   * @param src Source pointer
+   * @param bytes Number of bytes to copy
+   */
   void copy_device_to_device(void * dst, const void * src, size_t bytes) override;
+
+  /**
+   * @brief Check if this is device memory
+   * @return false (CPU memory is host memory)
+   */
   bool is_device_memory() const override;
+
+  /**
+   * @brief Get device name
+   * @return "cpu"
+   */
   std::string device_name() const override;
 };
 

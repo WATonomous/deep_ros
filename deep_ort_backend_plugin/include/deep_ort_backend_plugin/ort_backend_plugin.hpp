@@ -33,11 +33,32 @@ namespace deep_ort_backend
 class OrtBackendPlugin : public deep_ros::DeepBackendPlugin
 {
 public:
+  /**
+   * @brief Constructor - initializes ORT allocator and executor
+   */
   OrtBackendPlugin();
+
+  /**
+   * @brief Destructor
+   */
   ~OrtBackendPlugin() override = default;
 
+  /**
+   * @brief Get backend name
+   * @return "onnxruntime"
+   */
   std::string backend_name() const override;
+
+  /**
+   * @brief Get the ORT CPU memory allocator
+   * @return Shared pointer to ORT memory allocator
+   */
   std::shared_ptr<deep_ros::BackendMemoryAllocator> get_allocator() const override;
+
+  /**
+   * @brief Get the ORT inference executor
+   * @return Shared pointer to ORT inference executor
+   */
   std::shared_ptr<deep_ros::BackendInferenceExecutor> get_inference_executor() const override;
 
 private:

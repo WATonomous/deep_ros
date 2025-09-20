@@ -31,16 +31,45 @@ namespace deep_ort_backend
  * @brief ONNX Runtime backend inference executor
  *
  * Provides inference execution using ONNX Runtime with CPU optimization.
+ * Uses zero-copy IO binding for efficient tensor operations.
  */
 class OrtBackendExecutor : public deep_ros::BackendInferenceExecutor
 {
 public:
+  /**
+   * @brief Constructor - initializes ONNX Runtime environment
+   */
   OrtBackendExecutor();
+
+  /**
+   * @brief Destructor
+   */
   ~OrtBackendExecutor() override = default;
 
+  /**
+   * @brief Load an ONNX model from file
+   * @param model_path Path to the .onnx model file
+   * @return true if successful, false otherwise
+   */
   bool load_model(const std::filesystem::path & model_path) override;
+
+  /**
+   * @brief Run inference using zero-copy IO binding
+   * @param input Input tensor (must be compatible with model input)
+   * @return Output tensor with inference results
+   * @throws std::runtime_error if inference fails or no model loaded
+   */
   deep_ros::Tensor run_inference(deep_ros::Tensor input) override;
+
+  /**
+   * @brief Unload the currently loaded model
+   */
   void unload_model() override;
+
+  /**
+   * @brief Get supported model formats
+   * @return Vector containing "onnx"
+   */
   std::vector<std::string> supported_model_formats() const override;
 
 private:
@@ -51,8 +80,26 @@ private:
   std::unique_ptr<Ort::Session> session_;
   Ort::MemoryInfo memory_info_;
 
+  /**
+   * @brief Convert deep_ros DataType to ONNX tensor element type
+   * @param dtype deep_ros data type
+   * @return ONNX tensor element data type
+   */
   ONNXTensorElementDataType convert_to_onnx_type(deep_ros::DataType dtype) const;
+
+  /**
+   * @brief Get model output shape based on input shape
+   * @param input_shape Input tensor shape
+   * @return Expected output tensor shape
+   * @throws std::runtime_error if model not loaded or shape inference fails
+   */
   std::vector<size_t> get_output_shape(const std::vector<size_t> & input_shape) const;
+
+  /**
+   * @brief Get element size in bytes for a data type
+   * @param dtype Data type
+   * @return Size in bytes per element
+   */
   size_t get_element_size(deep_ros::DataType dtype) const;
 };
 

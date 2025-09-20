@@ -26,14 +26,14 @@ DeepNodeBase::DeepNodeBase(const std::string & node_name, const rclcpp::NodeOpti
 : rclcpp_lifecycle::LifecycleNode(node_name, options)
 , model_loaded_(false)
 {
-  plugin_loader_ = std::make_unique<pluginlib::ClassLoader<DeepBackendPlugin>>(
-    "deep_ort_backend_plugin", "deep_ros::DeepBackendPlugin");
+  plugin_loader_ =
+    std::make_unique<pluginlib::ClassLoader<DeepBackendPlugin>>("deep_core", "deep_ros::DeepBackendPlugin");
   declare_parameters();
 }
 
 void DeepNodeBase::declare_parameters()
 {
-  declare_parameter("backend", "");
+  declare_parameter("Backend.plugin", "");
   declare_parameter("model_path", "");
 }
 
@@ -41,10 +41,10 @@ CallbackReturn DeepNodeBase::on_configure(const rclcpp_lifecycle::State & state)
 {
   RCLCPP_INFO(get_logger(), "Configuring DeepNodeBase");
 
-  std::string backend = get_parameter("backend").as_string();
-  if (!backend.empty()) {
-    if (!load_plugin(backend)) {
-      RCLCPP_ERROR(get_logger(), "Failed to load backend plugin: %s", backend.c_str());
+  std::string backend_plugin = get_parameter("Backend.plugin").as_string();
+  if (!backend_plugin.empty()) {
+    if (!load_plugin(backend_plugin)) {
+      RCLCPP_ERROR(get_logger(), "Failed to load backend plugin: %s", backend_plugin.c_str());
       return CallbackReturn::FAILURE;
     }
   }
