@@ -19,11 +19,14 @@
 #include <string>
 #include <vector>
 
+#include <pluginlib/class_list_macros.hpp>
+#include <pluginlib/class_loader.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <rclcpp_lifecycle/state.hpp>
 
-#include "deep_core/plugin_interface.hpp"
-#include "deep_core/types/tensor.hpp"
+#include "deep_core/deep_backend_plugin.hpp"
+#include "deep_tensor/memory_allocator.hpp"
+#include "deep_tensor/tensor.hpp"
 
 namespace deep_ros
 {
@@ -69,7 +72,10 @@ protected:
   bool load_plugin(const std::string & plugin_name);
   bool load_model(const std::filesystem::path & model_path);
   void unload_model();
-  InferenceResult run_inference(std::vector<std::unique_ptr<Tensor>> inputs);
+  Tensor run_inference(Tensor inputs);
+
+  // Get current allocator from loaded plugin
+  std::shared_ptr<MemoryAllocator> get_current_allocator() const;
 
   // Plugin status
   bool is_plugin_loaded() const
@@ -94,10 +100,13 @@ private:
 
   // Plugin discovery and loading
   std::vector<std::string> discover_available_plugins();
-  std::unique_ptr<InferencePluginInterface> load_plugin_library(const std::string & plugin_name);
+  pluginlib::UniquePtr<DeepBackendPlugin> load_plugin_library(const std::string & plugin_name);
+
+  // Plugin loader
+  std::unique_ptr<pluginlib::ClassLoader<DeepBackendPlugin>> plugin_loader_;
 
   // State
-  std::unique_ptr<InferencePluginInterface> plugin_;
+  pluginlib::UniquePtr<DeepBackendPlugin> plugin_;
   bool model_loaded_;
   std::string current_plugin_name_;
   std::filesystem::path current_model_path_;

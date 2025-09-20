@@ -11,10 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# Copyright (c) 2025-present Polymath Robotics, Inc. All rights reserved
-# Proprietary. Any unauthorized copying, distribution, or modification of this software is strictly prohibited.
+
 cmake_minimum_required(VERSION 3.22)
-project(deep_core)
+project(onnxruntime)
 
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
@@ -26,32 +25,39 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(rclcpp_lifecycle REQUIRED)
+find_package(deep_core REQUIRED)
 find_package(deep_tensor REQUIRED)
 find_package(pluginlib REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_lifecycle REQUIRED)
 
 set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# deep_core library
-set(DEEP_CORE_LIB ${PROJECT_NAME}_lib)
-add_library(${DEEP_CORE_LIB} SHARED
-  src/deep_node_base.cpp
+# onnxruntime plugin library
+set(PLUGIN_LIB ${PROJECT_NAME}_plugin)
+add_library(${PLUGIN_LIB} SHARED
+  src/onnx_cpu_allocator.cpp
+  src/onnxruntime_plugin.cpp
 )
-target_include_directories(${DEEP_CORE_LIB} PUBLIC
+
+target_include_directories(${PLUGIN_LIB} PUBLIC
   $<BUILD_INTERFACE:${include_dir}>
   $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(${DEEP_CORE_LIB}
+
+target_link_libraries(${PLUGIN_LIB}
   PUBLIC
+    deep_core::deep_core_lib
     deep_tensor::deep_tensor_lib
-    rclcpp::rclcpp
-    rclcpp_lifecycle::rclcpp_lifecycle
     pluginlib::pluginlib
+    rclcpp::rclcpp
 )
 
+# Export plugin symbols
+pluginlib_export_plugin_description_file(deep_core plugins.xml)
+
 install(TARGETS
-  ${DEEP_CORE_LIB}
+  ${PLUGIN_LIB}
   EXPORT ${PROJECT_NAME}Targets
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -67,10 +73,19 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
-if(BUILD_TESTING)
-  find_package(deep_test REQUIRED)
+install(FILES plugins.xml
+  DESTINATION share/${PROJECT_NAME}
+)
 
-endif()
+# if(BUILD_TESTING)
+#   find_package(deep_test REQUIRED)
+#
+#   add_deep_test(test_onnxruntime_plugin
+#     test/test_onnxruntime_plugin.cpp
+#     LIBRARIES
+#       ${PLUGIN_LIB}
+#   )
+# endif()
 
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
 ament_package()

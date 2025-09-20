@@ -18,6 +18,8 @@
 #include <memory>
 #include <vector>
 
+#include "deep_tensor/memory_allocator.hpp"
+
 namespace deep_ros
 {
 
@@ -67,6 +69,14 @@ public:
    * @param dtype Data type of tensor elements
    */
   Tensor(const std::vector<size_t> & shape, DataType dtype);
+
+  /**
+   * @brief Create a new tensor with specified shape, data type, and allocator
+   * @param shape Dimensions of the tensor
+   * @param dtype Data type of tensor elements
+   * @param allocator Memory allocator to use (uses CPU allocator if nullptr)
+   */
+  Tensor(const std::vector<size_t> & shape, DataType dtype, std::shared_ptr<MemoryAllocator> allocator);
 
   /**
    * @brief Wrap existing data in a tensor (non-owning)
@@ -205,6 +215,15 @@ public:
    */
   bool is_contiguous() const;
 
+  /**
+   * @brief Get the memory allocator used by this tensor
+   * @return Shared pointer to memory allocator, or nullptr if using external data
+   */
+  std::shared_ptr<MemoryAllocator> allocator() const
+  {
+    return allocator_;
+  }
+
 private:
   std::vector<size_t> shape_;
   std::vector<size_t> strides_;
@@ -212,6 +231,7 @@ private:
   size_t byte_size_;
   void * data_;
   bool is_view_;
+  std::shared_ptr<MemoryAllocator> allocator_;
 
   void calculate_strides();
   void allocate_memory();

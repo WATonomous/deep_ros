@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <functional>
+#include <memory>
 #include <numeric>
 #include <stdexcept>
 #include <utility>
@@ -61,12 +62,28 @@ Tensor::Tensor()
 , byte_size_(0)
 , data_(nullptr)
 , is_view_(false)
+, allocator_(nullptr)
 {}
 
 Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype)
 : shape_(shape)
 , dtype_(dtype)
 , is_view_(true)
+, allocator_(get_cpu_allocator())
+{
+  calculate_strides();
+
+  size_t total_elements = std::accumulate(shape_.begin(), shape_.end(), 1UL, std::multiplies<size_t>());
+  byte_size_ = total_elements * get_dtype_size(dtype_);
+
+  allocate_memory();
+}
+
+Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype, std::shared_ptr<MemoryAllocator> allocator)
+: shape_(shape)
+, dtype_(dtype)
+, is_view_(true)
+, allocator_(allocator ? allocator : get_cpu_allocator())
 {
   calculate_strides();
 
@@ -81,6 +98,7 @@ Tensor::Tensor(void * data, const std::vector<size_t> & shape, DataType dtype)
 , dtype_(dtype)
 , data_(data)
 , is_view_(false)
+, allocator_(nullptr)
 {
   calculate_strides();
 
@@ -99,10 +117,17 @@ Tensor::Tensor(const Tensor & other)
 , dtype_(other.dtype_)
 , byte_size_(other.byte_size_)
 , is_view_(true)
+, allocator_(other.allocator_ ? other.allocator_ : get_cpu_allocator())
 {
   allocate_memory();
   if (other.data_ && data_) {
-    std::memcpy(data_, other.data_, byte_size_);
+    if (allocator_ && other.allocator_ && allocator_ == other.allocator_) {
+      allocator_->copy_device_to_device(data_, other.data_, byte_size_);
+    } else if (allocator_) {
+      allocator_->copy_from_host(data_, other.data_, byte_size_);
+    } else {
+      std::memcpy(data_, other.data_, byte_size_);
+    }
   }
 }
 
@@ -116,10 +141,17 @@ Tensor & Tensor::operator=(const Tensor & other)
     dtype_ = other.dtype_;
     byte_size_ = other.byte_size_;
     is_view_ = true;
+    allocator_ = other.allocator_ ? other.allocator_ : get_cpu_allocator();
 
     allocate_memory();
     if (other.data_ && data_) {
-      std::memcpy(data_, other.data_, byte_size_);
+      if (allocator_ && other.allocator_ && allocator_ == other.allocator_) {
+        allocator_->copy_device_to_device(data_, other.data_, byte_size_);
+      } else if (allocator_) {
+        allocator_->copy_from_host(data_, other.data_, byte_size_);
+      } else {
+        std::memcpy(data_, other.data_, byte_size_);
+      }
     }
   }
   return *this;
@@ -132,10 +164,12 @@ Tensor::Tensor(Tensor && other) noexcept
 , byte_size_(other.byte_size_)
 , data_(other.data_)
 , is_view_(other.is_view_)
+, allocator_(std::move(other.allocator_))
 {
   other.data_ = nullptr;
   other.is_view_ = false;
   other.byte_size_ = 0;
+  other.allocator_ = nullptr;
 }
 
 Tensor & Tensor::operator=(Tensor && other) noexcept
@@ -149,10 +183,12 @@ Tensor & Tensor::operator=(Tensor && other) noexcept
     byte_size_ = other.byte_size_;
     data_ = other.data_;
     is_view_ = other.is_view_;
+    allocator_ = std::move(other.allocator_);
 
     other.data_ = nullptr;
     other.is_view_ = false;
     other.byte_size_ = 0;
+    other.allocator_ = nullptr;
   }
   return *this;
 }
@@ -171,7 +207,11 @@ void Tensor::calculate_strides()
 void Tensor::allocate_memory()
 {
   if (byte_size_ > 0 && is_view_) {
-    data_ = std::aligned_alloc(32, byte_size_);
+    if (allocator_) {
+      data_ = allocator_->allocate(byte_size_);
+    } else {
+      data_ = std::aligned_alloc(32, byte_size_);
+    }
     if (!data_) {
       throw std::bad_alloc();
     }
@@ -181,7 +221,11 @@ void Tensor::allocate_memory()
 void Tensor::deallocate_memory()
 {
   if (is_view_ && data_) {
-    std::free(data_);
+    if (allocator_) {
+      allocator_->deallocate(data_);
+    } else {
+      std::free(data_);
+    }
     data_ = nullptr;
   }
 }

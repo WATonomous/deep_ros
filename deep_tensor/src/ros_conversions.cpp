@@ -14,6 +14,7 @@
 
 #include "deep_tensor/ros_conversions.hpp"
 
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -120,7 +121,7 @@ ImageEncoding get_image_encoding_info(const std::string & encoding)
   throw std::runtime_error("Unsupported image encoding: " + encoding);
 }
 
-Tensor from_image(const sensor_msgs::msg::Image & image)
+Tensor from_image(const sensor_msgs::msg::Image & image, std::shared_ptr<MemoryAllocator> allocator)
 {
   auto encoding_info = get_image_encoding_info(image.encoding);
 
@@ -139,12 +140,16 @@ Tensor from_image(const sensor_msgs::msg::Image & image)
   }
 
   // Direct copy
-  Tensor tensor(shape, encoding_info.dtype);
-  std::memcpy(tensor.data(), image.data.data(), image.data.size());
+  Tensor tensor(shape, encoding_info.dtype, allocator);
+  if (allocator) {
+    allocator->copy_from_host(tensor.data(), image.data.data(), image.data.size());
+  } else {
+    std::memcpy(tensor.data(), image.data.data(), image.data.size());
+  }
   return tensor;
 }
 
-Tensor from_image(const std::vector<sensor_msgs::msg::Image> & images)
+Tensor from_image(const std::vector<sensor_msgs::msg::Image> & images, std::shared_ptr<MemoryAllocator> allocator)
 {
   if (images.empty()) {
     throw std::invalid_argument("Image batch is empty");
@@ -176,11 +181,15 @@ Tensor from_image(const std::vector<sensor_msgs::msg::Image> & images)
   }
 
   // Direct copy
-  Tensor tensor(shape, encoding_info.dtype);
+  Tensor tensor(shape, encoding_info.dtype, allocator);
   auto * dst = static_cast<uint8_t *>(tensor.data());
 
   for (size_t i = 0; i < images.size(); ++i) {
-    std::memcpy(dst + i * images[i].data.size(), images[i].data.data(), images[i].data.size());
+    if (allocator) {
+      allocator->copy_from_host(dst + i * images[i].data.size(), images[i].data.data(), images[i].data.size());
+    } else {
+      std::memcpy(dst + i * images[i].data.size(), images[i].data.data(), images[i].data.size());
+    }
   }
   return tensor;
 }
@@ -288,7 +297,7 @@ void to_image(
   }
 }
 
-Tensor from_pointcloud2(const sensor_msgs::msg::PointCloud2 & cloud)
+Tensor from_pointcloud2(const sensor_msgs::msg::PointCloud2 & cloud, std::shared_ptr<MemoryAllocator> allocator)
 {
   if (cloud.fields.empty()) {
     throw std::invalid_argument("PointCloud2 has no fields");
@@ -299,7 +308,7 @@ Tensor from_pointcloud2(const sensor_msgs::msg::PointCloud2 & cloud)
 
   // For simplicity, convert all to float32
   std::vector<size_t> shape = {num_points, num_fields};
-  Tensor tensor(shape, DataType::FLOAT32);
+  Tensor tensor(shape, DataType::FLOAT32, allocator);
   auto * data = tensor.data_as<float>();
 
   // Extract field data
@@ -333,14 +342,14 @@ Tensor from_pointcloud2(const sensor_msgs::msg::PointCloud2 & cloud)
   return tensor;
 }
 
-Tensor from_laserscan(const sensor_msgs::msg::LaserScan & scan)
+Tensor from_laserscan(const sensor_msgs::msg::LaserScan & scan, std::shared_ptr<MemoryAllocator> allocator)
 {
   size_t num_ranges = scan.ranges.size();
   bool has_intensities = !scan.intensities.empty() && scan.intensities.size() == num_ranges;
 
   if (has_intensities) {
     std::vector<size_t> shape = {num_ranges, 2};
-    Tensor tensor(shape, DataType::FLOAT32);
+    Tensor tensor(shape, DataType::FLOAT32, allocator);
     auto * data = tensor.data_as<float>();
 
     for (size_t i = 0; i < num_ranges; ++i) {
@@ -350,16 +359,20 @@ Tensor from_laserscan(const sensor_msgs::msg::LaserScan & scan)
     return tensor;
   } else {
     std::vector<size_t> shape = {num_ranges};
-    Tensor tensor(shape, DataType::FLOAT32);
-    std::memcpy(tensor.data(), scan.ranges.data(), num_ranges * sizeof(float));
+    Tensor tensor(shape, DataType::FLOAT32, allocator);
+    if (allocator) {
+      allocator->copy_from_host(tensor.data(), scan.ranges.data(), num_ranges * sizeof(float));
+    } else {
+      std::memcpy(tensor.data(), scan.ranges.data(), num_ranges * sizeof(float));
+    }
     return tensor;
   }
 }
 
-Tensor from_imu(const sensor_msgs::msg::Imu & imu)
+Tensor from_imu(const sensor_msgs::msg::Imu & imu, std::shared_ptr<MemoryAllocator> allocator)
 {
   std::vector<size_t> shape = {10};
-  Tensor tensor(shape, DataType::FLOAT64);
+  Tensor tensor(shape, DataType::FLOAT64, allocator);
   auto * data = tensor.data_as<double>();
 
   // Orientation quaternion
