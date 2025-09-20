@@ -26,8 +26,8 @@ DeepNodeBase::DeepNodeBase(const std::string & node_name, const rclcpp::NodeOpti
 : rclcpp_lifecycle::LifecycleNode(node_name, options)
 , model_loaded_(false)
 {
-  plugin_loader_ =
-    std::make_unique<pluginlib::ClassLoader<DeepBackendPlugin>>("deep_core", "deep_ros::DeepBackendPlugin");
+  plugin_loader_ = std::make_unique<pluginlib::ClassLoader<DeepBackendPlugin>>(
+    "deep_ort_backend_plugin", "deep_ros::DeepBackendPlugin");
   declare_parameters();
 }
 
@@ -111,7 +111,12 @@ bool DeepNodeBase::load_model(const std::filesystem::path & model_path)
 
   try {
     RCLCPP_INFO(get_logger(), "Loading model: %s", model_path.c_str());
-    model_loaded_ = plugin_->load_model(model_path);
+    auto executor = plugin_->get_inference_executor();
+    if (executor) {
+      model_loaded_ = executor->load_model(model_path);
+    } else {
+      model_loaded_ = false;
+    }
     if (model_loaded_) {
       current_model_path_ = model_path;
       RCLCPP_INFO(get_logger(), "Successfully loaded model: %s", model_path.c_str());
@@ -129,7 +134,10 @@ void DeepNodeBase::unload_model()
 {
   if (plugin_ && model_loaded_) {
     RCLCPP_INFO(get_logger(), "Unloading model");
-    plugin_->unload_model();
+    auto executor = plugin_->get_inference_executor();
+    if (executor) {
+      executor->unload_model();
+    }
     model_loaded_ = false;
     current_model_path_.clear();
   }
@@ -145,7 +153,12 @@ Tensor DeepNodeBase::run_inference(Tensor inputs)
     throw std::runtime_error("No model loaded");
   }
 
-  return plugin_->inference(inputs);
+  auto executor = plugin_->get_inference_executor();
+  if (!executor) {
+    throw std::runtime_error("No inference executor available");
+  }
+
+  return executor->run_inference(inputs);
 }
 
 std::string DeepNodeBase::get_backend_name() const
@@ -156,7 +169,7 @@ std::string DeepNodeBase::get_backend_name() const
   return "none";
 }
 
-std::shared_ptr<MemoryAllocator> DeepNodeBase::get_current_allocator() const
+std::shared_ptr<BackendMemoryAllocator> DeepNodeBase::get_current_allocator() const
 {
   if (plugin_) {
     return plugin_->get_allocator();

@@ -24,9 +24,10 @@
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <rclcpp_lifecycle/state.hpp>
 
-#include "deep_core/deep_backend_plugin.hpp"
-#include "deep_tensor/memory_allocator.hpp"
-#include "deep_tensor/tensor.hpp"
+#include "deep_core/plugin_interfaces/backend_inference_executor.hpp"
+#include "deep_core/plugin_interfaces/backend_memory_allocator.hpp"
+#include "deep_core/plugin_interfaces/deep_backend_plugin.hpp"
+#include "deep_core/types/tensor.hpp"
 
 namespace deep_ros
 {
@@ -75,7 +76,7 @@ protected:
   Tensor run_inference(Tensor inputs);
 
   // Get current allocator from loaded plugin
-  std::shared_ptr<MemoryAllocator> get_current_allocator() const;
+  std::shared_ptr<BackendMemoryAllocator> get_current_allocator() const;
 
   // Plugin status
   bool is_plugin_loaded() const

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "deep_tensor/tensor.hpp"
+#include "deep_core/types/tensor.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -68,22 +68,17 @@ Tensor::Tensor()
 Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype)
 : shape_(shape)
 , dtype_(dtype)
-, is_view_(true)
-, allocator_(get_cpu_allocator())
+, is_view_(false)
+, allocator_(nullptr)
 {
-  calculate_strides();
-
-  size_t total_elements = std::accumulate(shape_.begin(), shape_.end(), 1UL, std::multiplies<size_t>());
-  byte_size_ = total_elements * get_dtype_size(dtype_);
-
-  allocate_memory();
+  throw std::runtime_error("Tensor construction requires an allocator. Use Tensor(shape, dtype, allocator) instead.");
 }
 
-Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype, std::shared_ptr<MemoryAllocator> allocator)
+Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype, std::shared_ptr<BackendMemoryAllocator> allocator)
 : shape_(shape)
 , dtype_(dtype)
-, is_view_(true)
-, allocator_(allocator ? allocator : get_cpu_allocator())
+, is_view_(false)
+, allocator_(allocator)
 {
   calculate_strides();
 
@@ -117,7 +112,7 @@ Tensor::Tensor(const Tensor & other)
 , dtype_(other.dtype_)
 , byte_size_(other.byte_size_)
 , is_view_(true)
-, allocator_(other.allocator_ ? other.allocator_ : get_cpu_allocator())
+, allocator_(other.allocator_)
 {
   allocate_memory();
   if (other.data_ && data_) {
@@ -141,7 +136,7 @@ Tensor & Tensor::operator=(const Tensor & other)
     dtype_ = other.dtype_;
     byte_size_ = other.byte_size_;
     is_view_ = true;
-    allocator_ = other.allocator_ ? other.allocator_ : get_cpu_allocator();
+    allocator_ = other.allocator_;
 
     allocate_memory();
     if (other.data_ && data_) {

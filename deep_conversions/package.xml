@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>deep_tensor</name>
+  <name>deep_conversions</name>
   <version>0.1.0</version>
-  <description>ROS 2 tensor type implementation for deep learning applications</description>
+  <description>Conversion utilities between ROS 2 sensor messages and tensors</description>
   <maintainer email="hello@watonomous.ca">WATonomous</maintainer>
   <license>Apache 2.0</license>
 
@@ -12,6 +12,7 @@
   <depend>rclcpp</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
+  <depend>deep_core</depend>
 
   <test_depend>deep_test</test_depend>
 

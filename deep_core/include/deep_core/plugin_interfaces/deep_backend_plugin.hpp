@@ -1,0 +1,56 @@
+// Copyright (c) 2025-present WATonomous. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#pragma once
+
+#include <memory>
+#include <string>
+
+#include "deep_core/plugin_interfaces/backend_memory_allocator.hpp"
+#include "deep_core/plugin_interfaces/backend_inference_executor.hpp"
+
+namespace deep_ros
+{
+
+/**
+ * @brief Combined backend plugin interface
+ * 
+ * This interface combines both memory allocation and inference execution
+ * for a complete backend implementation.
+ */
+class DeepBackendPlugin
+{
+public:
+  virtual ~DeepBackendPlugin() = default;
+
+  /**
+   * @brief Get the backend name
+   * @return Backend name (e.g., "onnxruntime", "tensorrt")
+   */
+  virtual std::string backend_name() const = 0;
+
+  /**
+   * @brief Get the memory allocator for this backend
+   * @return Shared pointer to the backend's memory allocator
+   */
+  virtual std::shared_ptr<BackendMemoryAllocator> get_allocator() const = 0;
+
+  /**
+   * @brief Get the inference executor for this backend
+   * @return Shared pointer to the backend's inference executor
+   */
+  virtual std::shared_ptr<BackendInferenceExecutor> get_inference_executor() const = 0;
+};
+
+}  // namespace deep_ros

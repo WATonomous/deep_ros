@@ -25,38 +25,41 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(deep_tensor REQUIRED)
-find_package(deep_backend REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(deep_core REQUIRED)
 
 set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # deep_conversions library
-set(DEEP_TENSOR_LIB ${PROJECT_NAME}_lib)
-add_library(${DEEP_TENSOR_LIB} SHARED
+set(DEEP_CONVERSIONS_LIB ${PROJECT_NAME}_lib)
+add_library(${DEEP_CONVERSIONS_LIB} SHARED
   src/ros_conversions.cpp
 )
 
-target_include_directories(${DEEP_TENSOR_LIB} PUBLIC
+target_include_directories(${DEEP_CONVERSIONS_LIB} PUBLIC
   $<BUILD_INTERFACE:${include_dir}>
   $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(${DEEP_TENSOR_LIB}
+target_link_libraries(${DEEP_CONVERSIONS_LIB}
   PUBLIC
     rclcpp::rclcpp
-    deep_backend::deep_backend
-    deep_tensor::deep_tensor
+    sensor_msgs::sensor_msgs__rosidl_typesupport_cpp
+    std_msgs::std_msgs__rosidl_typesupport_cpp
+    deep_core::deep_core_lib
 )
 
 install(TARGETS
-  ${DEEP_TENSOR_LIB}
-  EXPORT ${DEEP_TENSOR_LIB}Targets
+  ${DEEP_CONVERSIONS_LIB}
+  EXPORT ${PROJECT_NAME}Targets
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
 
-install(EXPORT ${DEEP_TENSOR_LIB}Targets
+install(EXPORT ${PROJECT_NAME}Targets
   NAMESPACE ${PROJECT_NAME}::
   DESTINATION share/${PROJECT_NAME}/cmake
 )
@@ -68,12 +71,10 @@ install(DIRECTORY include/
 if(BUILD_TESTING)
   find_package(deep_test REQUIRED)
 
-  add_deep_test(test_ros_conversions
-    test/test_ros_conversions.cpp
-    LIBRARIES
-      ${DEEP_TENSOR_LIB}
+  add_deep_test(test_conversions test/test_conversions.cpp
+    LIBRARIES ${DEEP_CONVERSIONS_LIB}
   )
 endif()
 
-ament_export_targets(${DEEP_TENSOR_LIB}Targets HAS_LIBRARY_TARGET)
+ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
 ament_package()

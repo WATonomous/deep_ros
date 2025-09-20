@@ -21,15 +21,15 @@ namespace deep_ros
 {
 
 /**
- * @brief Abstract interface for memory allocation strategies
+ * @brief Backend plugin interface for memory allocation strategies
  *
- * This interface allows different backends (CPU, CUDA, etc.) to provide
+ * This plugin interface allows different backends (CPU, CUDA, etc.) to provide
  * their optimal memory allocation and copying strategies.
  */
-class MemoryAllocator
+class BackendMemoryAllocator
 {
 public:
-  virtual ~MemoryAllocator() = default;
+  virtual ~BackendMemoryAllocator() = default;
 
   /**
    * @brief Allocate memory

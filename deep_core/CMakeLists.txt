@@ -28,7 +28,6 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
-find_package(deep_tensor REQUIRED)
 find_package(pluginlib REQUIRED)
 
 set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -37,6 +36,7 @@ set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(DEEP_CORE_LIB ${PROJECT_NAME}_lib)
 add_library(${DEEP_CORE_LIB} SHARED
   src/deep_node_base.cpp
+  src/tensor.cpp
 )
 target_include_directories(${DEEP_CORE_LIB} PUBLIC
   $<BUILD_INTERFACE:${include_dir}>
@@ -44,7 +44,6 @@ target_include_directories(${DEEP_CORE_LIB} PUBLIC
 )
 target_link_libraries(${DEEP_CORE_LIB}
   PUBLIC
-    deep_tensor::deep_tensor_lib
     rclcpp::rclcpp
     rclcpp_lifecycle::rclcpp_lifecycle
     pluginlib::pluginlib
@@ -69,6 +68,10 @@ install(DIRECTORY include/
 
 if(BUILD_TESTING)
   find_package(deep_test REQUIRED)
+
+  add_deep_test(test_deep_core test/test_deep_core.cpp
+    LIBRARIES ${DEEP_CORE_LIB}
+  )
 
 endif()
 

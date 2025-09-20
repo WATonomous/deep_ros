@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "deep_tensor/ros_conversions.hpp"
+#include "deep_conversions/ros_conversions.hpp"
 
 #include <memory>
 #include <string>
@@ -121,7 +121,7 @@ ImageEncoding get_image_encoding_info(const std::string & encoding)
   throw std::runtime_error("Unsupported image encoding: " + encoding);
 }
 
-Tensor from_image(const sensor_msgs::msg::Image & image, std::shared_ptr<MemoryAllocator> allocator)
+Tensor from_image(const sensor_msgs::msg::Image & image, std::shared_ptr<BackendMemoryAllocator> allocator)
 {
   auto encoding_info = get_image_encoding_info(image.encoding);
 
@@ -149,7 +149,8 @@ Tensor from_image(const sensor_msgs::msg::Image & image, std::shared_ptr<MemoryA
   return tensor;
 }
 
-Tensor from_image(const std::vector<sensor_msgs::msg::Image> & images, std::shared_ptr<MemoryAllocator> allocator)
+Tensor from_image(
+  const std::vector<sensor_msgs::msg::Image> & images, std::shared_ptr<BackendMemoryAllocator> allocator)
 {
   if (images.empty()) {
     throw std::invalid_argument("Image batch is empty");
@@ -297,7 +298,7 @@ void to_image(
   }
 }
 
-Tensor from_pointcloud2(const sensor_msgs::msg::PointCloud2 & cloud, std::shared_ptr<MemoryAllocator> allocator)
+Tensor from_pointcloud2(const sensor_msgs::msg::PointCloud2 & cloud, std::shared_ptr<BackendMemoryAllocator> allocator)
 {
   if (cloud.fields.empty()) {
     throw std::invalid_argument("PointCloud2 has no fields");
@@ -342,7 +343,7 @@ Tensor from_pointcloud2(const sensor_msgs::msg::PointCloud2 & cloud, std::shared
   return tensor;
 }
 
-Tensor from_laserscan(const sensor_msgs::msg::LaserScan & scan, std::shared_ptr<MemoryAllocator> allocator)
+Tensor from_laserscan(const sensor_msgs::msg::LaserScan & scan, std::shared_ptr<BackendMemoryAllocator> allocator)
 {
   size_t num_ranges = scan.ranges.size();
   bool has_intensities = !scan.intensities.empty() && scan.intensities.size() == num_ranges;
@@ -369,7 +370,7 @@ Tensor from_laserscan(const sensor_msgs::msg::LaserScan & scan, std::shared_ptr<
   }
 }
 
-Tensor from_imu(const sensor_msgs::msg::Imu & imu, std::shared_ptr<MemoryAllocator> allocator)
+Tensor from_imu(const sensor_msgs::msg::Imu & imu, std::shared_ptr<BackendMemoryAllocator> allocator)
 {
   std::vector<size_t> shape = {10};
   Tensor tensor(shape, DataType::FLOAT64, allocator);
