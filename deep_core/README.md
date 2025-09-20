@@ -1,162 +1,46 @@
 # deep_core
 
-Core package for the Deep ROS inference framework providing abstract interfaces, tensor operations, and plugin architecture for machine learning inference in ROS 2.
+Core abstractions for ML inference in ROS 2 lifecycle nodes.
 
 ## Overview
 
-`deep_core` provides the foundational components for a modular, high-performance ML inference system:
+Provides:
+- `TensorPtr`: Smart pointer for tensor data with custom memory allocators
+- `DeepNodeBase`: Lifecycle node base class with plugin loading and optional bond support
+- Plugin interfaces for backend inference engines and memory management
 
-- **Plugin interfaces** for backend inference engines and memory allocators
-- **Lifecycle node base class** with optional bond timers
-- **Generic TensorPtr Type** to interface large tensor data between ROS msgs and backend hardware accelerators without deepcopy operations
+## Key Components
 
-## Architecture
+### TensorPtr
+Multi-dimensional tensor smart pointer supporting:
+- Custom memory allocators (CPU/GPU/aligned memory)
+- View semantics (wrap existing data without copying)
+- Standard tensor operations (reshape, data access)
 
-### Core Components
+### DeepNodeBase
+Lifecycle node that handles:
+- Dynamic backend plugin loading via pluginlib
+- Model loading/unloading lifecycle
+- Optional bond connections for nav2 integration
+- Parameter-driven configuration
 
-- **`TensorPtr`**: Smart pointer for multi-dimensional tensor data with pluggable memory allocators
-- **`DeepNodeBase`**: ROS 2 lifecycle node base class for inference services
-- **Plugin Interfaces**: Abstract base classes for backend implementations
-  - `BackendMemoryAllocator`: Custom memory allocation strategies
-  - `BackendInferenceExecutor`: ML framework inference execution
-  - `DeepBackendPlugin`: Combined backend plugin interface
+### Plugin Interfaces
+Deep_ROS abstracts away hardware acceleration interfaces as plugins. This means that users have the
+freedom to switch between different hardware accelerators at runtime. The backend plugin interface is
+as follows:
+- `DeepBackendPlugin`: Abstract interface for defining a backend plugin. Must implement:
+  - `BackendMemoryAllocator`: Backend implementation for memory allocation and management
+  - `BackendInferenceExecutor`: Backend implementation for running model inference
 
-### Memory Management
+## Configuration
 
-The tensor system supports custom memory allocators for optimal performance:
+All nodes inherenting `deep_ros::DeepNodeBase` have the following settable parameters.
 
-```cpp
-// Create tensor with custom allocator
-auto allocator = get_custom_allocator();
-deep_ros::TensorPtr input({1, 3, 224, 224}, deep_ros::DataType::FLOAT32, allocator);
-```
+Required parameters:
+- `Backend.plugin`: Plugin name (e.g., "onnxruntime_cpu")
+- `model_path`: Path to model file
 
-### Plugin Architecture
-
-Backend implementations are loaded dynamically using ROS 2 pluginlib:
-
-```cpp
-// Load backend plugin
-if (!load_plugin("onnxruntime_cpu")) {
-  RCLCPP_ERROR(get_logger(), "Failed to load backend plugin");
-}
-
-// Run inference
-deep_ros::TensorPtr output = run_inference(input_tensor);
-```
-
-## Usage
-
-### Creating an Inference Node
-
-```cpp
-#include <deep_core/deep_node_base.hpp>
-
-class MyInferenceNode : public deep_ros::DeepNodeBase
-{
-public:
-  MyInferenceNode(const rclcpp::NodeOptions & options)
-  : DeepNodeBase("my_inference_node", options)
-  {
-  }
-
-protected:
-  CallbackReturn on_configure_impl(const rclcpp_lifecycle::State & state) override
-  {
-    // Custom configuration logic
-    return CallbackReturn::SUCCESS;
-  }
-
-  CallbackReturn on_activate_impl(const rclcpp_lifecycle::State & state) override
-  {
-    // Start inference services
-    return CallbackReturn::SUCCESS;
-  }
-};
-```
-
-### Custom Memory Allocator
-
-```cpp
-class MyCustomAllocator : public deep_ros::BackendMemoryAllocator
-{
-public:
-  void * allocate(size_t bytes) override {
-    // Custom allocation strategy (e.g., GPU memory, aligned allocation)
-    return my_custom_malloc(bytes);
-  }
-
-  void deallocate(void * ptr) override {
-    my_custom_free(ptr);
-  }
-
-  // Implement other required methods...
-};
-```
-
-## Package Structure
-
-```
-deep_core/
-├── include/deep_core/
-│   ├── deep_node_base.hpp          # Lifecycle node base class
-│   ├── types/
-│   │   ├── tensor.hpp              # TensorPtr class and data types
-│   │   └── data_type.hpp           # Enum for tensor data types
-│   └── plugin_interfaces/
-│       ├── backend_memory_allocator.hpp    # Memory allocator interface
-│       ├── backend_inference_executor.hpp  # Inference executor interface
-│       └── deep_backend_plugin.hpp         # Combined plugin interface
-├── src/
-│   ├── deep_node_base.cpp          # Lifecycle node implementation
-│   └── tensor.cpp                  # TensorPtr operations
-└── CMakeLists.txt
-```
-
-## Dependencies
-
-- **ROS 2**: rclcpp, rclcpp_lifecycle
-- **pluginlib**: Dynamic plugin loading
-- **Standard C++17**: Modern C++ features
-
-## Supported Data Types
-
-- `FLOAT32`: 32-bit floating point
-- `INT32`: 32-bit signed integer
-- `INT64`: 64-bit signed integer
-- `UINT8`: 8-bit unsigned integer
-
-## Backend Plugin Development
-
-To create a new backend plugin:
-
-1. Implement the three interfaces:
-   - `BackendMemoryAllocator`
-   - `BackendInferenceExecutor`
-   - `DeepBackendPlugin`
-
-2. Create a `plugins.xml` file:
-
-```xml
-<library path="my_backend_plugin_lib">
-  <class name="my_backend" type="my_namespace::MyBackendPlugin" base_class_type="deep_ros::DeepBackendPlugin">
-    <description>My custom ML backend</description>
-  </class>
-</library>
-```
-
-1. Export the plugin in your `package.xml`:
-
-```xml
-<export>
-  <deep_ort_backend_plugin plugin="${prefix}/plugins.xml" />
-</export>
-```
-
-## Examples
-
-See the [`deep_ort_backend_plugin`](../deep_ort_backend_plugin/) package for a complete ONNX Runtime backend implementation.
-
-## License
-
-Licensed under the Apache License, Version 2.0.
+Optional parameters:
+- `Bond.enable`: Enable bond connections (default: false)
+- `Bond.bond_timeout`: Bond timeout in seconds (default: 4.0)
+- `Bond.bond_heartbeat_period`: Heartbeat period in seconds (default: 0.1)
