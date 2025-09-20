@@ -17,15 +17,15 @@
 #include <memory>
 #include <string>
 
-#include "deep_core/plugin_interfaces/backend_memory_allocator.hpp"
 #include "deep_core/plugin_interfaces/backend_inference_executor.hpp"
+#include "deep_core/plugin_interfaces/backend_memory_allocator.hpp"
 
 namespace deep_ros
 {
 
 /**
  * @brief Combined backend plugin interface
- * 
+ *
  * This interface combines both memory allocation and inference execution
  * for a complete backend implementation.
  */

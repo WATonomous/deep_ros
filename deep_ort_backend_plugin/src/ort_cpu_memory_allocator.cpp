@@ -81,8 +81,7 @@ std::string OrtCpuMemoryAllocator::device_name() const
 
 std::shared_ptr<deep_ros::BackendMemoryAllocator> get_ort_cpu_allocator()
 {
-  static std::shared_ptr<deep_ros::BackendMemoryAllocator> allocator = 
-    std::make_shared<OrtCpuMemoryAllocator>();
+  static std::shared_ptr<deep_ros::BackendMemoryAllocator> allocator = std::make_shared<OrtCpuMemoryAllocator>();
   return allocator;
 }
 

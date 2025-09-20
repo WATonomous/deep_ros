@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <onnxruntime_cxx_api.h>
+
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -21,14 +23,13 @@
 
 #include <deep_core/plugin_interfaces/backend_inference_executor.hpp>
 #include <deep_core/types/tensor.hpp>
-#include <onnxruntime_cxx_api.h>
 
 namespace deep_ort_backend
 {
 
 /**
  * @brief ONNX Runtime backend inference executor
- * 
+ *
  * Provides inference execution using ONNX Runtime with CPU optimization.
  */
 class OrtBackendExecutor : public deep_ros::BackendInferenceExecutor
@@ -45,13 +46,13 @@ public:
 private:
   bool model_loaded_{false};
   std::filesystem::path model_path_;
-  
+
   std::unique_ptr<Ort::Env> env_;
   std::unique_ptr<Ort::Session> session_;
   Ort::MemoryInfo memory_info_;
-  
+
   ONNXTensorElementDataType convert_to_onnx_type(deep_ros::DataType dtype) const;
-  std::vector<size_t> get_output_shape(const std::vector<size_t>& input_shape) const;
+  std::vector<size_t> get_output_shape(const std::vector<size_t> & input_shape) const;
   size_t get_element_size(deep_ros::DataType dtype) const;
 };
 

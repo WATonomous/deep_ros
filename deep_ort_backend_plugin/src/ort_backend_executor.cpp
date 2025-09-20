@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "deep_ort_backend_plugin/ort_backend_executor.hpp"
-#include "deep_ort_backend_plugin/ort_cpu_memory_allocator.hpp"
 
 #include <stdexcept>
+
+#include "deep_ort_backend_plugin/ort_cpu_memory_allocator.hpp"
 
 namespace deep_ort_backend
 {
@@ -37,13 +38,13 @@ bool OrtBackendExecutor::load_model(const std::filesystem::path & model_path)
     Ort::SessionOptions session_options;
     session_options.SetIntraOpNumThreads(1);
     session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
-    
+
     session_ = std::make_unique<Ort::Session>(*env_, model_path.c_str(), session_options);
-    
+
     model_path_ = model_path;
     model_loaded_ = true;
     return true;
-  } catch (const std::exception& e) {
+  } catch (const std::exception & e) {
     model_loaded_ = false;
     return false;
   }
@@ -62,57 +63,45 @@ deep_ros::Tensor OrtBackendExecutor::run_inference(deep_ros::Tensor input)
   try {
     // Convert deep_ros::DataType to ONNX tensor element type
     ONNXTensorElementDataType onnx_type = convert_to_onnx_type(input.dtype());
-    
+
     // Create input OrtValue that wraps the input tensor's memory (zero-copy!)
     size_t input_size_bytes = input.size() * get_element_size(input.dtype());
     std::vector<int64_t> input_shape_int64(input.shape().begin(), input.shape().end());
-    
+
     Ort::Value ort_input = Ort::Value::CreateTensor(
-      memory_info_,
-      input.data(),
-      input_size_bytes,
-      input_shape_int64.data(),
-      input_shape_int64.size(),
-      onnx_type
-    );
+      memory_info_, input.data(), input_size_bytes, input_shape_int64.data(), input_shape_int64.size(), onnx_type);
 
     // Get input/output names
     Ort::AllocatorWithDefaultOptions allocator;
     auto input_name = session_->GetInputNameAllocated(0, allocator);
     auto output_name = session_->GetOutputNameAllocated(0, allocator);
-    
+
     // Get output shape (assuming we know it or can infer it)
     auto output_shape = get_output_shape(input.shape());
-    
+
     // Allocate output tensor using our custom allocator
     auto tensor_allocator = get_ort_cpu_allocator();
     deep_ros::Tensor output(output_shape, input.dtype(), tensor_allocator);
-    
+
     // Create output OrtValue that wraps the output tensor's memory (zero-copy!)
     size_t output_size_bytes = output.size() * get_element_size(output.dtype());
     std::vector<int64_t> output_shape_int64(output.shape().begin(), output.shape().end());
-    
+
     Ort::Value ort_output = Ort::Value::CreateTensor(
-      memory_info_,
-      output.data(),
-      output_size_bytes,
-      output_shape_int64.data(),
-      output_shape_int64.size(),
-      onnx_type
-    );
+      memory_info_, output.data(), output_size_bytes, output_shape_int64.data(), output_shape_int64.size(), onnx_type);
 
     // Create IO binding for zero-copy inference
     Ort::IoBinding binding(*session_);
     binding.BindInput(input_name.get(), ort_input);
     binding.BindOutput(output_name.get(), ort_output);
-    
+
     // Run inference with IO binding (zero-copy!)
     Ort::RunOptions run_options;
     session_->Run(run_options, binding);
-    
+
     return output;
-    
-  } catch (const std::exception& e) {
+
+  } catch (const std::exception & e) {
     throw std::runtime_error("ONNX Runtime inference failed: " + std::string(e.what()));
   }
 }
@@ -147,7 +136,7 @@ ONNXTensorElementDataType OrtBackendExecutor::convert_to_onnx_type(deep_ros::Dat
   }
 }
 
-std::vector<size_t> OrtBackendExecutor::get_output_shape(const std::vector<size_t>& input_shape) const
+std::vector<size_t> OrtBackendExecutor::get_output_shape(const std::vector<size_t> & input_shape) const
 {
   if (!session_) {
     throw std::runtime_error("No session available to query output shape");
@@ -157,17 +146,17 @@ std::vector<size_t> OrtBackendExecutor::get_output_shape(const std::vector<size_
     // Get output type info for the first output (assuming single output model)
     auto output_type_info = session_->GetOutputTypeInfo(0);
     auto tensor_info = output_type_info.GetTensorTypeAndShapeInfo();
-    
+
     // Get the output shape from the model
     auto output_shape_int64 = tensor_info.GetShape();
-    
+
     // Convert int64_t shape to size_t and handle dynamic dimensions
     std::vector<size_t> output_shape;
     output_shape.reserve(output_shape_int64.size());
-    
+
     for (size_t i = 0; i < output_shape_int64.size(); ++i) {
       int64_t dim = output_shape_int64[i];
-      
+
       if (dim == -1) {
         // Dynamic dimension: use corresponding input dimension
         if (i < input_shape.size()) {
@@ -181,10 +170,10 @@ std::vector<size_t> OrtBackendExecutor::get_output_shape(const std::vector<size_
         output_shape.push_back(static_cast<size_t>(dim));
       }
     }
-    
+
     return output_shape;
-    
-  } catch (const std::exception& e) {
+
+  } catch (const std::exception & e) {
     throw std::runtime_error("Failed to get output shape from model: " + std::string(e.what()));
   }
 }

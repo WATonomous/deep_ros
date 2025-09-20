@@ -17,12 +17,12 @@
 /**
  * @file deep_core.hpp
  * @brief Convenience header that includes all deep_core components
- * 
+ *
  * This header provides a single include for all deep_core functionality:
  * - Core types (Tensor, DataType)
  * - Plugin interfaces (BackendMemoryAllocator, BackendInferenceExecutor, DeepBackendPlugin)
  * - Base node classes (DeepNodeBase)
- * 
+ *
  * Usage:
  * @code
  * #include <deep_core/deep_core.hpp>
@@ -33,8 +33,8 @@
 #include "deep_core/types/tensor.hpp"
 
 // Plugin interfaces
-#include "deep_core/plugin_interfaces/backend_memory_allocator.hpp"
 #include "deep_core/plugin_interfaces/backend_inference_executor.hpp"
+#include "deep_core/plugin_interfaces/backend_memory_allocator.hpp"
 #include "deep_core/plugin_interfaces/deep_backend_plugin.hpp"
 
 // Base classes

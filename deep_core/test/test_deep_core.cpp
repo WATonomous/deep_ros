@@ -13,9 +13,8 @@
 // limitations under the License.
 
 #include <catch2/catch.hpp>
-
-#include <deep_core/types/tensor.hpp>
 #include <deep_core/deep_node_base.hpp>
+#include <deep_core/types/tensor.hpp>
 
 namespace deep_ros
 {
@@ -53,10 +52,20 @@ public:
     std::memcpy(dst, src, bytes);
   }
 
-  bool is_device_memory() const override { return false; }
-  std::string device_name() const override { return "mock_device"; }
+  bool is_device_memory() const override
+  {
+    return false;
+  }
 
-  size_t allocated_bytes() const { return allocated_bytes_; }
+  std::string device_name() const override
+  {
+    return "mock_device";
+  }
+
+  size_t allocated_bytes() const
+  {
+    return allocated_bytes_;
+  }
 
 private:
   size_t allocated_bytes_{0};
@@ -66,7 +75,7 @@ TEST_CASE("Tensor construction with allocator", "[tensor]")
 {
   auto allocator = std::make_shared<MockMemoryAllocator>();
   std::vector<size_t> shape{2, 3, 4};
-  
+
   Tensor tensor(shape, DataType::FLOAT32, allocator);
 
   REQUIRE(tensor.shape() == shape);
@@ -85,7 +94,7 @@ TEST_CASE("Tensor construction without allocator throws", "[tensor]")
 TEST_CASE("Different data types have correct sizes", "[tensor]")
 {
   auto allocator = std::make_shared<MockMemoryAllocator>();
-  
+
   Tensor float_tensor({10}, DataType::FLOAT32, allocator);
   Tensor int32_tensor({10}, DataType::INT32, allocator);
   Tensor int64_tensor({10}, DataType::INT64, allocator);
@@ -101,9 +110,9 @@ TEST_CASE("Empty shape creates scalar tensor", "[tensor]")
 {
   auto allocator = std::make_shared<MockMemoryAllocator>();
   std::vector<size_t> empty_shape;
-  
+
   Tensor tensor(empty_shape, DataType::FLOAT32, allocator);
-  
+
   REQUIRE(tensor.size() == 1);  // Scalar tensor
   REQUIRE(tensor.shape().empty());
 }
@@ -112,9 +121,9 @@ TEST_CASE("Large shape allocation", "[tensor]")
 {
   auto allocator = std::make_shared<MockMemoryAllocator>();
   std::vector<size_t> large_shape{100, 100, 3};
-  
+
   Tensor tensor(large_shape, DataType::UINT8, allocator);
-  
+
   REQUIRE(tensor.size() == 30000);
   REQUIRE(tensor.shape() == large_shape);
 }
@@ -134,7 +143,7 @@ public:
     if (!model_loaded_) {
       throw std::runtime_error("No model loaded");
     }
-    
+
     // Mock inference: return tensor with same shape but all zeros
     auto allocator = std::make_shared<MockMemoryAllocator>();
     Tensor output(input.shape(), input.dtype(), allocator);
@@ -153,8 +162,15 @@ public:
     return {"mock"};
   }
 
-  bool is_model_loaded() const { return model_loaded_; }
-  const std::filesystem::path& loaded_model_path() const { return loaded_model_path_; }
+  bool is_model_loaded() const
+  {
+    return model_loaded_;
+  }
+
+  const std::filesystem::path & loaded_model_path() const
+  {
+    return loaded_model_path_;
+  }
 
 private:
   bool model_loaded_{false};
@@ -167,16 +183,18 @@ public:
   MockBackendPlugin()
   : allocator_(std::make_shared<MockMemoryAllocator>())
   , executor_(std::make_shared<MockBackendExecutor>())
+  {}
+
+  std::string backend_name() const override
   {
+    return "mock_backend";
   }
 
-  std::string backend_name() const override { return "mock_backend"; }
-  
   std::shared_ptr<BackendMemoryAllocator> get_allocator() const override
   {
     return allocator_;
   }
-  
+
   std::shared_ptr<BackendInferenceExecutor> get_inference_executor() const override
   {
     return executor_;
@@ -190,13 +208,13 @@ private:
 TEST_CASE("Backend plugin interface", "[plugin]")
 {
   MockBackendPlugin plugin;
-  
+
   REQUIRE(plugin.backend_name() == "mock_backend");
-  
+
   auto allocator = plugin.get_allocator();
   REQUIRE(allocator != nullptr);
   REQUIRE(allocator->device_name() == "mock_device");
-  
+
   auto executor = plugin.get_inference_executor();
   REQUIRE(executor != nullptr);
   REQUIRE(executor->supported_model_formats() == std::vector<std::string>{"mock"});
@@ -207,20 +225,20 @@ TEST_CASE("Backend inference workflow", "[plugin][inference]")
   MockBackendPlugin plugin;
   auto allocator = plugin.get_allocator();
   auto executor = plugin.get_inference_executor();
-  
+
   // Load model
   REQUIRE(executor->load_model("/fake/model.mock"));
-  
+
   // Create input tensor
   std::vector<size_t> shape{1, 3, 224, 224};
   Tensor input(shape, DataType::FLOAT32, allocator);
-  
+
   // Run inference
   auto output = executor->run_inference(input);
-  
+
   REQUIRE(output.shape() == input.shape());
   REQUIRE(output.dtype() == input.dtype());
-  
+
   // Unload model
   executor->unload_model();
 }
@@ -230,8 +248,7 @@ class TestInferenceNode : public DeepNodeBase
 public:
   TestInferenceNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
   : DeepNodeBase("test_inference_node", options)
-  {
-  }
+  {}
 
   bool test_load_plugin(const std::string & plugin_name)
   {

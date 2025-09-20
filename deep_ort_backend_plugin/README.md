@@ -41,7 +41,7 @@ This package implements a complete backend plugin for ONNX Runtime that integrat
 ```
 Input: deep_ros::Tensor (custom allocator)
     ↓ (zero-copy wrap)
-ONNX Runtime: Ort::Value 
+ONNX Runtime: Ort::Value
     ↓ (IO binding)
 Inference: session_->Run(binding)
     ↓ (zero-copy wrap)
@@ -63,20 +63,20 @@ public:
     if (!load_plugin("onnxruntime_cpu")) {
       RCLCPP_ERROR(get_logger(), "Failed to load ONNX Runtime backend");
     }
-    
+
     // Load model
     if (!load_model("/path/to/model.onnx")) {
       RCLCPP_ERROR(get_logger(), "Failed to load ONNX model");
     }
   }
-  
+
   void process_input(const sensor_msgs::msg::Image& image) {
     // Convert image to tensor
     auto input = image_to_tensor(image);
-    
+
     // Run inference (zero-copy!)
     auto output = run_inference(input);
-    
+
     // Process results
     publish_results(output);
   }
@@ -163,7 +163,7 @@ deep_ros::Tensor input3({1, 3, 512, 512}, dtype, allocator);    // Different res
 
 // Output shapes are automatically inferred
 auto output1 = executor->run_inference(input1);  // [1, 1000]
-auto output2 = executor->run_inference(input2);  // [4, 1000] 
+auto output2 = executor->run_inference(input2);  // [4, 1000]
 auto output3 = executor->run_inference(input3);  // [1, 1000]
 ```
 
@@ -207,7 +207,7 @@ deep_ort_backend_plugin/
 
 ### Memory Efficiency
 - **Zero-copy overhead**: 0% (direct memory binding)
-- **Memory alignment**: 64-byte for optimal SIMD performance  
+- **Memory alignment**: 64-byte for optimal SIMD performance
 - **Allocation strategy**: Arena-based for reduced fragmentation
 
 ### Inference Speed
@@ -220,20 +220,23 @@ deep_ort_backend_plugin/
 ### Common Issues
 
 1. **Plugin not found**:
+
    ```bash
    # Verify plugin registration
    ros2 pkg prefix deep_ort_backend_plugin
    ```
 
 2. **Model loading fails**:
-   ```bash
+   
+```bash
    # Check file permissions and path
    ls -la /path/to/model.onnx
    ```
 
 3. **Memory alignment errors**:
+   
    ```cpp
-   // Ensure tensor size >= 128 bytes (ONNX Runtime requirement)
+// Ensure tensor size >= 128 bytes (ONNX Runtime requirement)
    if (tensor.size() * tensor.element_size() < 128) {
        // Use smaller data types or add padding
    }
@@ -242,7 +245,7 @@ deep_ort_backend_plugin/
 ## Future Enhancements
 
 - [ ] **GPU backend**: CUDA and ROCm execution providers
-- [ ] **Quantization**: INT8 and FP16 optimizations  
+- [ ] **Quantization**: INT8 and FP16 optimizations
 - [ ] **Model optimization**: Runtime graph optimization
 - [ ] **Batch processing**: Efficient multi-request batching
 - [ ] **Memory pools**: Advanced memory management strategies

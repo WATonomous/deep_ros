@@ -7,7 +7,7 @@ Core package for the Deep ROS inference framework providing abstract interfaces,
 `deep_core` provides the foundational components for a modular, high-performance ML inference system:
 
 - **Tensor abstraction** with custom memory allocators
-- **Plugin interfaces** for backend inference engines 
+- **Plugin interfaces** for backend inference engines
 - **Lifecycle node base class** for inference nodes
 - **Type system** for tensor data types
 
@@ -67,7 +67,7 @@ protected:
     // Custom configuration logic
     return CallbackReturn::SUCCESS;
   }
-  
+
   CallbackReturn on_activate_impl(const rclcpp_lifecycle::State & state) override
   {
     // Start inference services
@@ -86,11 +86,11 @@ public:
     // Custom allocation strategy (e.g., GPU memory, aligned allocation)
     return my_custom_malloc(bytes);
   }
-  
+
   void deallocate(void * ptr) override {
     my_custom_free(ptr);
   }
-  
+
   // Implement other required methods...
 };
 ```
@@ -123,7 +123,7 @@ deep_core/
 ## Supported Data Types
 
 - `FLOAT32`: 32-bit floating point
-- `INT32`: 32-bit signed integer  
+- `INT32`: 32-bit signed integer
 - `INT64`: 64-bit signed integer
 - `UINT8`: 8-bit unsigned integer
 
@@ -133,10 +133,11 @@ To create a new backend plugin:
 
 1. Implement the three interfaces:
    - `BackendMemoryAllocator`
-   - `BackendInferenceExecutor` 
+   - `BackendInferenceExecutor`
    - `DeepBackendPlugin`
 
 2. Create a `plugins.xml` file:
+
 ```xml
 <library path="my_backend_plugin_lib">
   <class name="my_backend" type="my_namespace::MyBackendPlugin" base_class_type="deep_ros::DeepBackendPlugin">
@@ -145,7 +146,8 @@ To create a new backend plugin:
 </library>
 ```
 
-3. Export the plugin in your `package.xml`:
+1. Export the plugin in your `package.xml`:
+
 ```xml
 <export>
   <deep_ort_backend_plugin plugin="${prefix}/plugins.xml" />

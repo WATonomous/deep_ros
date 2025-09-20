@@ -24,7 +24,7 @@ namespace deep_ort_backend
 
 /**
  * @brief ONNX Runtime optimized CPU memory allocator
- * 
+ *
  * Provides CPU memory allocation optimized for ONNX Runtime operations
  * with proper alignment for SIMD operations.
  */

@@ -16,7 +16,7 @@ Conversion utilities for seamlessly transforming ROS 2 sensor messages into tens
 
 ### 📷 Comprehensive Sensor Support
 - **Images**: All standard ROS image encodings
-- **Point Clouds**: PointCloud2 with arbitrary field configurations  
+- **Point Clouds**: PointCloud2 with arbitrary field configurations
 - **Laser Scans**: Range and intensity data
 - **IMU Data**: Orientation, acceleration, and angular velocity
 
@@ -76,7 +76,7 @@ auto tensor = deep_ros::ros_conversions::from_laserscan(scan, allocator);
 // Shape: [num_ranges] or [num_ranges, 2] if intensities present
 ```
 
-### IMU Messages  
+### IMU Messages
 
 Convert `sensor_msgs::msg::Imu` to standardized tensors:
 
@@ -102,12 +102,12 @@ public:
     // Load model and setup subscriptions
     load_plugin("onnxruntime_cpu");
     load_model("/models/object_detection.onnx");
-    
+
     image_sub_ = create_subscription<sensor_msgs::msg::Image>(
-      "/camera/image", 10, 
+      "/camera/image", 10,
       std::bind(&ImageProcessorNode::image_callback, this, std::placeholders::_1)
     );
-    
+
     result_pub_ = create_publisher<sensor_msgs::msg::Image>("/detection/result", 10);
   }
 
@@ -117,22 +117,22 @@ private:
       // Convert ROS image to tensor
       auto allocator = get_current_allocator();
       auto input_tensor = deep_ros::ros_conversions::from_image(*msg, allocator);
-      
+
       // Run inference
       auto output_tensor = run_inference(input_tensor);
-      
+
       // Convert result back to ROS image
       sensor_msgs::msg::Image result_msg;
       deep_ros::ros_conversions::to_image(output_tensor, result_msg, "bgr8", msg->header);
-      
+
       // Publish result
       result_pub_->publish(result_msg);
-      
+
     } catch (const std::exception& e) {
       RCLCPP_ERROR(get_logger(), "Processing failed: %s", e.what());
     }
   }
-  
+
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr result_pub_;
 };
@@ -141,7 +141,7 @@ private:
 ### Multi-Sensor Fusion
 
 ```cpp
-class FusionNode : public rclcpp::Node 
+class FusionNode : public rclcpp::Node
 {
 public:
   FusionNode() : Node("fusion_node") {
@@ -149,7 +149,7 @@ public:
     image_sub_.subscribe(this, "/camera/image");
     lidar_sub_.subscribe(this, "/lidar/scan");
     imu_sub_.subscribe(this, "/imu/data");
-    
+
     // Synchronize messages
     sync_.reset(new Synchronizer(SyncPolicy(10), image_sub_, lidar_sub_, imu_sub_));
     sync_->registerCallback(std::bind(&FusionNode::fusion_callback, this, _1, _2, _3));
@@ -159,22 +159,22 @@ private:
   void fusion_callback(
     const sensor_msgs::msg::Image::ConstSharedPtr& image,
     const sensor_msgs::msg::LaserScan::ConstSharedPtr& scan,
-    const sensor_msgs::msg::Imu::ConstSharedPtr& imu) 
+    const sensor_msgs::msg::Imu::ConstSharedPtr& imu)
   {
     // Convert all sensors to tensors
     auto image_tensor = deep_ros::ros_conversions::from_image(*image, allocator_);
     auto lidar_tensor = deep_ros::ros_conversions::from_laserscan(*scan, allocator_);
     auto imu_tensor = deep_ros::ros_conversions::from_imu(*imu, allocator_);
-    
+
     // Concatenate or process as needed for fusion model
     auto fused_input = create_fusion_tensor(image_tensor, lidar_tensor, imu_tensor);
-    
+
     // Run fusion inference
     auto result = run_fusion_model(fused_input);
-    
+
     // Publish results...
   }
-  
+
   // Subscriber and synchronizer setup...
 };
 ```
@@ -216,7 +216,7 @@ auto cpu_allocator = get_cpu_allocator();
 auto gpu_tensor = deep_ros::ros_conversions::from_image(image, gpu_allocator);
 auto gpu_result = run_gpu_inference(gpu_tensor);
 
-// CPU-based processing  
+// CPU-based processing
 auto cpu_tensor = deep_ros::ros_conversions::from_image(image, cpu_allocator);
 auto cpu_result = run_cpu_inference(cpu_tensor);
 ```
@@ -249,7 +249,7 @@ auto batch_tensor = deep_ros::ros_conversions::from_image(image_batch, allocator
 ```cpp
 // Tensors use optimal memory layouts:
 // - Contiguous memory for cache efficiency
-// - Proper alignment for SIMD operations  
+// - Proper alignment for SIMD operations
 // - Backend-specific memory locations (CPU/GPU)
 ```
 

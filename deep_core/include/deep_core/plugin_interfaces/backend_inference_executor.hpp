@@ -26,7 +26,7 @@ namespace deep_ros
 
 /**
  * @brief Backend plugin interface for inference execution
- * 
+ *
  * This plugin interface allows different backends to provide
  * their inference execution implementations.
  */
@@ -48,12 +48,12 @@ public:
    * @return Output tensor
    */
   virtual Tensor run_inference(Tensor input) = 0;
-  
+
   /**
    * @brief Unload the currently loaded model
    */
   virtual void unload_model() = 0;
-  
+
   /**
    * @brief Get supported model formats
    * @return Vector of supported formats (e.g., "onnx", "pb")

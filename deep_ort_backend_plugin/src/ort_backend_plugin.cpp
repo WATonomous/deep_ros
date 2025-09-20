@@ -13,10 +13,11 @@
 // limitations under the License.
 
 #include "deep_ort_backend_plugin/ort_backend_plugin.hpp"
-#include "deep_ort_backend_plugin/ort_cpu_memory_allocator.hpp"
-#include "deep_ort_backend_plugin/ort_backend_executor.hpp"
 
 #include <pluginlib/class_list_macros.hpp>
+
+#include "deep_ort_backend_plugin/ort_backend_executor.hpp"
+#include "deep_ort_backend_plugin/ort_cpu_memory_allocator.hpp"
 
 namespace deep_ort_backend
 {
@@ -24,8 +25,7 @@ namespace deep_ort_backend
 OrtBackendPlugin::OrtBackendPlugin()
 : allocator_(get_ort_cpu_allocator())
 , executor_(std::make_shared<OrtBackendExecutor>())
-{
-}
+{}
 
 std::string OrtBackendPlugin::backend_name() const
 {

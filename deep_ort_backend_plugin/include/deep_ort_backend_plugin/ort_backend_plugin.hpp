@@ -17,16 +17,16 @@
 #include <memory>
 #include <string>
 
-#include <deep_core/plugin_interfaces/deep_backend_plugin.hpp>
-#include <deep_core/plugin_interfaces/backend_memory_allocator.hpp>
 #include <deep_core/plugin_interfaces/backend_inference_executor.hpp>
+#include <deep_core/plugin_interfaces/backend_memory_allocator.hpp>
+#include <deep_core/plugin_interfaces/deep_backend_plugin.hpp>
 
 namespace deep_ort_backend
 {
 
 /**
  * @brief ONNX Runtime backend plugin
- * 
+ *
  * Combines ORT CPU memory allocator and inference executor into a single
  * backend plugin for use with pluginlib.
  */
