@@ -12,12 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <chrono>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include <catch2/catch.hpp>
-#include <deep_conversions/ros_conversions.hpp>
+#include <deep_conversions/image_conversions.hpp>
+#include <deep_conversions/imu_conversions.hpp>
+#include <deep_conversions/laserscan_conversions.hpp>
+#include <deep_conversions/pointcloud_conversions.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>

@@ -46,9 +46,9 @@ target_include_directories(${DEEP_CONVERSIONS_LIB} PUBLIC
 target_link_libraries(${DEEP_CONVERSIONS_LIB}
   PUBLIC
     rclcpp::rclcpp
-    sensor_msgs::sensor_msgs__rosidl_typesupport_cpp
-    std_msgs::std_msgs__rosidl_typesupport_cpp
     deep_core::deep_core_lib
+    ${sensor_msgs_TARGETS}
+    ${std_msgs_TARGETS}
 )
 
 install(TARGETS

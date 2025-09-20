@@ -12,13 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "deep_conversions/ros_conversions.hpp"
-
+#include <cstring>
 #include <memory>
+#include <regex>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#include "deep_conversions/image_conversions.hpp"
+#include "deep_conversions/imu_conversions.hpp"
+#include "deep_conversions/laserscan_conversions.hpp"
+#include "deep_conversions/pointcloud_conversions.hpp"
 
 namespace deep_ros
 {
@@ -123,12 +129,24 @@ ImageEncoding get_image_encoding_info(const std::string & encoding)
 
 Tensor from_image(const sensor_msgs::msg::Image & image, std::shared_ptr<BackendMemoryAllocator> allocator)
 {
+  if (image.height == 0 || image.width == 0) {
+    throw std::runtime_error(
+      "Invalid image dimensions: height=" + std::to_string(image.height) + ", width=" + std::to_string(image.width));
+  }
+
   auto encoding_info = get_image_encoding_info(image.encoding);
 
   // Create tensor with proper shape - always include batch dimension (size 1 for single image)
   std::vector<size_t> shape = {1, image.height, image.width};
   if (encoding_info.channels > 1) {
     shape.push_back(encoding_info.channels);
+  }
+
+  // Validate step size (bytes per row)
+  size_t expected_step = image.width * encoding_info.channels * encoding_info.bytes_per_channel;
+  if (image.step != expected_step) {
+    throw std::runtime_error(
+      "Image step mismatch. Expected " + std::to_string(expected_step) + " but got " + std::to_string(image.step));
   }
 
   // Validate data size
@@ -373,24 +391,24 @@ Tensor from_laserscan(const sensor_msgs::msg::LaserScan & scan, std::shared_ptr<
 Tensor from_imu(const sensor_msgs::msg::Imu & imu, std::shared_ptr<BackendMemoryAllocator> allocator)
 {
   std::vector<size_t> shape = {10};
-  Tensor tensor(shape, DataType::FLOAT64, allocator);
-  auto * data = tensor.data_as<double>();
+  Tensor tensor(shape, DataType::FLOAT32, allocator);
+  auto * data = tensor.data_as<float>();
 
   // Orientation quaternion
-  data[0] = imu.orientation.x;
-  data[1] = imu.orientation.y;
-  data[2] = imu.orientation.z;
-  data[3] = imu.orientation.w;
+  data[0] = static_cast<float>(imu.orientation.x);
+  data[1] = static_cast<float>(imu.orientation.y);
+  data[2] = static_cast<float>(imu.orientation.z);
+  data[3] = static_cast<float>(imu.orientation.w);
 
   // Linear acceleration
-  data[4] = imu.linear_acceleration.x;
-  data[5] = imu.linear_acceleration.y;
-  data[6] = imu.linear_acceleration.z;
+  data[4] = static_cast<float>(imu.linear_acceleration.x);
+  data[5] = static_cast<float>(imu.linear_acceleration.y);
+  data[6] = static_cast<float>(imu.linear_acceleration.z);
 
   // Angular velocity
-  data[7] = imu.angular_velocity.x;
-  data[8] = imu.angular_velocity.y;
-  data[9] = imu.angular_velocity.z;
+  data[7] = static_cast<float>(imu.angular_velocity.x);
+  data[8] = static_cast<float>(imu.angular_velocity.y);
+  data[9] = static_cast<float>(imu.angular_velocity.z);
 
   return tensor;
 }
