@@ -57,7 +57,7 @@ size_t get_dtype_size(DataType dtype)
   }
 }
 
-Tensor::Tensor()
+TensorPtr::TensorPtr()
 : dtype_(DataType::FLOAT32)
 , byte_size_(0)
 , data_(nullptr)
@@ -65,16 +65,18 @@ Tensor::Tensor()
 , allocator_(nullptr)
 {}
 
-Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype)
+TensorPtr::TensorPtr(const std::vector<size_t> & shape, DataType dtype)
 : shape_(shape)
 , dtype_(dtype)
 , is_view_(false)
 , allocator_(nullptr)
 {
-  throw std::runtime_error("Tensor construction requires an allocator. Use Tensor(shape, dtype, allocator) instead.");
+  throw std::runtime_error(
+    "TensorPtr construction requires an allocator. Use TensorPtr(shape, dtype, allocator) instead.");
 }
 
-Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype, std::shared_ptr<BackendMemoryAllocator> allocator)
+TensorPtr::TensorPtr(
+  const std::vector<size_t> & shape, DataType dtype, std::shared_ptr<BackendMemoryAllocator> allocator)
 : shape_(shape)
 , dtype_(dtype)
 , is_view_(false)
@@ -88,7 +90,7 @@ Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype, std::shared_pt
   allocate_memory();
 }
 
-Tensor::Tensor(void * data, const std::vector<size_t> & shape, DataType dtype)
+TensorPtr::TensorPtr(void * data, const std::vector<size_t> & shape, DataType dtype)
 : shape_(shape)
 , dtype_(dtype)
 , data_(data)
@@ -101,12 +103,12 @@ Tensor::Tensor(void * data, const std::vector<size_t> & shape, DataType dtype)
   byte_size_ = total_elements * get_dtype_size(dtype_);
 }
 
-Tensor::~Tensor()
+TensorPtr::~TensorPtr()
 {
   deallocate_memory();
 }
 
-Tensor::Tensor(const Tensor & other)
+TensorPtr::TensorPtr(const TensorPtr & other)
 : shape_(other.shape_)
 , strides_(other.strides_)
 , dtype_(other.dtype_)
@@ -126,7 +128,7 @@ Tensor::Tensor(const Tensor & other)
   }
 }
 
-Tensor & Tensor::operator=(const Tensor & other)
+TensorPtr & TensorPtr::operator=(const TensorPtr & other)
 {
   if (this != &other) {
     deallocate_memory();
@@ -152,7 +154,7 @@ Tensor & Tensor::operator=(const Tensor & other)
   return *this;
 }
 
-Tensor::Tensor(Tensor && other) noexcept
+TensorPtr::TensorPtr(TensorPtr && other) noexcept
 : shape_(std::move(other.shape_))
 , strides_(std::move(other.strides_))
 , dtype_(other.dtype_)
@@ -167,7 +169,7 @@ Tensor::Tensor(Tensor && other) noexcept
   other.allocator_ = nullptr;
 }
 
-Tensor & Tensor::operator=(Tensor && other) noexcept
+TensorPtr & TensorPtr::operator=(TensorPtr && other) noexcept
 {
   if (this != &other) {
     deallocate_memory();
@@ -188,7 +190,7 @@ Tensor & Tensor::operator=(Tensor && other) noexcept
   return *this;
 }
 
-void Tensor::calculate_strides()
+void TensorPtr::calculate_strides()
 {
   strides_.resize(shape_.size());
   if (shape_.empty()) return;
@@ -199,7 +201,7 @@ void Tensor::calculate_strides()
   }
 }
 
-void Tensor::allocate_memory()
+void TensorPtr::allocate_memory()
 {
   if (byte_size_ > 0 && !is_view_) {
     if (allocator_) {
@@ -213,7 +215,7 @@ void Tensor::allocate_memory()
   }
 }
 
-void Tensor::deallocate_memory()
+void TensorPtr::deallocate_memory()
 {
   if (!is_view_ && data_) {
     if (allocator_) {
@@ -225,7 +227,7 @@ void Tensor::deallocate_memory()
   }
 }
 
-Tensor Tensor::reshape(const std::vector<size_t> & new_shape) const
+TensorPtr TensorPtr::reshape(const std::vector<size_t> & new_shape) const
 {
   size_t new_total = std::accumulate(new_shape.begin(), new_shape.end(), 1UL, std::multiplies<size_t>());
   size_t current_total = std::accumulate(shape_.begin(), shape_.end(), 1UL, std::multiplies<size_t>());
@@ -238,15 +240,15 @@ Tensor Tensor::reshape(const std::vector<size_t> & new_shape) const
     throw std::runtime_error("Cannot reshape non-contiguous tensor");
   }
 
-  return Tensor(data_, new_shape, dtype_);
+  return TensorPtr(data_, new_shape, dtype_);
 }
 
-size_t Tensor::size() const
+size_t TensorPtr::size() const
 {
   return std::accumulate(shape_.begin(), shape_.end(), 1UL, std::multiplies<size_t>());
 }
 
-bool Tensor::is_contiguous() const
+bool TensorPtr::is_contiguous() const
 {
   if (shape_.empty()) return true;
 

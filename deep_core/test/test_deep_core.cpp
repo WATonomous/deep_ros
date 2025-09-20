@@ -79,12 +79,12 @@ private:
   size_t allocated_bytes_{0};
 };
 
-TEST_CASE("Tensor construction with allocator", "[tensor]")
+TEST_CASE("TensorPtr construction with allocator", "[tensor]")
 {
   auto allocator = std::make_shared<MockMemoryAllocator>();
   std::vector<size_t> shape{2, 3, 4};
 
-  Tensor tensor(shape, DataType::FLOAT32, allocator);
+  TensorPtr tensor(shape, DataType::FLOAT32, allocator);
 
   REQUIRE(tensor.shape() == shape);
   REQUIRE(tensor.dtype() == DataType::FLOAT32);
@@ -93,20 +93,20 @@ TEST_CASE("Tensor construction with allocator", "[tensor]")
   REQUIRE(allocator->allocated_bytes() > 0);
 }
 
-TEST_CASE("Tensor construction without allocator throws", "[tensor]")
+TEST_CASE("TensorPtr construction without allocator throws", "[tensor]")
 {
   std::vector<size_t> shape{2, 3};
-  REQUIRE_THROWS_AS(Tensor(shape, DataType::FLOAT32), std::runtime_error);
+  REQUIRE_THROWS_AS(TensorPtr(shape, DataType::FLOAT32), std::runtime_error);
 }
 
 TEST_CASE("Different data types have correct sizes", "[tensor]")
 {
   auto allocator = std::make_shared<MockMemoryAllocator>();
 
-  Tensor float_tensor({10}, DataType::FLOAT32, allocator);
-  Tensor int32_tensor({10}, DataType::INT32, allocator);
-  Tensor int64_tensor({10}, DataType::INT64, allocator);
-  Tensor uint8_tensor({10}, DataType::UINT8, allocator);
+  TensorPtr float_tensor({10}, DataType::FLOAT32, allocator);
+  TensorPtr int32_tensor({10}, DataType::INT32, allocator);
+  TensorPtr int64_tensor({10}, DataType::INT64, allocator);
+  TensorPtr uint8_tensor({10}, DataType::UINT8, allocator);
 
   REQUIRE(float_tensor.size() == 10);
   REQUIRE(int32_tensor.size() == 10);
@@ -119,7 +119,7 @@ TEST_CASE("Empty shape creates scalar tensor", "[tensor]")
   auto allocator = std::make_shared<MockMemoryAllocator>();
   std::vector<size_t> empty_shape;
 
-  Tensor tensor(empty_shape, DataType::FLOAT32, allocator);
+  TensorPtr tensor(empty_shape, DataType::FLOAT32, allocator);
 
   REQUIRE(tensor.size() == 1);  // Scalar tensor
   REQUIRE(tensor.shape().empty());
@@ -130,7 +130,7 @@ TEST_CASE("Large shape allocation", "[tensor]")
   auto allocator = std::make_shared<MockMemoryAllocator>();
   std::vector<size_t> large_shape{100, 100, 3};
 
-  Tensor tensor(large_shape, DataType::UINT8, allocator);
+  TensorPtr tensor(large_shape, DataType::UINT8, allocator);
 
   REQUIRE(tensor.size() == 30000);
   REQUIRE(tensor.shape() == large_shape);
@@ -146,7 +146,7 @@ public:
     return true;
   }
 
-  Tensor run_inference(Tensor input) override
+  TensorPtr run_inference(TensorPtr input) override
   {
     if (!model_loaded_) {
       throw std::runtime_error("No model loaded");
@@ -154,7 +154,7 @@ public:
 
     // Mock inference: return tensor with same shape but all zeros
     auto allocator = std::make_shared<MockMemoryAllocator>();
-    Tensor output(input.shape(), input.dtype(), allocator);
+    TensorPtr output(input.shape(), input.dtype(), allocator);
 
     // Calculate correct byte size based on data type
     size_t dtype_size = get_dtype_size(input.dtype());
@@ -244,7 +244,7 @@ TEST_CASE("Backend inference workflow", "[plugin][inference]")
 
   // Create input tensor
   std::vector<size_t> shape{1, 3, 224, 224};
-  Tensor input(shape, DataType::FLOAT32, allocator);
+  TensorPtr input(shape, DataType::FLOAT32, allocator);
 
   // Run inference
   auto output = executor->run_inference(std::move(input));
@@ -273,7 +273,7 @@ public:
     return load_model(model_path);
   }
 
-  Tensor test_run_inference(Tensor input)
+  TensorPtr test_run_inference(TensorPtr input)
   {
     return run_inference(input);
   }

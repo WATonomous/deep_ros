@@ -6,16 +6,15 @@ Core package for the Deep ROS inference framework providing abstract interfaces,
 
 `deep_core` provides the foundational components for a modular, high-performance ML inference system:
 
-- **Tensor abstraction** with custom memory allocators
-- **Plugin interfaces** for backend inference engines
-- **Lifecycle node base class** for inference nodes
-- **Type system** for tensor data types
+- **Plugin interfaces** for backend inference engines and memory allocators
+- **Lifecycle node base class** with optional bond timers
+- **Generic TensorPtr Type** to interface large tensor data between ROS msgs and backend hardware accelerators without deepcopy operations
 
 ## Architecture
 
 ### Core Components
 
-- **`Tensor`**: Multi-dimensional array with pluggable memory allocators
+- **`TensorPtr`**: Smart pointer for multi-dimensional tensor data with pluggable memory allocators
 - **`DeepNodeBase`**: ROS 2 lifecycle node base class for inference services
 - **Plugin Interfaces**: Abstract base classes for backend implementations
   - `BackendMemoryAllocator`: Custom memory allocation strategies
@@ -29,7 +28,7 @@ The tensor system supports custom memory allocators for optimal performance:
 ```cpp
 // Create tensor with custom allocator
 auto allocator = get_custom_allocator();
-deep_ros::Tensor input({1, 3, 224, 224}, deep_ros::DataType::FLOAT32, allocator);
+deep_ros::TensorPtr input({1, 3, 224, 224}, deep_ros::DataType::FLOAT32, allocator);
 ```
 
 ### Plugin Architecture
@@ -43,7 +42,7 @@ if (!load_plugin("onnxruntime_cpu")) {
 }
 
 // Run inference
-deep_ros::Tensor output = run_inference(input_tensor);
+deep_ros::TensorPtr output = run_inference(input_tensor);
 ```
 
 ## Usage
@@ -102,7 +101,7 @@ deep_core/
 ├── include/deep_core/
 │   ├── deep_node_base.hpp          # Lifecycle node base class
 │   ├── types/
-│   │   ├── tensor.hpp              # Tensor class and data types
+│   │   ├── tensor.hpp              # TensorPtr class and data types
 │   │   └── data_type.hpp           # Enum for tensor data types
 │   └── plugin_interfaces/
 │       ├── backend_memory_allocator.hpp    # Memory allocator interface
@@ -110,7 +109,7 @@ deep_core/
 │       └── deep_backend_plugin.hpp         # Combined plugin interface
 ├── src/
 │   ├── deep_node_base.cpp          # Lifecycle node implementation
-│   └── tensor.cpp                  # Tensor operations
+│   └── tensor.cpp                  # TensorPtr operations
 └── CMakeLists.txt
 ```
 

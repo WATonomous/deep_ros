@@ -62,6 +62,10 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
+install(FILES cmake/add_deep_test.cmake
+  DESTINATION share/${PROJECT_NAME}/cmake
+)
+
 if(BUILD_TESTING)
   # Include our custom test function
   include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/add_deep_test.cmake)

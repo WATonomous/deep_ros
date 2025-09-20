@@ -47,7 +47,7 @@ public:
    * @param input Input tensor
    * @return Output tensor
    */
-  virtual Tensor run_inference(Tensor input) = 0;
+  virtual TensorPtr run_inference(TensorPtr input) = 0;
 
   /**
    * @brief Unload the currently loaded model

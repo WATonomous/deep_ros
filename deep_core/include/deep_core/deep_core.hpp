@@ -19,7 +19,7 @@
  * @brief Convenience header that includes all deep_core components
  *
  * This header provides a single include for all deep_core functionality:
- * - Core types (Tensor, DataType)
+ * - Core types (TensorPtr, DataType)
  * - Plugin interfaces (BackendMemoryAllocator, BackendInferenceExecutor, DeepBackendPlugin)
  * - Base node classes (DeepNodeBase)
  *
