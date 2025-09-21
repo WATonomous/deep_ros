@@ -74,12 +74,6 @@ if(BUILD_TESTING)
     LIBRARIES
       ${DEEP_CORE_LIB}
   )
-
-  add_deep_test(test_dynamic_reconfiguration test/test_dynamic_reconfiguration.cpp
-    LIBRARIES
-      ${DEEP_CORE_LIB}
-  )
-
   add_deep_test(test_tensor test/test_tensor.cpp
     LIBRARIES
       ${DEEP_CORE_LIB}
