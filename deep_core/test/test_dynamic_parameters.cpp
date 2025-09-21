@@ -235,7 +235,7 @@ TEST_CASE_METHOD(deep_ros::test::TestExecutorFixture, "Dynamic model reconfigura
 
     // Set multiple parameters including model_path
     auto parameters = std::vector<rclcpp::Parameter>{
-      rclcpp::Parameter("model_path", "/new/model/path.onnx"), rclcpp::Parameter("some_other_param", 42)};
+      rclcpp::Parameter("model_path", "/new/model/path.onnx"), rclcpp::Parameter("some_other_param", "new_value")};
 
     auto result = test_node->set_parameters(parameters);
 
@@ -243,16 +243,8 @@ TEST_CASE_METHOD(deep_ros::test::TestExecutorFixture, "Dynamic model reconfigura
     REQUIRE(result.size() == 2);
 
     // Both parameters should succeed - model_path succeeds with plugin loaded
-    bool model_path_succeeded = false;
-    bool other_param_succeeded = false;
     for (const auto & res : result) {
-      if (res.successful) {
-        if (res.reason.find("model_path") != std::string::npos || res.reason.empty()) {
-          model_path_succeeded = true;
-        } else {
-          other_param_succeeded = true;
-        }
-      }
+      REQUIRE(res.successful == true);
     }
     REQUIRE(test_node->is_model_loaded() == true);
   }

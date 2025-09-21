@@ -64,7 +64,7 @@ protected:
    * @param state Current lifecycle state
    * @return Callback return status
    */
-  virtual CallbackReturn on_configure_impl(const rclcpp_lifecycle::State & state)
+  virtual CallbackReturn on_configure_impl(const rclcpp_lifecycle::State & /*state*/)
   {
     return CallbackReturn::SUCCESS;
   }
@@ -74,7 +74,7 @@ protected:
    * @param state Current lifecycle state
    * @return Callback return status
    */
-  virtual CallbackReturn on_activate_impl(const rclcpp_lifecycle::State & state)
+  virtual CallbackReturn on_activate_impl(const rclcpp_lifecycle::State & /*state*/)
   {
     return CallbackReturn::SUCCESS;
   }
@@ -84,7 +84,7 @@ protected:
    * @param state Current lifecycle state
    * @return Callback return status
    */
-  virtual CallbackReturn on_deactivate_impl(const rclcpp_lifecycle::State & state)
+  virtual CallbackReturn on_deactivate_impl(const rclcpp_lifecycle::State & /*state*/)
   {
     return CallbackReturn::SUCCESS;
   }
@@ -94,7 +94,7 @@ protected:
    * @param state Current lifecycle state
    * @return Callback return status
    */
-  virtual CallbackReturn on_cleanup_impl(const rclcpp_lifecycle::State & state)
+  virtual CallbackReturn on_cleanup_impl(const rclcpp_lifecycle::State & /*state*/)
   {
     return CallbackReturn::SUCCESS;
   }
@@ -104,7 +104,7 @@ protected:
    * @param state Current lifecycle state
    * @return Callback return status
    */
-  virtual CallbackReturn on_shutdown_impl(const rclcpp_lifecycle::State & state)
+  virtual CallbackReturn on_shutdown_impl(const rclcpp_lifecycle::State & /*state*/)
   {
     return CallbackReturn::SUCCESS;
   }
