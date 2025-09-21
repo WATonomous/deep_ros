@@ -20,9 +20,9 @@
 
 #include "deep_core/types/tensor.hpp"
 
-TEST_CASE("deep_ros::TensorPtr default constructor", "[tensor]")
+TEST_CASE("deep_ros::Tensor default constructor", "[tensor]")
 {
-  deep_ros::TensorPtr tensor;
+  deep_ros::Tensor tensor;
 
   REQUIRE(tensor.rank() == 0);
   REQUIRE(tensor.byte_size() == 0);
@@ -30,12 +30,12 @@ TEST_CASE("deep_ros::TensorPtr default constructor", "[tensor]")
   REQUIRE(tensor.data() == nullptr);
 }
 
-TEST_CASE("deep_ros::TensorPtr shape constructor", "[tensor]")
+TEST_CASE("deep_ros::Tensor shape constructor", "[tensor]")
 {
   SECTION("2D tensor")
   {
     std::vector<size_t> shape = {2, 3};
-    deep_ros::TensorPtr tensor(shape, deep_ros::DataType::FLOAT32);
+    deep_ros::Tensor tensor(shape, deep_ros::DataType::FLOAT32);
 
     REQUIRE(tensor.shape() == shape);
     REQUIRE(tensor.rank() == 2);
@@ -48,7 +48,7 @@ TEST_CASE("deep_ros::TensorPtr shape constructor", "[tensor]")
   SECTION("3D tensor with different data type")
   {
     std::vector<size_t> shape = {2, 3, 4};
-    deep_ros::TensorPtr tensor(shape, deep_ros::DataType::INT32);
+    deep_ros::Tensor tensor(shape, deep_ros::DataType::INT32);
 
     REQUIRE(tensor.shape() == shape);
     REQUIRE(tensor.rank() == 3);
@@ -58,12 +58,12 @@ TEST_CASE("deep_ros::TensorPtr shape constructor", "[tensor]")
   }
 }
 
-TEST_CASE("deep_ros::TensorPtr external data constructor", "[tensor]")
+TEST_CASE("deep_ros::Tensor external data constructor", "[tensor]")
 {
   std::vector<float> data = {1.0f, 2.0f, 3.0f, 4.0f};
   std::vector<size_t> shape = {2, 2};
 
-  deep_ros::TensorPtr tensor(data.data(), shape, deep_ros::DataType::FLOAT32);
+  deep_ros::Tensor tensor(data.data(), shape, deep_ros::DataType::FLOAT32);
 
   REQUIRE(tensor.shape() == shape);
   REQUIRE(tensor.rank() == 2);
@@ -72,10 +72,10 @@ TEST_CASE("deep_ros::TensorPtr external data constructor", "[tensor]")
   REQUIRE(tensor.dtype() == deep_ros::DataType::FLOAT32);
 }
 
-TEST_CASE("deep_ros::TensorPtr copy constructor", "[tensor]")
+TEST_CASE("deep_ros::Tensor copy constructor", "[tensor]")
 {
   std::vector<size_t> shape = {2, 3};
-  deep_ros::TensorPtr original(shape, deep_ros::DataType::INT32);
+  deep_ros::Tensor original(shape, deep_ros::DataType::INT32);
 
   // Fill with test data
   auto int_data = original.data_as<int32_t>();
@@ -83,7 +83,7 @@ TEST_CASE("deep_ros::TensorPtr copy constructor", "[tensor]")
     int_data[i] = static_cast<int32_t>(i + 1);
   }
 
-  deep_ros::TensorPtr copy(original);
+  deep_ros::Tensor copy(original);
 
   REQUIRE(copy.shape() == original.shape());
   REQUIRE(copy.dtype() == original.dtype());
@@ -97,13 +97,13 @@ TEST_CASE("deep_ros::TensorPtr copy constructor", "[tensor]")
   }
 }
 
-TEST_CASE("deep_ros::TensorPtr move constructor", "[tensor]")
+TEST_CASE("deep_ros::Tensor move constructor", "[tensor]")
 {
   std::vector<size_t> shape = {3, 4};
-  deep_ros::TensorPtr original(shape, deep_ros::DataType::FLOAT64);
+  deep_ros::Tensor original(shape, deep_ros::DataType::FLOAT64);
   void * original_data = original.data();
 
-  deep_ros::TensorPtr moved(std::move(original));
+  deep_ros::Tensor moved(std::move(original));
 
   REQUIRE(moved.shape() == shape);
   REQUIRE(moved.dtype() == deep_ros::DataType::FLOAT64);
@@ -112,10 +112,10 @@ TEST_CASE("deep_ros::TensorPtr move constructor", "[tensor]")
   REQUIRE(original.byte_size() == 0);
 }
 
-TEST_CASE("deep_ros::TensorPtr data_as template method", "[tensor]")
+TEST_CASE("deep_ros::Tensor data_as template method", "[tensor]")
 {
   std::vector<size_t> shape = {2, 2};
-  deep_ros::TensorPtr tensor(shape, deep_ros::DataType::FLOAT32);
+  deep_ros::Tensor tensor(shape, deep_ros::DataType::FLOAT32);
 
   auto float_ptr = tensor.data_as<float>();
   REQUIRE(float_ptr != nullptr);
@@ -128,15 +128,15 @@ TEST_CASE("deep_ros::TensorPtr data_as template method", "[tensor]")
   REQUIRE(float_ptr[1] == 2.5f);
 }
 
-TEST_CASE("deep_ros::TensorPtr reshape", "[tensor]")
+TEST_CASE("deep_ros::Tensor reshape", "[tensor]")
 {
   std::vector<size_t> shape = {2, 6};
-  deep_ros::TensorPtr tensor(shape, deep_ros::DataType::UINT8);
+  deep_ros::Tensor tensor(shape, deep_ros::DataType::UINT8);
 
   SECTION("Valid reshape")
   {
     std::vector<size_t> new_shape = {3, 4};
-    deep_ros::TensorPtr reshaped = tensor.reshape(new_shape);
+    deep_ros::Tensor reshaped = tensor.reshape(new_shape);
 
     REQUIRE(reshaped.shape() == new_shape);
     REQUIRE(reshaped.size() == tensor.size());
@@ -166,20 +166,20 @@ TEST_CASE("Data type sizes", "[tensor]")
   REQUIRE(get_dtype_size(deep_ros::DataType::BOOL) == sizeof(bool));
 }
 
-TEST_CASE("deep_ros::TensorPtr is_contiguous", "[tensor]")
+TEST_CASE("deep_ros::Tensor is_contiguous", "[tensor]")
 {
   std::vector<size_t> shape = {2, 3, 4};
-  deep_ros::TensorPtr tensor(shape, deep_ros::DataType::FLOAT32);
+  deep_ros::Tensor tensor(shape, deep_ros::DataType::FLOAT32);
 
   REQUIRE(tensor.is_contiguous() == true);
 }
 
-TEST_CASE("deep_ros::TensorPtr strides calculation", "[tensor]")
+TEST_CASE("deep_ros::Tensor strides calculation", "[tensor]")
 {
   SECTION("2D tensor strides")
   {
     std::vector<size_t> shape = {3, 4};
-    deep_ros::TensorPtr tensor(shape, deep_ros::DataType::FLOAT32);
+    deep_ros::Tensor tensor(shape, deep_ros::DataType::FLOAT32);
 
     auto strides = tensor.strides();
     REQUIRE(strides.size() == 2);
@@ -190,7 +190,7 @@ TEST_CASE("deep_ros::TensorPtr strides calculation", "[tensor]")
   SECTION("3D tensor strides")
   {
     std::vector<size_t> shape = {2, 3, 4};
-    deep_ros::TensorPtr tensor(shape, deep_ros::DataType::INT16);
+    deep_ros::Tensor tensor(shape, deep_ros::DataType::INT16);
 
     auto strides = tensor.strides();
     REQUIRE(strides.size() == 3);
@@ -200,10 +200,10 @@ TEST_CASE("deep_ros::TensorPtr strides calculation", "[tensor]")
   }
 }
 
-TEST_CASE("deep_ros::TensorPtr assignment operators", "[tensor]")
+TEST_CASE("deep_ros::Tensor assignment operators", "[tensor]")
 {
   std::vector<size_t> shape = {2, 2};
-  deep_ros::TensorPtr original(shape, deep_ros::DataType::FLOAT32);
+  deep_ros::Tensor original(shape, deep_ros::DataType::FLOAT32);
 
   // Fill with test data
   auto data = original.data_as<float>();
@@ -214,7 +214,7 @@ TEST_CASE("deep_ros::TensorPtr assignment operators", "[tensor]")
 
   SECTION("Copy assignment")
   {
-    deep_ros::TensorPtr copy;
+    deep_ros::Tensor copy;
     copy = original;
 
     REQUIRE(copy.shape() == original.shape());
@@ -228,7 +228,7 @@ TEST_CASE("deep_ros::TensorPtr assignment operators", "[tensor]")
   SECTION("Move assignment")
   {
     void * original_ptr = original.data();
-    deep_ros::TensorPtr moved;
+    deep_ros::Tensor moved;
     moved = std::move(original);
 
     REQUIRE(moved.shape() == shape);

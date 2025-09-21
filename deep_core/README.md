@@ -5,13 +5,13 @@ Core abstractions for ML inference in ROS 2 lifecycle nodes.
 ## Overview
 
 Provides:
-- `TensorPtr`: Smart pointer for tensor data with custom memory allocators
+- `Tensor`: Smart pointer for tensor data with custom memory allocators
 - `DeepNodeBase`: Lifecycle node base class with plugin loading and optional bond support
 - Plugin interfaces for backend inference engines and memory management
 
 ## Key Components
 
-### TensorPtr
+### Tensor
 Multi-dimensional tensor smart pointer supporting:
 - Custom memory allocators (CPU/GPU/aligned memory)
 - View semantics (wrap existing data without copying)

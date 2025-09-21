@@ -176,7 +176,7 @@ void DeepNodeBase::unload_model()
   }
 }
 
-TensorPtr DeepNodeBase::run_inference(TensorPtr inputs)
+Tensor DeepNodeBase::run_inference(Tensor inputs)
 {
   if (!plugin_) {
     throw std::runtime_error("No plugin loaded");

@@ -2,7 +2,7 @@
 
 ## Design Principles
 
-- TensorPtr is a smart pointer, not a traditional tensor class, it points to data in memory allocated by the backend memory allocator
+- Tensor is a smart pointer, not a traditional tensor class, it points to data in memory allocated by the backend memory allocator
 - DeepNodeBase handles plugin loading automatically via parameters
 - All backends are plugins - no hard framework dependencies
 - Memory allocators enable zero-copy GPU integration
@@ -37,7 +37,7 @@ Key lifecycle callbacks to override:
 
 **Your node just needs to:**
 - Set up ROS interfaces (topics, services, actions)
-- Process incoming data using `run_inference(TensorPtr)`
+- Process incoming data using `run_inference(Tensor)`
 - Handle your specific business logic
 
 Don't forget: `RCLCPP_COMPONENTS_REGISTER_NODE(your_namespace::YourNode)`

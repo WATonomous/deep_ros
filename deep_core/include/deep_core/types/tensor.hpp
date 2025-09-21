@@ -51,24 +51,24 @@ size_t get_dtype_size(DataType dtype);
 /**
  * @brief A smart pointer for multi-dimensional tensor data with automatic memory management
  *
- * The TensorPtr class provides a lightweight smart pointer for multi-dimensional arrays
+ * The Tensor class provides a lightweight smart pointer for multi-dimensional arrays
  * with support for different data types. It handles memory allocation automatically
  * and supports both owned and borrowed memory patterns.
  */
-class TensorPtr
+class Tensor
 {
 public:
   /**
    * @brief Default constructor - creates an empty tensor
    */
-  TensorPtr();
+  Tensor();
 
   /**
    * @brief Create a new tensor with specified shape and data type
    * @param shape Dimensions of the tensor
    * @param dtype Data type of tensor elements
    */
-  TensorPtr(const std::vector<size_t> & shape, DataType dtype);
+  Tensor(const std::vector<size_t> & shape, DataType dtype);
 
   /**
    * @brief Create a new tensor with specified shape, data type, and allocator
@@ -76,7 +76,7 @@ public:
    * @param dtype Data type of tensor elements
    * @param allocator Memory allocator to use (uses CPU allocator if nullptr)
    */
-  TensorPtr(const std::vector<size_t> & shape, DataType dtype, std::shared_ptr<BackendMemoryAllocator> allocator);
+  Tensor(const std::vector<size_t> & shape, DataType dtype, std::shared_ptr<BackendMemoryAllocator> allocator);
 
   /**
    * @brief Wrap existing data in a tensor (non-owning)
@@ -84,32 +84,32 @@ public:
    * @param shape Dimensions of the tensor
    * @param dtype Data type of tensor elements
    */
-  TensorPtr(void * data, const std::vector<size_t> & shape, DataType dtype);
+  Tensor(void * data, const std::vector<size_t> & shape, DataType dtype);
 
   /**
    * @brief Destructor - frees owned memory
    */
-  ~TensorPtr();
+  ~Tensor();
 
   /**
    * @brief Copy constructor - creates a deep copy
    */
-  TensorPtr(const TensorPtr & other);
+  Tensor(const Tensor & other);
 
   /**
    * @brief Copy assignment - creates a deep copy
    */
-  TensorPtr & operator=(const TensorPtr & other);
+  Tensor & operator=(const Tensor & other);
 
   /**
    * @brief Move constructor
    */
-  TensorPtr(TensorPtr && other) noexcept;
+  Tensor(Tensor && other) noexcept;
 
   /**
    * @brief Move assignment
    */
-  TensorPtr & operator=(TensorPtr && other) noexcept;
+  Tensor & operator=(Tensor && other) noexcept;
 
   /**
    * @brief Get tensor dimensions
@@ -201,7 +201,7 @@ public:
    * @param new_shape New dimensions (total size must match)
    * @return New tensor view with different shape
    */
-  TensorPtr reshape(const std::vector<size_t> & new_shape) const;
+  Tensor reshape(const std::vector<size_t> & new_shape) const;
 
   /**
    * @brief Get total number of elements
