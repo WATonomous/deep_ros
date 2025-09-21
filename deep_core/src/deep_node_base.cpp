@@ -35,6 +35,14 @@ DeepNodeBase::DeepNodeBase(const std::string & node_name, const rclcpp::NodeOpti
     add_on_set_parameters_callback(std::bind(&DeepNodeBase::on_parameter_change, this, std::placeholders::_1));
 }
 
+DeepNodeBase::~DeepNodeBase()
+{
+  // Remove parameter callback to prevent callback invocation during destruction
+  if (parameter_callback_handle_) {
+    remove_on_set_parameters_callback(parameter_callback_handle_.get());
+  }
+}
+
 void DeepNodeBase::declare_parameters()
 {
   declare_parameter("Backend.plugin", "");

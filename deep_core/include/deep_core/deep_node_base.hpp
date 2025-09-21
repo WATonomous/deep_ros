@@ -56,7 +56,7 @@ public:
   /**
    * @brief Destructor
    */
-  virtual ~DeepNodeBase() = default;
+  virtual ~DeepNodeBase();
 
 protected:
   /**
