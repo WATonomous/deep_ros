@@ -173,6 +173,8 @@ Tensor::Tensor(Tensor && other) noexcept
   other.is_owner_ = false;
   other.byte_size_ = 0;
   other.allocator_ = nullptr;
+  other.shape_.clear();
+  other.strides_.clear();
 }
 
 Tensor & Tensor::operator=(Tensor && other) noexcept
@@ -192,6 +194,8 @@ Tensor & Tensor::operator=(Tensor && other) noexcept
     other.is_owner_ = false;
     other.byte_size_ = 0;
     other.allocator_ = nullptr;
+    other.shape_.clear();
+    other.strides_.clear();
   }
   return *this;
 }
