@@ -35,7 +35,10 @@ set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 # deep_conversions library
 set(DEEP_CONVERSIONS_LIB ${PROJECT_NAME}_lib)
 add_library(${DEEP_CONVERSIONS_LIB} SHARED
-  src/ros_conversions.cpp
+  src/image_conversions.cpp
+  src/imu_conversions.cpp
+  src/laserscan_conversions.cpp
+  src/pointcloud_conversions.cpp
 )
 
 target_include_directories(${DEEP_CONVERSIONS_LIB} PUBLIC

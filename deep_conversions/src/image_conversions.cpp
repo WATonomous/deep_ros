@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "deep_conversions/image_conversions.hpp"
+
 #include <cstring>
 #include <memory>
 #include <regex>
@@ -20,11 +22,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-#include "deep_conversions/image_conversions.hpp"
-#include "deep_conversions/imu_conversions.hpp"
-#include "deep_conversions/laserscan_conversions.hpp"
-#include "deep_conversions/pointcloud_conversions.hpp"
 
 namespace deep_ros
 {
@@ -314,103 +311,6 @@ void to_image(
 
     images.push_back(std::move(image));
   }
-}
-
-Tensor from_pointcloud2(const sensor_msgs::msg::PointCloud2 & cloud, std::shared_ptr<BackendMemoryAllocator> allocator)
-{
-  if (cloud.fields.empty()) {
-    throw std::invalid_argument("PointCloud2 has no fields");
-  }
-
-  size_t num_points = cloud.width * cloud.height;
-  size_t num_fields = cloud.fields.size();
-
-  // For simplicity, convert all to float32
-  std::vector<size_t> shape = {num_points, num_fields};
-  Tensor tensor(shape, DataType::FLOAT32, allocator);
-  auto * data = tensor.data_as<float>();
-
-  // Extract field data
-  for (size_t i = 0; i < num_points; ++i) {
-    for (size_t j = 0; j < num_fields; ++j) {
-      const auto & field = cloud.fields[j];
-      size_t offset = i * cloud.point_step + field.offset;
-
-      // Convert based on datatype
-      float value = 0.0f;
-      if (field.datatype == sensor_msgs::msg::PointField::FLOAT32) {
-        std::memcpy(&value, &cloud.data[offset], sizeof(float));
-      } else if (field.datatype == sensor_msgs::msg::PointField::FLOAT64) {
-        double temp;
-        std::memcpy(&temp, &cloud.data[offset], sizeof(double));
-        value = static_cast<float>(temp);
-      } else if (field.datatype == sensor_msgs::msg::PointField::INT32) {
-        int32_t temp;
-        std::memcpy(&temp, &cloud.data[offset], sizeof(int32_t));
-        value = static_cast<float>(temp);
-      } else if (field.datatype == sensor_msgs::msg::PointField::UINT32) {
-        uint32_t temp;
-        std::memcpy(&temp, &cloud.data[offset], sizeof(uint32_t));
-        value = static_cast<float>(temp);
-      }
-
-      data[i * num_fields + j] = value;
-    }
-  }
-
-  return tensor;
-}
-
-Tensor from_laserscan(const sensor_msgs::msg::LaserScan & scan, std::shared_ptr<BackendMemoryAllocator> allocator)
-{
-  size_t num_ranges = scan.ranges.size();
-  bool has_intensities = !scan.intensities.empty() && scan.intensities.size() == num_ranges;
-
-  if (has_intensities) {
-    std::vector<size_t> shape = {num_ranges, 2};
-    Tensor tensor(shape, DataType::FLOAT32, allocator);
-    auto * data = tensor.data_as<float>();
-
-    for (size_t i = 0; i < num_ranges; ++i) {
-      data[i * 2] = scan.ranges[i];
-      data[i * 2 + 1] = scan.intensities[i];
-    }
-    return tensor;
-  } else {
-    std::vector<size_t> shape = {num_ranges};
-    Tensor tensor(shape, DataType::FLOAT32, allocator);
-    if (allocator) {
-      allocator->copy_from_host(tensor.data(), scan.ranges.data(), num_ranges * sizeof(float));
-    } else {
-      std::memcpy(tensor.data(), scan.ranges.data(), num_ranges * sizeof(float));
-    }
-    return tensor;
-  }
-}
-
-Tensor from_imu(const sensor_msgs::msg::Imu & imu, std::shared_ptr<BackendMemoryAllocator> allocator)
-{
-  std::vector<size_t> shape = {10};
-  Tensor tensor(shape, DataType::FLOAT32, allocator);
-  auto * data = tensor.data_as<float>();
-
-  // Orientation quaternion
-  data[0] = static_cast<float>(imu.orientation.x);
-  data[1] = static_cast<float>(imu.orientation.y);
-  data[2] = static_cast<float>(imu.orientation.z);
-  data[3] = static_cast<float>(imu.orientation.w);
-
-  // Linear acceleration
-  data[4] = static_cast<float>(imu.linear_acceleration.x);
-  data[5] = static_cast<float>(imu.linear_acceleration.y);
-  data[6] = static_cast<float>(imu.linear_acceleration.z);
-
-  // Angular velocity
-  data[7] = static_cast<float>(imu.angular_velocity.x);
-  data[8] = static_cast<float>(imu.angular_velocity.y);
-  data[9] = static_cast<float>(imu.angular_velocity.z);
-
-  return tensor;
 }
 
 }  // namespace ros_conversions
