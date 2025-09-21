@@ -33,11 +33,15 @@ TestExecutorFixture::TestExecutorFixture()
 
 TestExecutorFixture::~TestExecutorFixture()
 {
+  // Cancel executor and wait for thread to finish
   executor_.cancel();
 
   if (spin_thread_.joinable()) {
     spin_thread_.join();
   }
+
+  // Clear any remaining nodes from executor before shutdown
+  executor_.remove_all_nodes();
 }
 
 void TestExecutorFixture::start_spinning()
