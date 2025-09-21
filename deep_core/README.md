@@ -21,7 +21,7 @@ Multi-dimensional tensor smart pointer supporting:
 Lifecycle node that handles:
 - Dynamic backend plugin loading via pluginlib
 - Model loading/unloading lifecycle
-- Optional bond connections for nav2 integration
+- Optional bond connections for nav2 integration and integration with other lifecycle managers
 - Parameter-driven configuration
 
 ### Plugin Interfaces

@@ -88,16 +88,18 @@ TEST_CASE_METHOD(deep_ros::test::TestExecutorFixture, "Dynamic model reconfigura
     REQUIRE(test_node->get_current_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_UNCONFIGURED);
   }
 
-  SECTION("Model parameter change rejected when not active")
+  SECTION("Model parameter change allowed when not active (no callback registered)")
   {
     // Try to set model_path while in unconfigured state
     auto parameters = std::vector<rclcpp::Parameter>{rclcpp::Parameter("model_path", "/some/model/path.onnx")};
 
     auto result = test_node->set_parameters(parameters);
 
-    // Should fail because node is not active
-    REQUIRE(result[0].successful == false);
-    REQUIRE(result[0].reason.find("Node must be active") != std::string::npos);
+    // Should succeed because callback is not registered until activation
+    REQUIRE(result[0].successful == true);
+
+    // Verify the parameter was set
+    REQUIRE(test_node->get_parameter("model_path").as_string() == "/some/model/path.onnx");
   }
 
   SECTION("Configuration fails with invalid plugin")

@@ -29,18 +29,6 @@ DeepNodeBase::DeepNodeBase(const std::string & node_name, const rclcpp::NodeOpti
   plugin_loader_ =
     std::make_unique<pluginlib::ClassLoader<DeepBackendPlugin>>("deep_core", "deep_ros::DeepBackendPlugin");
   declare_parameters();
-
-  // Set up parameter callback for dynamic reconfiguration
-  parameter_callback_handle_ =
-    add_on_set_parameters_callback(std::bind(&DeepNodeBase::on_parameter_change, this, std::placeholders::_1));
-}
-
-DeepNodeBase::~DeepNodeBase()
-{
-  // Remove parameter callback to prevent callback invocation during destruction
-  if (parameter_callback_handle_) {
-    remove_on_set_parameters_callback(parameter_callback_handle_.get());
-  }
 }
 
 void DeepNodeBase::declare_parameters()
@@ -84,6 +72,9 @@ CallbackReturn DeepNodeBase::on_activate(const rclcpp_lifecycle::State & state)
 {
   RCLCPP_INFO(get_logger(), "Activating DeepNodeBase");
 
+  parameter_callback_handle_ =
+    add_on_set_parameters_callback(std::bind(&DeepNodeBase::on_parameter_change, this, std::placeholders::_1));
+
   // Start bond if enabled
   if (bond_enabled_ && bond_) {
     bond_->start();
@@ -96,6 +87,12 @@ CallbackReturn DeepNodeBase::on_activate(const rclcpp_lifecycle::State & state)
 CallbackReturn DeepNodeBase::on_deactivate(const rclcpp_lifecycle::State & state)
 {
   RCLCPP_INFO(get_logger(), "Deactivating DeepNodeBase");
+
+  if (parameter_callback_handle_) {
+    remove_on_set_parameters_callback(parameter_callback_handle_.get());
+    parameter_callback_handle_.reset();
+  }
+
   return on_deactivate_impl(state);
 }
 
@@ -117,6 +114,11 @@ CallbackReturn DeepNodeBase::on_cleanup(const rclcpp_lifecycle::State & state)
 CallbackReturn DeepNodeBase::on_shutdown(const rclcpp_lifecycle::State & state)
 {
   RCLCPP_INFO(get_logger(), "Shutting down DeepNodeBase");
+
+  if (parameter_callback_handle_) {
+    remove_on_set_parameters_callback(parameter_callback_handle_.get());
+    parameter_callback_handle_.reset();
+  }
 
   // Stop bond if active
   if (bond_) {
