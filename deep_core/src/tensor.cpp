@@ -65,17 +65,6 @@ Tensor::Tensor()
 , allocator_(nullptr)
 {}
 
-Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype)
-: shape_(shape)
-, dtype_(dtype)
-, byte_size_(0)
-, data_(nullptr)
-, is_owner_(false)
-, allocator_(nullptr)
-{
-  throw std::runtime_error("Tensor construction requires an allocator. Use Tensor(shape, dtype, allocator) instead.");
-}
-
 Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype, std::shared_ptr<BackendMemoryAllocator> allocator)
 : shape_(shape)
 , dtype_(dtype)

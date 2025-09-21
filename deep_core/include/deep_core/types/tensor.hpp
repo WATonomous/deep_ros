@@ -64,13 +64,6 @@ public:
   Tensor();
 
   /**
-   * @brief Create a new tensor with specified shape and data type
-   * @param shape Dimensions of the tensor
-   * @param dtype Data type of tensor elements
-   */
-  Tensor(const std::vector<size_t> & shape, DataType dtype);
-
-  /**
    * @brief Create a new tensor with specified shape, data type, and allocator
    * @param shape Dimensions of the tensor
    * @param dtype Data type of tensor elements
