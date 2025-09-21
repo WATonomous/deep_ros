@@ -67,6 +67,19 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
+
+# Add test plugin source to main library when testing
+if(BUILD_TESTING)
+  target_sources(${DEEP_CORE_LIB} PRIVATE
+    test/mock_plugin/test_plugin.cpp
+  )
+  install(FILES test/mock_plugin/plugins.xml
+    DESTINATION share/${PROJECT_NAME}
+  )
+  # Export plugin description file to ament index
+  pluginlib_export_plugin_description_file(deep_core test/mock_plugin/plugins.xml)
+endif()
+
 if(BUILD_TESTING)
   find_package(deep_test REQUIRED)
 
@@ -75,6 +88,10 @@ if(BUILD_TESTING)
       ${DEEP_CORE_LIB}
   )
   add_deep_test(test_tensor test/test_tensor.cpp
+    LIBRARIES
+      ${DEEP_CORE_LIB}
+  )
+  add_deep_test(test_dynamic_parameters test/test_dynamic_parameters.cpp
     LIBRARIES
       ${DEEP_CORE_LIB}
   )

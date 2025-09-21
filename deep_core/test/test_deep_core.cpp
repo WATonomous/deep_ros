@@ -27,23 +27,21 @@ namespace deep_ros
 namespace test
 {
 
-class MockMemoryAllocator : public BackendMemoryAllocator
+// Use the established test plugin instead of creating local mocks
+// This ensures we test with the same plugin infrastructure used throughout the system
+
+// Test tensor construction using a simple CPU allocator since we don't need the mock plugin for basic tensor tests
+class SimpleCPUAllocator : public BackendMemoryAllocator
 {
 public:
   void * allocate(size_t bytes) override
   {
-    if (bytes == 0) return nullptr;
-
-    allocated_bytes_ += bytes;
-    void * ptr = std::malloc(bytes);
-    return ptr;
+    return std::aligned_alloc(32, bytes);
   }
 
   void deallocate(void * ptr) override
   {
-    if (ptr) {
-      std::free(ptr);
-    }
+    std::free(ptr);
   }
 
   void copy_from_host(void * dst, const void * src, size_t bytes) override
@@ -68,21 +66,13 @@ public:
 
   std::string device_name() const override
   {
-    return "mock_device";
+    return "cpu";
   }
-
-  size_t allocated_bytes() const
-  {
-    return allocated_bytes_;
-  }
-
-private:
-  size_t allocated_bytes_{0};
 };
 
 TEST_CASE("Tensor construction with allocator", "[tensor]")
 {
-  auto allocator = std::make_shared<MockMemoryAllocator>();
+  auto allocator = std::make_shared<SimpleCPUAllocator>();
   std::vector<size_t> shape{2, 3, 4};
 
   Tensor tensor(shape, DataType::FLOAT32, allocator);
@@ -91,7 +81,6 @@ TEST_CASE("Tensor construction with allocator", "[tensor]")
   REQUIRE(tensor.dtype() == DataType::FLOAT32);
   REQUIRE(tensor.size() == 24);  // 2 * 3 * 4
   REQUIRE(tensor.data() != nullptr);
-  REQUIRE(allocator->allocated_bytes() > 0);
 }
 
 TEST_CASE("Tensor construction without allocator throws", "[tensor]")
@@ -102,7 +91,7 @@ TEST_CASE("Tensor construction without allocator throws", "[tensor]")
 
 TEST_CASE("Different data types have correct sizes", "[tensor]")
 {
-  auto allocator = std::make_shared<MockMemoryAllocator>();
+  auto allocator = std::make_shared<SimpleCPUAllocator>();
 
   Tensor float_tensor({10}, DataType::FLOAT32, allocator);
   Tensor int32_tensor({10}, DataType::INT32, allocator);
@@ -117,7 +106,7 @@ TEST_CASE("Different data types have correct sizes", "[tensor]")
 
 TEST_CASE("Empty shape throws exception", "[tensor]")
 {
-  auto allocator = std::make_shared<MockMemoryAllocator>();
+  auto allocator = std::make_shared<SimpleCPUAllocator>();
   std::vector<size_t> empty_shape;
 
   REQUIRE_THROWS_AS(Tensor(empty_shape, DataType::FLOAT32, allocator), std::invalid_argument);
@@ -125,7 +114,7 @@ TEST_CASE("Empty shape throws exception", "[tensor]")
 
 TEST_CASE("Large shape allocation", "[tensor]")
 {
-  auto allocator = std::make_shared<MockMemoryAllocator>();
+  auto allocator = std::make_shared<SimpleCPUAllocator>();
   std::vector<size_t> large_shape{100, 100, 3};
 
   Tensor tensor(large_shape, DataType::UINT8, allocator);
@@ -134,125 +123,8 @@ TEST_CASE("Large shape allocation", "[tensor]")
   REQUIRE(tensor.shape() == large_shape);
 }
 
-class MockBackendExecutor : public BackendInferenceExecutor
-{
-public:
-  bool load_model(const std::filesystem::path & model_path) override
-  {
-    loaded_model_path_ = model_path;
-    model_loaded_ = true;
-    return true;
-  }
-
-  Tensor run_inference(Tensor input) override
-  {
-    if (!model_loaded_) {
-      throw std::runtime_error("No model loaded");
-    }
-
-    // Mock inference: return tensor with same shape but all zeros
-    auto allocator = std::make_shared<MockMemoryAllocator>();
-    Tensor output(input.shape(), input.dtype(), allocator);
-
-    // Calculate correct byte size based on data type
-    size_t dtype_size = get_dtype_size(input.dtype());
-    size_t byte_size = output.size() * dtype_size;
-
-    std::memset(output.data(), 0, byte_size);
-    return output;
-  }
-
-  void unload_model() override
-  {
-    model_loaded_ = false;
-    loaded_model_path_.clear();
-  }
-
-  std::vector<std::string> supported_model_formats() const override
-  {
-    return {"mock"};
-  }
-
-  bool is_model_loaded() const
-  {
-    return model_loaded_;
-  }
-
-  const std::filesystem::path & loaded_model_path() const
-  {
-    return loaded_model_path_;
-  }
-
-private:
-  bool model_loaded_{false};
-  std::filesystem::path loaded_model_path_;
-};
-
-class MockBackendPlugin : public DeepBackendPlugin
-{
-public:
-  MockBackendPlugin()
-  : allocator_(std::make_shared<MockMemoryAllocator>())
-  , executor_(std::make_shared<MockBackendExecutor>())
-  {}
-
-  std::string backend_name() const override
-  {
-    return "mock_backend";
-  }
-
-  std::shared_ptr<BackendMemoryAllocator> get_allocator() const override
-  {
-    return allocator_;
-  }
-
-  std::shared_ptr<BackendInferenceExecutor> get_inference_executor() const override
-  {
-    return executor_;
-  }
-
-private:
-  std::shared_ptr<MockMemoryAllocator> allocator_;
-  std::shared_ptr<MockBackendExecutor> executor_;
-};
-
-TEST_CASE("Backend plugin interface", "[plugin]")
-{
-  MockBackendPlugin plugin;
-
-  REQUIRE(plugin.backend_name() == "mock_backend");
-
-  auto allocator = plugin.get_allocator();
-  REQUIRE(allocator != nullptr);
-  REQUIRE(allocator->device_name() == "mock_device");
-
-  auto executor = plugin.get_inference_executor();
-  REQUIRE(executor != nullptr);
-  REQUIRE(executor->supported_model_formats() == std::vector<std::string>{"mock"});
-}
-
-TEST_CASE("Backend inference workflow", "[plugin][inference]")
-{
-  MockBackendPlugin plugin;
-  auto allocator = plugin.get_allocator();
-  auto executor = plugin.get_inference_executor();
-
-  // Load model
-  REQUIRE(executor->load_model("/fake/model.mock"));
-
-  // Create input tensor
-  std::vector<size_t> shape{1, 3, 224, 224};
-  Tensor input(shape, DataType::FLOAT32, allocator);
-
-  // Run inference
-  auto output = executor->run_inference(std::move(input));
-
-  REQUIRE(output.shape() == shape);
-  REQUIRE(output.dtype() == DataType::FLOAT32);
-
-  // Unload model
-  executor->unload_model();
-}
+// These tests will use the established test_backend plugin through the node interface
+// This provides more realistic testing of the actual plugin loading mechanism
 
 class TestInferenceNode : public DeepNodeBase
 {
@@ -351,12 +223,44 @@ TEST_CASE_METHOD(deep_ros::test::TestExecutorFixture, "DeepNodeBase lifecycle ma
     // Configure first
     test_node->configure();
 
+    // Try to load the test plugin
+    bool load_result = test_node->test_load_plugin("test_backend");
+    REQUIRE(load_result == true);
+    REQUIRE(test_node->is_plugin_loaded() == true);
+    REQUIRE(test_node->get_backend_name() == "test_backend");
+    REQUIRE(test_node->get_current_allocator() != nullptr);
+
     // Try to load a non-existent plugin
-    bool load_result = test_node->test_load_plugin("nonexistent_plugin");
-    REQUIRE(load_result == false);
-    REQUIRE(test_node->is_plugin_loaded() == false);
-    REQUIRE(test_node->get_backend_name() == "none");
-    REQUIRE(test_node->get_current_allocator() == nullptr);
+    bool bad_load_result = test_node->test_load_plugin("nonexistent_plugin");
+    REQUIRE(bad_load_result == false);
+  }
+
+  SECTION("Model loading and inference with plugin")
+  {
+    test_node->configure();
+
+    // Load the test plugin
+    bool plugin_result = test_node->test_load_plugin("test_backend");
+    REQUIRE(plugin_result == true);
+    REQUIRE(test_node->is_plugin_loaded() == true);
+
+    test_node->activate();
+
+    // Load model with plugin
+    bool model_result = test_node->test_load_model("/fake/model.onnx");
+    REQUIRE(model_result == true);
+    REQUIRE(test_node->is_model_loaded() == true);
+
+    // Test inference
+    auto allocator = test_node->get_current_allocator();
+    REQUIRE(allocator != nullptr);
+
+    std::vector<size_t> shape{1, 3, 224, 224};
+    Tensor input(shape, DataType::FLOAT32, allocator);
+
+    auto output = test_node->test_run_inference(std::move(input));
+    REQUIRE(output.shape() == shape);
+    REQUIRE(output.dtype() == DataType::FLOAT32);
   }
 
   SECTION("Model loading without plugin fails")
@@ -368,12 +272,6 @@ TEST_CASE_METHOD(deep_ros::test::TestExecutorFixture, "DeepNodeBase lifecycle ma
     bool model_result = test_node->test_load_model("/fake/model.onnx");
     REQUIRE(model_result == false);
     REQUIRE(test_node->is_model_loaded() == false);
-  }
-
-  SECTION("Backend functionality with no plugin")
-  {
-    test_node->configure();
-    test_node->activate();
 
     // Verify backend state when no plugin is loaded
     REQUIRE(test_node->get_backend_name() == "none");
