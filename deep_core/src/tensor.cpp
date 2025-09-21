@@ -130,7 +130,7 @@ Tensor::Tensor(const Tensor & other)
   if (is_owner_) {
     allocate_memory();
     if (other.data_ && data_) {
-      if (allocator_ && other.allocator_ && allocator_ == other.allocator_) {
+      if (allocator_ && other.allocator_) {
         allocator_->copy_device_to_device(data_, other.data_, byte_size_);
       } else {
         allocator_->copy_from_host(data_, other.data_, byte_size_);
