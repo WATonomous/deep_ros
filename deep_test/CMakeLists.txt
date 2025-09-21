@@ -78,7 +78,6 @@ if(BUILD_TESTING)
   add_deep_test(test_basic_example
     test/test_basic_example.cpp
     LIBRARIES
-      ${DEEP_TEST_LIB}
       ${std_msgs_TARGETS}
       ${std_srvs_TARGETS}
   )
@@ -87,7 +86,6 @@ if(BUILD_TESTING)
   add_deep_test(test_with_ros
     test/test_with_ros.cpp
     LIBRARIES
-      ${DEEP_TEST_LIB}
       ${std_msgs_TARGETS}
   )
 endif()

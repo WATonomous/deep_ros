@@ -29,6 +29,10 @@ DeepNodeBase::DeepNodeBase(const std::string & node_name, const rclcpp::NodeOpti
   plugin_loader_ =
     std::make_unique<pluginlib::ClassLoader<DeepBackendPlugin>>("deep_core", "deep_ros::DeepBackendPlugin");
   declare_parameters();
+
+  // Set up parameter callback for dynamic reconfiguration
+  parameter_callback_handle_ =
+    add_on_set_parameters_callback(std::bind(&DeepNodeBase::on_parameter_change, this, std::placeholders::_1));
 }
 
 void DeepNodeBase::declare_parameters()
@@ -238,6 +242,56 @@ void DeepNodeBase::setup_bond()
   } else {
     RCLCPP_INFO(get_logger(), "Bond disabled");
   }
+}
+
+rcl_interfaces::msg::SetParametersResult DeepNodeBase::on_parameter_change(
+  const std::vector<rclcpp::Parameter> & parameters)
+{
+  rcl_interfaces::msg::SetParametersResult result;
+  result.successful = true;
+
+  for (const auto & param : parameters) {
+    if (param.get_name() == "model_path") {
+      // Only allow model changes when node is active for safety
+      if (get_current_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
+        std::string new_model_path = param.as_string();
+
+        // Reject empty model paths entirely
+        if (new_model_path.empty()) {
+          RCLCPP_ERROR(get_logger(), "Cannot set empty model path");
+          result.successful = false;
+          result.reason = "Cannot set empty model path";
+        } else if (new_model_path != current_model_path_.string()) {
+          RCLCPP_INFO(
+            get_logger(),
+            "Dynamically changing model from '%s' to '%s'",
+            current_model_path_.c_str(),
+            new_model_path.c_str());
+
+          // Unload current model
+          unload_model();
+
+          // Load new model
+          if (!load_model(new_model_path)) {
+            RCLCPP_ERROR(get_logger(), "Failed to load new model: %s", new_model_path.c_str());
+            result.successful = false;
+            result.reason = "Failed to load new model: " + new_model_path;
+          } else {
+            RCLCPP_INFO(get_logger(), "Successfully loaded new model: %s", new_model_path.c_str());
+          }
+        }
+      } else {
+        RCLCPP_WARN(
+          get_logger(),
+          "Cannot change model_path when node is not active. Current state: %s",
+          get_current_state().label().c_str());
+        result.successful = false;
+        result.reason = "Node must be active to change model_path";
+      }
+    }
+  }
+
+  return result;
 }
 
 }  // namespace deep_ros

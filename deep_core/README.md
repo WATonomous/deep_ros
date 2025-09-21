@@ -38,7 +38,8 @@ All nodes inherenting `deep_ros::DeepNodeBase` have the following settable param
 
 Required parameters:
 - `Backend.plugin`: Plugin name (e.g., "onnxruntime_cpu")
-- `model_path`: Path to model file
+- `model_path`: Path to model file (dynamically reconfigurable on runtime,
+you can switch model's while the node is running!)
 
 Optional parameters:
 - `Bond.enable`: Enable bond connections (default: false)

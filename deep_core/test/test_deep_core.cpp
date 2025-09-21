@@ -20,6 +20,7 @@
 #include <catch2/catch.hpp>
 #include <deep_core/deep_node_base.hpp>
 #include <deep_core/types/tensor.hpp>
+#include <deep_test/deep_test.hpp>
 
 namespace deep_ros
 {
@@ -114,15 +115,12 @@ TEST_CASE("Different data types have correct sizes", "[tensor]")
   REQUIRE(uint8_tensor.size() == 10);
 }
 
-TEST_CASE("Empty shape creates scalar tensor", "[tensor]")
+TEST_CASE("Empty shape throws exception", "[tensor]")
 {
   auto allocator = std::make_shared<MockMemoryAllocator>();
   std::vector<size_t> empty_shape;
 
-  TensorPtr tensor(empty_shape, DataType::FLOAT32, allocator);
-
-  REQUIRE(tensor.size() == 1);  // Scalar tensor
-  REQUIRE(tensor.shape().empty());
+  REQUIRE_THROWS_AS(TensorPtr(empty_shape, DataType::FLOAT32, allocator), std::invalid_argument);
 }
 
 TEST_CASE("Large shape allocation", "[tensor]")
@@ -263,6 +261,15 @@ public:
   : DeepNodeBase("test_inference_node", options)
   {}
 
+  // Expose protected methods for testing
+  using DeepNodeBase::get_backend_name;
+  using DeepNodeBase::get_current_allocator;
+  using DeepNodeBase::is_model_loaded;
+  using DeepNodeBase::is_plugin_loaded;
+  using DeepNodeBase::load_model;
+  using DeepNodeBase::load_plugin;
+  using DeepNodeBase::run_inference;
+
   bool test_load_plugin(const std::string & plugin_name)
   {
     return load_plugin(plugin_name);
@@ -305,10 +312,73 @@ protected:
   }
 };
 
-TEST_CASE("DeepNodeBase creation", "[node]")
+TEST_CASE_METHOD(deep_ros::test::TestExecutorFixture, "DeepNodeBase lifecycle management", "[node]")
 {
-  // Skip ROS lifecycle node tests to avoid segfault
-  REQUIRE(true);
+  // Create a test node that inherits from DeepNodeBase
+  auto test_node = std::make_shared<TestInferenceNode>();
+  add_node(test_node);
+  start_spinning();
+
+  SECTION("Node creation and initial state")
+  {
+    REQUIRE(test_node->get_name() == std::string("test_inference_node"));
+    REQUIRE(test_node->get_current_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_UNCONFIGURED);
+    REQUIRE(test_node->is_plugin_loaded() == false);
+    REQUIRE(test_node->is_model_loaded() == false);
+  }
+
+  SECTION("Lifecycle transitions work correctly")
+  {
+    // Configure
+    auto configure_result = test_node->configure();
+    REQUIRE(configure_result.id() == lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE);
+
+    // Activate
+    auto activate_result = test_node->activate();
+    REQUIRE(activate_result.id() == lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE);
+
+    // Deactivate
+    auto deactivate_result = test_node->deactivate();
+    REQUIRE(deactivate_result.id() == lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE);
+
+    // Cleanup
+    auto cleanup_result = test_node->cleanup();
+    REQUIRE(cleanup_result.id() == lifecycle_msgs::msg::State::PRIMARY_STATE_UNCONFIGURED);
+  }
+
+  SECTION("Plugin loading functionality")
+  {
+    // Configure first
+    test_node->configure();
+
+    // Try to load a non-existent plugin
+    bool load_result = test_node->test_load_plugin("nonexistent_plugin");
+    REQUIRE(load_result == false);
+    REQUIRE(test_node->is_plugin_loaded() == false);
+    REQUIRE(test_node->get_backend_name() == "none");
+    REQUIRE(test_node->get_current_allocator() == nullptr);
+  }
+
+  SECTION("Model loading without plugin fails")
+  {
+    test_node->configure();
+    test_node->activate();
+
+    // Try to load model without plugin
+    bool model_result = test_node->test_load_model("/fake/model.onnx");
+    REQUIRE(model_result == false);
+    REQUIRE(test_node->is_model_loaded() == false);
+  }
+
+  SECTION("Backend functionality with no plugin")
+  {
+    test_node->configure();
+    test_node->activate();
+
+    // Verify backend state when no plugin is loaded
+    REQUIRE(test_node->get_backend_name() == "none");
+    REQUIRE(test_node->get_current_allocator() == nullptr);
+  }
 }
 
 }  // namespace test

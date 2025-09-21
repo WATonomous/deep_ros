@@ -82,6 +82,10 @@ TensorPtr::TensorPtr(
 , is_view_(false)
 , allocator_(allocator)
 {
+  if (shape_.empty()) {
+    throw std::invalid_argument("Tensor shape cannot be empty");
+  }
+
   calculate_strides();
 
   size_t total_elements = std::accumulate(shape_.begin(), shape_.end(), 1UL, std::multiplies<size_t>());
@@ -97,6 +101,10 @@ TensorPtr::TensorPtr(void * data, const std::vector<size_t> & shape, DataType dt
 , is_view_(false)
 , allocator_(nullptr)
 {
+  if (shape_.empty()) {
+    throw std::invalid_argument("Tensor shape cannot be empty");
+  }
+
   calculate_strides();
 
   size_t total_elements = std::accumulate(shape_.begin(), shape_.end(), 1UL, std::multiplies<size_t>());

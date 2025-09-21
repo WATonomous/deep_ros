@@ -75,6 +75,11 @@ if(BUILD_TESTING)
       ${DEEP_CORE_LIB}
   )
 
+  add_deep_test(test_dynamic_reconfiguration test/test_dynamic_reconfiguration.cpp
+    LIBRARIES
+      ${DEEP_CORE_LIB}
+  )
+
 endif()
 
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)

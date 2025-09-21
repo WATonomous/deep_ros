@@ -20,6 +20,7 @@
 #include <vector>
 
 #include <bondcpp/bond.hpp>
+#include <lifecycle_msgs/msg/state.hpp>
 #include <pluginlib/class_list_macros.hpp>
 #include <pluginlib/class_loader.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
@@ -41,19 +42,12 @@ using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface
  * DeepNodeBase provides a lifecycle-managed ROS 2 node that can load and manage
  * deep learning backend plugins. It handles the plugin discovery, loading, model
  * management, and provides a simple interface for running inference.
- *
- * Users should inherit from this class and implement the lifecycle callback methods
- * to create custom inference nodes.
- *
- * Configuration parameters:
- * - Backend.plugin: Backend plugin name (e.g., "deep_ort_backend_plugin::OrtBackendPlugin")
- * - model_path: Path to the model file
  */
 class DeepNodeBase : public rclcpp_lifecycle::LifecycleNode
 {
 public:
   /**
-   * @brief Construct a new DeepNodeBase
+   * @brief Construct a new DeepNodeBase - initialize base parameters
    * @param node_name Name of the ROS 2 node
    * @param options ROS 2 node options
    */
@@ -172,15 +166,53 @@ protected:
   std::shared_ptr<BackendMemoryAllocator> get_current_allocator() const;
 
 private:
-  // Final lifecycle callbacks - base handles backend, then calls user impl
+  /**
+   * @brief Configure lifecycle callback - retrieve parameter values,
+   * loads plugin and model, then calls user implementation
+   * @param state Current lifecycle state
+   * @return Callback return status
+   */
   CallbackReturn on_configure(const rclcpp_lifecycle::State & state) final;
+
+  /**
+   * @brief Activate lifecycle callback - starts bond if enabled, then calls user implementation
+   * @param state Current lifecycle state
+   * @return Callback return status
+   */
   CallbackReturn on_activate(const rclcpp_lifecycle::State & state) final;
+
+  /**
+   * @brief Deactivate lifecycle callback - calls user implementation
+   * @param state Current lifecycle state
+   * @return Callback return status
+   */
   CallbackReturn on_deactivate(const rclcpp_lifecycle::State & state) final;
+
+  /**
+   * @brief Cleanup lifecycle callback - unloads model/plugin, stops bond, then calls user implementation
+   * @param state Current lifecycle state
+   * @return Callback return status
+   */
   CallbackReturn on_cleanup(const rclcpp_lifecycle::State & state) final;
+
+  /**
+   * @brief Shutdown lifecycle callback - unloads model/plugin, stops bond, then calls user implementation
+   * @param state Current lifecycle state
+   * @return Callback return status
+   */
   CallbackReturn on_shutdown(const rclcpp_lifecycle::State & state) final;
 
-  // Plugin discovery and loading
+  /**
+   * @brief Discover available backend plugins using pluginlib
+   * @return Vector of plugin class names
+   */
   std::vector<std::string> discover_available_plugins();
+
+  /**
+   * @brief Load a specific backend plugin library
+   * @param plugin_name Name of the plugin class to load
+   * @return Unique pointer to the loaded plugin instance
+   */
   pluginlib::UniquePtr<DeepBackendPlugin> load_plugin_library(const std::string & plugin_name);
 
   // Plugin loader
@@ -201,6 +233,10 @@ private:
   // ROS parameters
   void declare_parameters();
   void setup_bond();
+  rcl_interfaces::msg::SetParametersResult on_parameter_change(const std::vector<rclcpp::Parameter> & parameters);
+
+  // Parameter callback for dynamic reconfiguration
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_callback_handle_;
 };
 
 }  // namespace deep_ros
