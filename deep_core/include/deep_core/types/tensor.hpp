@@ -230,7 +230,7 @@ private:
   DataType dtype_;
   size_t byte_size_;
   void * data_;
-  bool is_view_;
+  bool is_owner_;
   std::shared_ptr<BackendMemoryAllocator> allocator_;
 
   void calculate_strides();

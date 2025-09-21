@@ -13,12 +13,65 @@
 // limitations under the License.
 
 #include <algorithm>
+#include <cstring>
+#include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include <catch2/catch.hpp>
 
 #include "deep_core/types/tensor.hpp"
+
+namespace deep_ros
+{
+namespace test
+{
+
+class MockMemoryAllocator : public BackendMemoryAllocator
+{
+public:
+  void * allocate(size_t bytes) override
+  {
+    if (bytes == 0) return nullptr;
+    return std::malloc(bytes);
+  }
+
+  void deallocate(void * ptr) override
+  {
+    if (ptr) {
+      std::free(ptr);
+    }
+  }
+
+  void copy_from_host(void * dst, const void * src, size_t bytes) override
+  {
+    std::memcpy(dst, src, bytes);
+  }
+
+  void copy_to_host(void * dst, const void * src, size_t bytes) override
+  {
+    std::memcpy(dst, src, bytes);
+  }
+
+  void copy_device_to_device(void * dst, const void * src, size_t bytes) override
+  {
+    std::memcpy(dst, src, bytes);
+  }
+
+  bool is_device_memory() const override
+  {
+    return false;
+  }
+
+  std::string device_name() const override
+  {
+    return "mock_device";
+  }
+};
+
+}  // namespace test
+}  // namespace deep_ros
 
 TEST_CASE("deep_ros::Tensor default constructor", "[tensor]")
 {
@@ -30,12 +83,20 @@ TEST_CASE("deep_ros::Tensor default constructor", "[tensor]")
   REQUIRE(tensor.data() == nullptr);
 }
 
-TEST_CASE("deep_ros::Tensor shape constructor", "[tensor]")
+TEST_CASE("deep_ros::Tensor shape constructor throws without allocator", "[tensor]")
 {
+  std::vector<size_t> shape = {2, 3};
+  REQUIRE_THROWS_AS(deep_ros::Tensor(shape, deep_ros::DataType::FLOAT32), std::runtime_error);
+}
+
+TEST_CASE("deep_ros::Tensor shape constructor with allocator", "[tensor]")
+{
+  auto allocator = std::make_shared<deep_ros::test::MockMemoryAllocator>();
+
   SECTION("2D tensor")
   {
     std::vector<size_t> shape = {2, 3};
-    deep_ros::Tensor tensor(shape, deep_ros::DataType::FLOAT32);
+    deep_ros::Tensor tensor(shape, deep_ros::DataType::FLOAT32, allocator);
 
     REQUIRE(tensor.shape() == shape);
     REQUIRE(tensor.rank() == 2);
@@ -48,7 +109,7 @@ TEST_CASE("deep_ros::Tensor shape constructor", "[tensor]")
   SECTION("3D tensor with different data type")
   {
     std::vector<size_t> shape = {2, 3, 4};
-    deep_ros::Tensor tensor(shape, deep_ros::DataType::INT32);
+    deep_ros::Tensor tensor(shape, deep_ros::DataType::INT32, allocator);
 
     REQUIRE(tensor.shape() == shape);
     REQUIRE(tensor.rank() == 3);
@@ -74,8 +135,9 @@ TEST_CASE("deep_ros::Tensor external data constructor", "[tensor]")
 
 TEST_CASE("deep_ros::Tensor copy constructor", "[tensor]")
 {
+  auto allocator = std::make_shared<deep_ros::test::MockMemoryAllocator>();
   std::vector<size_t> shape = {2, 3};
-  deep_ros::Tensor original(shape, deep_ros::DataType::INT32);
+  deep_ros::Tensor original(shape, deep_ros::DataType::INT32, allocator);
 
   // Fill with test data
   auto int_data = original.data_as<int32_t>();
@@ -99,8 +161,9 @@ TEST_CASE("deep_ros::Tensor copy constructor", "[tensor]")
 
 TEST_CASE("deep_ros::Tensor move constructor", "[tensor]")
 {
+  auto allocator = std::make_shared<deep_ros::test::MockMemoryAllocator>();
   std::vector<size_t> shape = {3, 4};
-  deep_ros::Tensor original(shape, deep_ros::DataType::FLOAT64);
+  deep_ros::Tensor original(shape, deep_ros::DataType::FLOAT64, allocator);
   void * original_data = original.data();
 
   deep_ros::Tensor moved(std::move(original));
@@ -114,8 +177,9 @@ TEST_CASE("deep_ros::Tensor move constructor", "[tensor]")
 
 TEST_CASE("deep_ros::Tensor data_as template method", "[tensor]")
 {
+  auto allocator = std::make_shared<deep_ros::test::MockMemoryAllocator>();
   std::vector<size_t> shape = {2, 2};
-  deep_ros::Tensor tensor(shape, deep_ros::DataType::FLOAT32);
+  deep_ros::Tensor tensor(shape, deep_ros::DataType::FLOAT32, allocator);
 
   auto float_ptr = tensor.data_as<float>();
   REQUIRE(float_ptr != nullptr);
@@ -130,8 +194,9 @@ TEST_CASE("deep_ros::Tensor data_as template method", "[tensor]")
 
 TEST_CASE("deep_ros::Tensor reshape", "[tensor]")
 {
+  auto allocator = std::make_shared<deep_ros::test::MockMemoryAllocator>();
   std::vector<size_t> shape = {2, 6};
-  deep_ros::Tensor tensor(shape, deep_ros::DataType::UINT8);
+  deep_ros::Tensor tensor(shape, deep_ros::DataType::UINT8, allocator);
 
   SECTION("Valid reshape")
   {
@@ -168,18 +233,21 @@ TEST_CASE("Data type sizes", "[tensor]")
 
 TEST_CASE("deep_ros::Tensor is_contiguous", "[tensor]")
 {
+  auto allocator = std::make_shared<deep_ros::test::MockMemoryAllocator>();
   std::vector<size_t> shape = {2, 3, 4};
-  deep_ros::Tensor tensor(shape, deep_ros::DataType::FLOAT32);
+  deep_ros::Tensor tensor(shape, deep_ros::DataType::FLOAT32, allocator);
 
   REQUIRE(tensor.is_contiguous() == true);
 }
 
 TEST_CASE("deep_ros::Tensor strides calculation", "[tensor]")
 {
+  auto allocator = std::make_shared<deep_ros::test::MockMemoryAllocator>();
+
   SECTION("2D tensor strides")
   {
     std::vector<size_t> shape = {3, 4};
-    deep_ros::Tensor tensor(shape, deep_ros::DataType::FLOAT32);
+    deep_ros::Tensor tensor(shape, deep_ros::DataType::FLOAT32, allocator);
 
     auto strides = tensor.strides();
     REQUIRE(strides.size() == 2);
@@ -190,7 +258,7 @@ TEST_CASE("deep_ros::Tensor strides calculation", "[tensor]")
   SECTION("3D tensor strides")
   {
     std::vector<size_t> shape = {2, 3, 4};
-    deep_ros::Tensor tensor(shape, deep_ros::DataType::INT16);
+    deep_ros::Tensor tensor(shape, deep_ros::DataType::INT16, allocator);
 
     auto strides = tensor.strides();
     REQUIRE(strides.size() == 3);
@@ -202,8 +270,9 @@ TEST_CASE("deep_ros::Tensor strides calculation", "[tensor]")
 
 TEST_CASE("deep_ros::Tensor assignment operators", "[tensor]")
 {
+  auto allocator = std::make_shared<deep_ros::test::MockMemoryAllocator>();
   std::vector<size_t> shape = {2, 2};
-  deep_ros::Tensor original(shape, deep_ros::DataType::FLOAT32);
+  deep_ros::Tensor original(shape, deep_ros::DataType::FLOAT32, allocator);
 
   // Fill with test data
   auto data = original.data_as<float>();

@@ -61,14 +61,16 @@ Tensor::Tensor()
 : dtype_(DataType::FLOAT32)
 , byte_size_(0)
 , data_(nullptr)
-, is_view_(false)
+, is_owner_(false)
 , allocator_(nullptr)
 {}
 
 Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype)
 : shape_(shape)
 , dtype_(dtype)
-, is_view_(false)
+, byte_size_(0)
+, data_(nullptr)
+, is_owner_(false)
 , allocator_(nullptr)
 {
   throw std::runtime_error("Tensor construction requires an allocator. Use Tensor(shape, dtype, allocator) instead.");
@@ -77,7 +79,9 @@ Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype)
 Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype, std::shared_ptr<BackendMemoryAllocator> allocator)
 : shape_(shape)
 , dtype_(dtype)
-, is_view_(false)
+, byte_size_(0)
+, data_(nullptr)
+, is_owner_(true)
 , allocator_(allocator)
 {
   if (shape_.empty()) {
@@ -96,7 +100,7 @@ Tensor::Tensor(void * data, const std::vector<size_t> & shape, DataType dtype)
 : shape_(shape)
 , dtype_(dtype)
 , data_(data)
-, is_view_(false)
+, is_owner_(false)
 , allocator_(nullptr)
 {
   if (shape_.empty()) {
@@ -119,18 +123,22 @@ Tensor::Tensor(const Tensor & other)
 , strides_(other.strides_)
 , dtype_(other.dtype_)
 , byte_size_(other.byte_size_)
-, is_view_(true)
+, data_(nullptr)
+, is_owner_(other.allocator_ != nullptr)
 , allocator_(other.allocator_)
 {
-  allocate_memory();
-  if (other.data_ && data_) {
-    if (allocator_ && other.allocator_ && allocator_ == other.allocator_) {
-      allocator_->copy_device_to_device(data_, other.data_, byte_size_);
-    } else if (allocator_) {
-      allocator_->copy_from_host(data_, other.data_, byte_size_);
-    } else {
-      std::memcpy(data_, other.data_, byte_size_);
+  if (is_owner_) {
+    allocate_memory();
+    if (other.data_ && data_) {
+      if (allocator_ && other.allocator_ && allocator_ == other.allocator_) {
+        allocator_->copy_device_to_device(data_, other.data_, byte_size_);
+      } else {
+        allocator_->copy_from_host(data_, other.data_, byte_size_);
+      }
     }
+  } else {
+    // Copying from external data - cannot create owned copy without allocator
+    throw std::runtime_error("Cannot copy tensor with external data: no allocator available");
   }
 }
 
@@ -143,18 +151,21 @@ Tensor & Tensor::operator=(const Tensor & other)
     strides_ = other.strides_;
     dtype_ = other.dtype_;
     byte_size_ = other.byte_size_;
-    is_view_ = true;
+    is_owner_ = (other.allocator_ != nullptr);
     allocator_ = other.allocator_;
 
-    allocate_memory();
-    if (other.data_ && data_) {
-      if (allocator_ && other.allocator_ && allocator_ == other.allocator_) {
-        allocator_->copy_device_to_device(data_, other.data_, byte_size_);
-      } else if (allocator_) {
-        allocator_->copy_from_host(data_, other.data_, byte_size_);
-      } else {
-        std::memcpy(data_, other.data_, byte_size_);
+    if (is_owner_) {
+      allocate_memory();
+      if (other.data_ && data_) {
+        if (allocator_ && other.allocator_ && allocator_ == other.allocator_) {
+          allocator_->copy_device_to_device(data_, other.data_, byte_size_);
+        } else {
+          allocator_->copy_from_host(data_, other.data_, byte_size_);
+        }
       }
+    } else {
+      // Assigning from external data - cannot create owned copy without allocator
+      throw std::runtime_error("Cannot assign tensor with external data: no allocator available");
     }
   }
   return *this;
@@ -166,11 +177,11 @@ Tensor::Tensor(Tensor && other) noexcept
 , dtype_(other.dtype_)
 , byte_size_(other.byte_size_)
 , data_(other.data_)
-, is_view_(other.is_view_)
+, is_owner_(other.is_owner_)
 , allocator_(std::move(other.allocator_))
 {
   other.data_ = nullptr;
-  other.is_view_ = false;
+  other.is_owner_ = false;
   other.byte_size_ = 0;
   other.allocator_ = nullptr;
 }
@@ -185,11 +196,11 @@ Tensor & Tensor::operator=(Tensor && other) noexcept
     dtype_ = other.dtype_;
     byte_size_ = other.byte_size_;
     data_ = other.data_;
-    is_view_ = other.is_view_;
+    is_owner_ = other.is_owner_;
     allocator_ = std::move(other.allocator_);
 
     other.data_ = nullptr;
-    other.is_view_ = false;
+    other.is_owner_ = false;
     other.byte_size_ = 0;
     other.allocator_ = nullptr;
   }
@@ -209,26 +220,22 @@ void Tensor::calculate_strides()
 
 void Tensor::allocate_memory()
 {
-  if (byte_size_ > 0 && !is_view_) {
+  if (byte_size_ > 0 && is_owner_ && data_ == nullptr) {
     if (allocator_) {
       data_ = allocator_->allocate(byte_size_);
+      if (!data_) {
+        throw std::bad_alloc();
+      }
     } else {
-      data_ = std::aligned_alloc(32, byte_size_);
-    }
-    if (!data_) {
-      throw std::bad_alloc();
+      throw std::runtime_error("Cannot allocate memory: no allocator provided");
     }
   }
 }
 
 void Tensor::deallocate_memory()
 {
-  if (!is_view_ && data_) {
-    if (allocator_) {
-      allocator_->deallocate(data_);
-    } else {
-      std::free(data_);
-    }
+  if (is_owner_ && data_ && allocator_) {
+    allocator_->deallocate(data_);
     data_ = nullptr;
   }
 }

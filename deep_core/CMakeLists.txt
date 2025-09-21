@@ -80,6 +80,11 @@ if(BUILD_TESTING)
       ${DEEP_CORE_LIB}
   )
 
+  add_deep_test(test_tensor test/test_tensor.cpp
+    LIBRARIES
+      ${DEEP_CORE_LIB}
+  )
+
 endif()
 
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
