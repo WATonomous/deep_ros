@@ -19,6 +19,8 @@
 #include <string>
 #include <vector>
 
+#include <bondcpp/bond.hpp>
+
 namespace deep_ros
 {
 
@@ -30,6 +32,8 @@ DeepNodeBase::DeepNodeBase(const std::string & node_name, const rclcpp::NodeOpti
     std::make_unique<pluginlib::ClassLoader<DeepBackendPlugin>>("deep_core", "deep_ros::DeepBackendPlugin");
   declare_parameters();
 }
+
+DeepNodeBase::~DeepNodeBase() = default;
 
 void DeepNodeBase::declare_parameters()
 {

@@ -27,6 +27,8 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(deep_core REQUIRED)
 
 set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -34,15 +36,19 @@ set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(DEEP_TEST_LIB ${PROJECT_NAME}_lib)
 add_library(${DEEP_TEST_LIB} SHARED
   src/test_executor_fixture.cpp
+  src/mock_plugin/mock_plugin.cpp
 )
 target_include_directories(${DEEP_TEST_LIB} PUBLIC
   $<BUILD_INTERFACE:${include_dir}>
   $<INSTALL_INTERFACE:include>
 )
 target_link_libraries(${DEEP_TEST_LIB}
+  PUBLIC
+    deep_core::deep_core_lib
   PRIVATE
     rclcpp::rclcpp
     rclcpp_lifecycle::rclcpp_lifecycle
+    pluginlib::pluginlib
 )
 
 install(TARGETS
@@ -66,6 +72,14 @@ install(FILES cmake/add_deep_test.cmake
   DESTINATION share/${PROJECT_NAME}/cmake
 )
 
+# Install the mock plugin description file
+install(FILES src/mock_plugin/plugins.xml
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# Export plugin description file to ament index for the mock plugin
+pluginlib_export_plugin_description_file(deep_core src/mock_plugin/plugins.xml)
+
 if(BUILD_TESTING)
   # Include our custom test function
   include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/add_deep_test.cmake)
@@ -87,6 +101,31 @@ if(BUILD_TESTING)
     test/test_with_ros.cpp
     LIBRARIES
       ${std_msgs_TARGETS}
+  )
+  
+  # Deep core tests - organized by functionality
+  add_deep_test(test_simple_tensor
+    test/test_simple_tensor.cpp
+  )
+  add_deep_test(test_tensor
+    test/test_tensor.cpp
+    LIBRARIES
+      ${DEEP_TEST_LIB}
+  )
+  add_deep_test(test_plugin_system
+    test/test_plugin_system.cpp
+    LIBRARIES
+      ${DEEP_TEST_LIB}
+  )
+  add_deep_test(test_node_lifecycle
+    test/test_node_lifecycle.cpp
+    LIBRARIES
+      ${DEEP_TEST_LIB}
+  )
+  add_deep_test(test_integration
+    test/test_integration.cpp
+    LIBRARIES
+      ${DEEP_TEST_LIB}
   )
 endif()
 

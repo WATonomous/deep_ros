@@ -66,3 +66,6 @@ Don't forget: `PLUGINLIB_EXPORT_CLASS(YourPlugin, deep_ros::DeepBackendPlugin)`
   </class>
 </library>
 ```
+
+## Testing
+All tests for `deep_core` exist in the `deep_test` package. This is to expose test headers to other packages downstream in a centralized way.

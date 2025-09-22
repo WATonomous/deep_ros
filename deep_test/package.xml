@@ -11,6 +11,8 @@
   <depend>catch2</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_lifecycle</depend>
+  <depend>pluginlib</depend>
+  <depend>deep_core</depend>
 
   <test_depend>std_msgs</test_depend>
   <test_depend>std_srvs</test_depend>

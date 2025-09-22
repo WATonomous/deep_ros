@@ -85,8 +85,6 @@ public:
     if (!model_loaded_) {
       throw std::runtime_error("No model loaded");
     }
-
-    // For testing, just return a copy of the input
     return input;
   }
 

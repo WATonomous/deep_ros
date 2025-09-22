@@ -19,7 +19,6 @@
 #include <string>
 #include <vector>
 
-#include <bondcpp/bond.hpp>
 #include <lifecycle_msgs/msg/state.hpp>
 #include <pluginlib/class_list_macros.hpp>
 #include <pluginlib/class_loader.hpp>
@@ -30,6 +29,11 @@
 #include "deep_core/plugin_interfaces/backend_memory_allocator.hpp"
 #include "deep_core/plugin_interfaces/deep_backend_plugin.hpp"
 #include "deep_core/types/tensor.hpp"
+
+// Forward declarations
+namespace bond {
+class Bond;
+}
 
 namespace deep_ros
 {
@@ -56,7 +60,7 @@ public:
   /**
    * @brief Destructor
    */
-  virtual ~DeepNodeBase() = default;
+  virtual ~DeepNodeBase();
 
 protected:
   /**

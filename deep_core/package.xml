@@ -13,7 +13,6 @@
   <depend>pluginlib</depend>
   <depend>bondcpp</depend>
 
-  <test_depend>deep_test</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
