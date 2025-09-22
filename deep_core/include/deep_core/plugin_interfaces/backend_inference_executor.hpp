@@ -39,26 +39,57 @@ public:
    * @brief Load a model from file
    * @param model_path Path to the model file
    * @return true if successful, false otherwise
+   * @throws std::invalid_argument if model_path is empty or file doesn't exist
    */
-  virtual bool load_model(const std::filesystem::path & model_path) = 0;
+  bool load_model(const std::filesystem::path & model_path);
 
   /**
    * @brief Run inference on input tensor
    * @param input Input tensor
    * @return Output tensor
+   * @throws std::invalid_argument if input tensor is invalid
+   * @throws std::runtime_error if no model is loaded
    */
-  virtual Tensor run_inference(Tensor input) = 0;
+  Tensor run_inference(Tensor input);
 
   /**
    * @brief Unload the currently loaded model
    */
-  virtual void unload_model() = 0;
+  void unload_model();
+
+  /**
+   * @brief Check if a model is currently loaded
+   * @return true if model is loaded, false otherwise
+   */
+  bool is_model_loaded() const
+  {
+    return model_loaded_;
+  }
 
   /**
    * @brief Get supported model formats
    * @return Vector of supported formats (e.g., "onnx", "pb")
    */
   virtual std::vector<std::string> supported_model_formats() const = 0;
+
+protected:
+  /**
+   * @brief Implementation of load_model (to be overridden by backends)
+   */
+  virtual bool load_model_impl(const std::filesystem::path & model_path) = 0;
+
+  /**
+   * @brief Implementation of run_inference (to be overridden by backends)
+   */
+  virtual Tensor run_inference_impl(Tensor input) = 0;
+
+  /**
+   * @brief Implementation of unload_model (to be overridden by backends)
+   */
+  virtual void unload_model_impl() = 0;
+
+private:
+  bool model_loaded_ = false;
 };
 
 }  // namespace deep_ros

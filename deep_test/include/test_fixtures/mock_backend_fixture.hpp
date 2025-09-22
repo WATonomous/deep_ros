@@ -15,16 +15,18 @@
 #pragma once
 
 #include <memory>
+
 #include <pluginlib/class_loader.hpp>
-#include "deep_core/plugin_interfaces/deep_backend_plugin.hpp"
+
 #include "deep_core/plugin_interfaces/backend_memory_allocator.hpp"
+#include "deep_core/plugin_interfaces/deep_backend_plugin.hpp"
 
 namespace deep_ros::test
 {
 
 /**
  * @brief Mock backend fixture for testing
- * 
+ *
  * Catch2 test fixture that provides access to the mock backend plugin
  * and its allocator for consistent testing across all packages.
  */
@@ -36,8 +38,8 @@ public:
    */
   MockBackendFixture()
   {
-    loader_ = std::make_unique<pluginlib::ClassLoader<deep_ros::DeepBackendPlugin>>(
-      "deep_core", "deep_ros::DeepBackendPlugin");
+    loader_ =
+      std::make_unique<pluginlib::ClassLoader<deep_ros::DeepBackendPlugin>>("deep_core", "deep_ros::DeepBackendPlugin");
     mock_backend_ = loader_->createSharedInstance("mock_backend");
     allocator_ = mock_backend_->get_allocator();
   }

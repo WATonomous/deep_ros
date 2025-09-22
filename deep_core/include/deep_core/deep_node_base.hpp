@@ -31,7 +31,8 @@
 #include "deep_core/types/tensor.hpp"
 
 // Forward declarations
-namespace bond {
+namespace bond
+{
 class Bond;
 }
 

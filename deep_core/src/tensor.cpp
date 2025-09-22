@@ -76,7 +76,7 @@ Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype, std::shared_pt
   if (shape_.empty()) {
     throw std::invalid_argument("Tensor shape cannot be empty");
   }
-  
+
   // Check for zero dimensions
   for (size_t dim : shape_) {
     if (dim == 0) {
@@ -102,7 +102,7 @@ Tensor::Tensor(void * data, const std::vector<size_t> & shape, DataType dtype)
   if (shape_.empty()) {
     throw std::invalid_argument("Tensor shape cannot be empty");
   }
-  
+
   // Check for zero dimensions
   for (size_t dim : shape_) {
     if (dim == 0) {

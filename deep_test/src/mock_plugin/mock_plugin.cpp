@@ -44,17 +44,17 @@ public:
     }
   }
 
-  void copy_from_host(void * dst, const void * src, size_t bytes) override
+  void copy_from_host_impl(void * dst, const void * src, size_t bytes) override
   {
     std::memcpy(dst, src, bytes);
   }
 
-  void copy_to_host(void * dst, const void * src, size_t bytes) override
+  void copy_to_host_impl(void * dst, const void * src, size_t bytes) override
   {
     std::memcpy(dst, src, bytes);
   }
 
-  void copy_device_to_device(void * dst, const void * src, size_t bytes) override
+  void copy_device_to_device_impl(void * dst, const void * src, size_t bytes) override
   {
     std::memcpy(dst, src, bytes);
   }
@@ -73,24 +73,19 @@ public:
 class MockInferenceExecutor : public BackendInferenceExecutor
 {
 public:
-  bool load_model(const std::filesystem::path & model_path) override
+  bool load_model_impl(const std::filesystem::path & model_path) override
   {
-    model_loaded_ = true;
     current_model_path_ = model_path;
     return true;
   }
 
-  Tensor run_inference(Tensor input) override
+  Tensor run_inference_impl(Tensor input) override
   {
-    if (!model_loaded_) {
-      throw std::runtime_error("No model loaded");
-    }
     return input;
   }
 
-  void unload_model() override
+  void unload_model_impl() override
   {
-    model_loaded_ = false;
     current_model_path_.clear();
   }
 
@@ -100,7 +95,6 @@ public:
   }
 
 private:
-  bool model_loaded_ = false;
   std::filesystem::path current_model_path_;
 };
 

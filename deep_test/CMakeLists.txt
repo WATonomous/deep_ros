@@ -102,28 +102,25 @@ if(BUILD_TESTING)
     LIBRARIES
       ${std_msgs_TARGETS}
   )
-  
+
   # Deep core tests - organized by functionality
-  add_deep_test(test_simple_tensor
-    test/test_simple_tensor.cpp
-  )
   add_deep_test(test_tensor
-    test/test_tensor.cpp
+    test/deep_core/test_tensor.cpp
     LIBRARIES
       ${DEEP_TEST_LIB}
   )
   add_deep_test(test_plugin_system
-    test/test_plugin_system.cpp
+    test/deep_core/test_plugin_system.cpp
     LIBRARIES
       ${DEEP_TEST_LIB}
   )
   add_deep_test(test_node_lifecycle
-    test/test_node_lifecycle.cpp
+    test/deep_core/test_node_lifecycle.cpp
     LIBRARIES
       ${DEEP_TEST_LIB}
   )
   add_deep_test(test_integration
-    test/test_integration.cpp
+    test/deep_core/test_integration.cpp
     LIBRARIES
       ${DEEP_TEST_LIB}
   )

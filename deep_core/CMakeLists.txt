@@ -37,6 +37,8 @@ set(DEEP_CORE_LIB ${PROJECT_NAME}_lib)
 add_library(${DEEP_CORE_LIB} SHARED
   src/deep_node_base.cpp
   src/tensor.cpp
+  src/backend_memory_allocator.cpp
+  src/backend_inference_executor.cpp
 )
 target_include_directories(${DEEP_CORE_LIB} PUBLIC
   $<BUILD_INTERFACE:${include_dir}>

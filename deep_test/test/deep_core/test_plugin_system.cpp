@@ -14,31 +14,30 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch.hpp>
-#include <pluginlib/class_loader.hpp>
-#include <deep_core/plugin_interfaces/deep_backend_plugin.hpp>
-#include <deep_core/plugin_interfaces/backend_memory_allocator.hpp>
 #include <deep_core/plugin_interfaces/backend_inference_executor.hpp>
+#include <deep_core/plugin_interfaces/backend_memory_allocator.hpp>
+#include <deep_core/plugin_interfaces/deep_backend_plugin.hpp>
 #include <deep_core/types/tensor.hpp>
+#include <pluginlib/class_loader.hpp>
 #include <test_fixtures/mock_backend_fixture.hpp>
 
-using namespace deep_ros;
-
-TEST_CASE("Plugin System: Discovery and Loading", "[plugin][discovery]")
+TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Discovery and Loading", "[plugin][discovery]")
 {
   SECTION("Plugin loader can discover available plugins")
   {
-    pluginlib::ClassLoader<DeepBackendPlugin> loader("deep_core", "deep_ros::DeepBackendPlugin");
-    
+    pluginlib::ClassLoader<deep_ros::DeepBackendPlugin> loader("deep_core", "deep_ros::DeepBackendPlugin");
+
     auto available_plugins = loader.getDeclaredClasses();
-    
+
     // Should find at least the mock plugin
     REQUIRE(!available_plugins.empty());
-    
+
     bool found_mock = false;
-    for (const auto& plugin_name : available_plugins) {
+    for (const auto & plugin_name : available_plugins) {
       if (plugin_name == "mock_backend") {
         found_mock = true;
         break;
@@ -49,19 +48,19 @@ TEST_CASE("Plugin System: Discovery and Loading", "[plugin][discovery]")
 
   SECTION("Can load valid plugin")
   {
-    pluginlib::ClassLoader<DeepBackendPlugin> loader("deep_core", "deep_ros::DeepBackendPlugin");
-    
+    pluginlib::ClassLoader<deep_ros::DeepBackendPlugin> loader("deep_core", "deep_ros::DeepBackendPlugin");
+
     // Should be able to load the mock plugin
     REQUIRE_NOTHROW(loader.createSharedInstance("mock_backend"));
-    
+
     auto plugin = loader.createSharedInstance("mock_backend");
     REQUIRE(plugin != nullptr);
   }
 
   SECTION("Loading invalid plugin should fail gracefully")
   {
-    pluginlib::ClassLoader<DeepBackendPlugin> loader("deep_core", "deep_ros::DeepBackendPlugin");
-    
+    pluginlib::ClassLoader<deep_ros::DeepBackendPlugin> loader("deep_core", "deep_ros::DeepBackendPlugin");
+
     // Should throw when trying to load non-existent plugin
     REQUIRE_THROWS(loader.createSharedInstance("nonexistent_backend"));
     REQUIRE_THROWS(loader.createSharedInstance(""));
@@ -76,7 +75,7 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Backend Int
   SECTION("Backend provides basic identification")
   {
     REQUIRE(backend != nullptr);
-    
+
     // Should have a meaningful name
     auto name = backend->backend_name();
     REQUIRE(!name.empty());
@@ -88,7 +87,7 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Backend Int
     // Must provide memory allocator
     auto allocator = backend->get_allocator();
     REQUIRE(allocator != nullptr);
-    
+
     // Must provide inference executor
     auto executor = backend->get_inference_executor();
     REQUIRE(executor != nullptr);
@@ -101,7 +100,7 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Backend Int
     auto allocator2 = backend->get_allocator();
     auto executor1 = backend->get_inference_executor();
     auto executor2 = backend->get_inference_executor();
-    
+
     // These could be same instances or different but equivalent
     REQUIRE(allocator1 != nullptr);
     REQUIRE(allocator2 != nullptr);
@@ -117,14 +116,14 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Memory Allo
   SECTION("Basic allocation and deallocation")
   {
     // Should be able to allocate memory
-    void* ptr = allocator->allocate(1024);
+    void * ptr = allocator->allocate(1024);
     REQUIRE(ptr != nullptr);
-    
+
     // Memory should be writable
-    auto* int_ptr = static_cast<int*>(ptr);
+    auto * int_ptr = static_cast<int *>(ptr);
     *int_ptr = 42;
     REQUIRE(*int_ptr == 42);
-    
+
     // Should deallocate safely
     REQUIRE_NOTHROW(allocator->deallocate(ptr));
   }
@@ -132,7 +131,7 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Memory Allo
   SECTION("Zero-size allocation behavior")
   {
     // Zero allocation should return nullptr or be well-defined
-    void* ptr = allocator->allocate(0);
+    void * ptr = allocator->allocate(0);
     REQUIRE(ptr == nullptr);  // Most common expectation
   }
 
@@ -147,21 +146,21 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Memory Allo
     std::vector<float> source = {1.0f, 2.0f, 3.0f, 4.0f};
     std::vector<float> dest(4, 0.0f);
     size_t bytes = source.size() * sizeof(float);
-    
-    void* device_ptr = allocator->allocate(bytes);
+
+    void * device_ptr = allocator->allocate(bytes);
     REQUIRE(device_ptr != nullptr);
-    
+
     // Host to device copy
     REQUIRE_NOTHROW(allocator->copy_from_host(device_ptr, source.data(), bytes));
-    
+
     // Device to host copy
     REQUIRE_NOTHROW(allocator->copy_to_host(dest.data(), device_ptr, bytes));
-    
+
     // Data should be preserved
     for (size_t i = 0; i < source.size(); ++i) {
       REQUIRE(dest[i] == source[i]);
     }
-    
+
     allocator->deallocate(device_ptr);
   }
 
@@ -169,26 +168,26 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Memory Allo
   {
     std::vector<int> data = {10, 20, 30, 40};
     size_t bytes = data.size() * sizeof(int);
-    
-    void* ptr1 = allocator->allocate(bytes);
-    void* ptr2 = allocator->allocate(bytes);
+
+    void * ptr1 = allocator->allocate(bytes);
+    void * ptr2 = allocator->allocate(bytes);
     REQUIRE(ptr1 != nullptr);
     REQUIRE(ptr2 != nullptr);
-    
+
     // Copy data to first allocation
     allocator->copy_from_host(ptr1, data.data(), bytes);
-    
+
     // Copy between device allocations
     REQUIRE_NOTHROW(allocator->copy_device_to_device(ptr2, ptr1, bytes));
-    
+
     // Verify copy worked
     std::vector<int> result(4, 0);
     allocator->copy_to_host(result.data(), ptr2, bytes);
-    
+
     for (size_t i = 0; i < data.size(); ++i) {
       REQUIRE(result[i] == data[i]);
     }
-    
+
     allocator->deallocate(ptr1);
     allocator->deallocate(ptr2);
   }
@@ -198,7 +197,7 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Memory Allo
     // Should provide meaningful device info
     auto device_name = allocator->device_name();
     REQUIRE(!device_name.empty());
-    
+
     // Should indicate memory type
     bool is_device = allocator->is_device_memory();
     // No specific requirement, but should be well-defined
@@ -206,7 +205,8 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Memory Allo
   }
 }
 
-TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Inference Executor Interface", "[plugin][executor]")
+TEST_CASE_METHOD(
+  deep_ros::test::MockBackendFixture, "Plugin System: Inference Executor Interface", "[plugin][executor]")
 {
   auto backend = getBackend();
   auto executor = backend->get_inference_executor();
@@ -215,12 +215,12 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Inference E
   SECTION("Executor reports supported model formats")
   {
     auto formats = executor->supported_model_formats();
-    
+
     // Should support at least one format
     REQUIRE(!formats.empty());
-    
+
     // Each format should be non-empty
-    for (const auto& format : formats) {
+    for (const auto & format : formats) {
       REQUIRE(!format.empty());
     }
   }
@@ -230,10 +230,10 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Inference E
     // Should be able to load a model
     bool loaded = executor->load_model("/test/model.onnx");
     REQUIRE(loaded == true);
-    
+
     // Should be able to unload
     REQUIRE_NOTHROW(executor->unload_model());
-    
+
     // Should be able to load again
     loaded = executor->load_model("/another/model.mock");
     REQUIRE(loaded == true);
@@ -242,36 +242,36 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Inference E
   SECTION("Inference requires loaded model")
   {
     // Inference without model should fail
-    Tensor input({2, 2}, DataType::FLOAT32, allocator);
+    deep_ros::Tensor input({2, 2}, deep_ros::DataType::FLOAT32, allocator);
     REQUIRE_THROWS_AS(executor->run_inference(std::move(input)), std::runtime_error);
-    
+
     // After loading model, inference should work
     executor->load_model("/test/model.onnx");
-    Tensor input2({2, 2}, DataType::FLOAT32, allocator);
+    deep_ros::Tensor input2({2, 2}, deep_ros::DataType::FLOAT32, allocator);
     REQUIRE_NOTHROW(executor->run_inference(std::move(input2)));
   }
 
   SECTION("Inference with valid input produces valid output")
   {
     executor->load_model("/test/model.onnx");
-    
+
     // Create input tensor
     std::vector<size_t> shape = {1, 3, 4, 4};
-    Tensor input(shape, DataType::FLOAT32, allocator);
-    
+    deep_ros::Tensor input(shape, deep_ros::DataType::FLOAT32, allocator);
+
     // Fill with test data
     auto data = input.data_as<float>();
     for (size_t i = 0; i < input.size(); ++i) {
       data[i] = static_cast<float>(i) * 0.1f;
     }
-    
+
     // Run inference
     auto output = executor->run_inference(std::move(input));
-    
+
     // Output should be valid tensor
     REQUIRE(output.data() != nullptr);
     REQUIRE(output.size() > 0);
-    REQUIRE(output.dtype() == DataType::FLOAT32);  // Common expectation
+    REQUIRE(output.dtype() == deep_ros::DataType::FLOAT32);  // Common expectation
   }
 
   SECTION("Model state is managed correctly")
@@ -279,12 +279,12 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Inference E
     // Multiple model loads should work
     REQUIRE(executor->load_model("/model1.onnx") == true);
     REQUIRE(executor->load_model("/model2.onnx") == true);  // Should replace first
-    
+
     // Unload should work
     executor->unload_model();
-    
+
     // Inference after unload should fail
-    Tensor input({1, 1}, DataType::FLOAT32, allocator);
+    deep_ros::Tensor input({1, 1}, deep_ros::DataType::FLOAT32, allocator);
     REQUIRE_THROWS_AS(executor->run_inference(std::move(input)), std::runtime_error);
   }
 }
@@ -298,9 +298,9 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Error Handl
   SECTION("Invalid tensor input is handled")
   {
     executor->load_model("/test/model.onnx");
-    
+
     // Empty tensor should be rejected
-    Tensor empty_tensor;
+    deep_ros::Tensor empty_tensor;
     REQUIRE_THROWS(executor->run_inference(std::move(empty_tensor)));
   }
 
@@ -323,16 +323,16 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Error Handl
   {
     // Failed operations shouldn't break the plugin
     try {
-      Tensor empty_tensor;
+      deep_ros::Tensor empty_tensor;
       executor->run_inference(std::move(empty_tensor));
     } catch (...) {
       // Error is expected
     }
-    
+
     // Plugin should still work after error
     REQUIRE(executor->load_model("/recovery/model.onnx") == true);
-    
-    Tensor valid_input({2, 2}, DataType::FLOAT32, allocator);
+
+    deep_ros::Tensor valid_input({2, 2}, deep_ros::DataType::FLOAT32, allocator);
     REQUIRE_NOTHROW(executor->run_inference(std::move(valid_input)));
   }
 }

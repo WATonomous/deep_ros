@@ -49,25 +49,45 @@ public:
    * @param dst Destination pointer (allocated by this allocator)
    * @param src Source pointer (host memory)
    * @param bytes Number of bytes to copy
+   * @throws std::invalid_argument if dst or src is nullptr and bytes > 0
    */
-  virtual void copy_from_host(void * dst, const void * src, size_t bytes) = 0;
+  void copy_from_host(void * dst, const void * src, size_t bytes);
 
   /**
    * @brief Copy data from allocated memory to host (CPU) memory
    * @param dst Destination pointer (host memory)
    * @param src Source pointer (allocated by this allocator)
    * @param bytes Number of bytes to copy
+   * @throws std::invalid_argument if dst or src is nullptr and bytes > 0
    */
-  virtual void copy_to_host(void * dst, const void * src, size_t bytes) = 0;
+  void copy_to_host(void * dst, const void * src, size_t bytes);
 
   /**
    * @brief Copy data between two allocations from this allocator
    * @param dst Destination pointer (allocated by this allocator)
    * @param src Source pointer (allocated by this allocator)
    * @param bytes Number of bytes to copy
+   * @throws std::invalid_argument if dst or src is nullptr and bytes > 0
    */
-  virtual void copy_device_to_device(void * dst, const void * src, size_t bytes) = 0;
+  void copy_device_to_device(void * dst, const void * src, size_t bytes);
 
+protected:
+  /**
+   * @brief Implementation of copy_from_host (to be overridden by backends)
+   */
+  virtual void copy_from_host_impl(void * dst, const void * src, size_t bytes) = 0;
+
+  /**
+   * @brief Implementation of copy_to_host (to be overridden by backends)
+   */
+  virtual void copy_to_host_impl(void * dst, const void * src, size_t bytes) = 0;
+
+  /**
+   * @brief Implementation of copy_device_to_device (to be overridden by backends)
+   */
+  virtual void copy_device_to_device_impl(void * dst, const void * src, size_t bytes) = 0;
+
+public:
   /**
    * @brief Check if this allocator manages device (non-host) memory
    * @return true if memory is on device (GPU, etc.), false if host memory
