@@ -79,35 +79,6 @@ TEST_CASE("Image encoding info parsing", "[conversions][image]")
   }
 }
 
-TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Mock Backend SECTION Test", "[conversions][mock]")
-{
-  auto allocator = getAllocator();
-  REQUIRE(allocator != nullptr);
-
-  SECTION("First section")
-  {
-    // Just allocate some memory
-    std::vector<size_t> shape{2, 2};
-    Tensor tensor(shape, DataType::FLOAT32, allocator);
-    REQUIRE(tensor.data() != nullptr);
-  }
-
-  SECTION("Second section")
-  {
-    // Test conversion function
-    sensor_msgs::msg::Image ros_image;
-    ros_image.height = 10;
-    ros_image.width = 10;
-    ros_image.encoding = "rgb8";
-    ros_image.step = 10 * 3;
-    ros_image.data.resize(10 * 10 * 3, 128);
-
-    auto tensor = from_image(ros_image, allocator);
-    REQUIRE(tensor.data() != nullptr);
-    REQUIRE(allocator->allocated_bytes() > 0);
-  }
-}
-
 TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Image conversion from ROS to Tensor", "[conversions][image]")
 {
   auto allocator = getAllocator();
@@ -141,16 +112,41 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Image conversion from ROS 
   SECTION("Grayscale image conversion")
   {
     sensor_msgs::msg::Image ros_image;
+    ros_image.header.stamp.sec = 456;
+    ros_image.header.frame_id = "mono_camera_frame";
     ros_image.height = 240;
     ros_image.width = 320;
     ros_image.encoding = "mono8";
-    ros_image.step = 320;
+    ros_image.is_bigendian = false;
+    ros_image.step = 320;  // width * 1 channel
     ros_image.data.resize(240 * 320);
+
+    // Fill with gradient test pattern
+    for (size_t y = 0; y < ros_image.height; ++y) {
+      for (size_t x = 0; x < ros_image.width; ++x) {
+        size_t idx = y * ros_image.step + x;
+        ros_image.data[idx] = static_cast<uint8_t>((x + y) % 256);
+      }
+    }
 
     auto tensor = from_image(ros_image, allocator);
 
-    REQUIRE(tensor.shape().size() >= 3);  // At least [1, height, width]
+    // Validate tensor properties
+    REQUIRE(tensor.shape().size() == 3);  // [1, height, width] for grayscale
+    REQUIRE(tensor.shape()[0] == 1);  // Batch size
+    REQUIRE(tensor.shape()[1] == 240);  // Height
+    REQUIRE(tensor.shape()[2] == 320);  // Width
     REQUIRE(tensor.dtype() == DataType::UINT8);
+    REQUIRE(tensor.data() != nullptr);
+    REQUIRE(tensor.size() == 240 * 320 * 1);
+
+    // Verify data integrity - check a few sample points
+    auto tensor_data = static_cast<const uint8_t *>(tensor.data());
+    REQUIRE(tensor_data[0] == static_cast<uint8_t>((0 + 0) % 256));  // Top-left corner
+    REQUIRE(tensor_data[319] == static_cast<uint8_t>((319 + 0) % 256));  // Top-right corner
+
+    // Verify memory allocation tracking
+    REQUIRE(allocator->allocated_bytes() > 0);
   }
 }
 
