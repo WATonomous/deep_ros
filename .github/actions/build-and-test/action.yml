@@ -18,6 +18,13 @@ runs:
                             python3-pip \
                             build-essential \
 
+    - name: 🔗 Install rosdep dependencies
+      shell: bash
+      run: |
+        sudo rosdep init || true
+        rosdep update
+        rosdep install --from-paths . --ignore-src -r -y
+
     - name: 🧱 Build workspace
       shell: bash
       run: |
