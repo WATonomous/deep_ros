@@ -40,8 +40,19 @@ public:
   {
     loader_ =
       std::make_unique<pluginlib::ClassLoader<deep_ros::DeepBackendPlugin>>("deep_core", "deep_ros::DeepBackendPlugin");
-    mock_backend_ = loader_->createSharedInstance("mock_backend");
+    mock_backend_ = loader_->createUniqueInstance("mock_backend");
     allocator_ = mock_backend_->get_allocator();
+  }
+
+  /**
+   * @brief Destructor - ensures clean shutdown
+   */
+  ~MockBackendFixture()
+  {
+    // Reset shared pointers before destroying the loader
+    allocator_.reset();
+    mock_backend_.reset();
+    loader_.reset();
   }
 
   /**

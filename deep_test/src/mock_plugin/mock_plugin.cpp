@@ -79,6 +79,11 @@ public:
     return allocated_bytes_;
   }
 
+  void reset_allocation_counter()
+  {
+    allocated_bytes_ = 0;
+  }
+
 private:
   size_t allocated_bytes_{0};
 };

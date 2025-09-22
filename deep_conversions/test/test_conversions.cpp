@@ -79,21 +79,51 @@ TEST_CASE("Image encoding info parsing", "[conversions][image]")
   }
 }
 
+TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Mock Backend SECTION Test", "[conversions][mock]")
+{
+  auto allocator = getAllocator();
+  REQUIRE(allocator != nullptr);
+
+  SECTION("First section")
+  {
+    // Just allocate some memory
+    std::vector<size_t> shape{2, 2};
+    Tensor tensor(shape, DataType::FLOAT32, allocator);
+    REQUIRE(tensor.data() != nullptr);
+  }
+
+  SECTION("Second section")
+  {
+    // Test conversion function
+    sensor_msgs::msg::Image ros_image;
+    ros_image.height = 10;
+    ros_image.width = 10;
+    ros_image.encoding = "rgb8";
+    ros_image.step = 10 * 3;
+    ros_image.data.resize(10 * 10 * 3, 128);
+
+    auto tensor = from_image(ros_image, allocator);
+    REQUIRE(tensor.data() != nullptr);
+    REQUIRE(allocator->allocated_bytes() > 0);
+  }
+}
+
 TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Image conversion from ROS to Tensor", "[conversions][image]")
 {
   auto allocator = getAllocator();
+  REQUIRE(allocator != nullptr);
 
   SECTION("RGB8 image conversion")
   {
     sensor_msgs::msg::Image ros_image;
     ros_image.header.stamp.sec = 123;
     ros_image.header.frame_id = "camera_frame";
-    ros_image.height = 480;
-    ros_image.width = 640;
+    ros_image.height = 100;
+    ros_image.width = 100;
     ros_image.encoding = "rgb8";
     ros_image.is_bigendian = false;
-    ros_image.step = 640 * 3;  // width * channels
-    ros_image.data.resize(480 * 640 * 3);
+    ros_image.step = 100 * 3;  // width * channels
+    ros_image.data.resize(100 * 100 * 3);
 
     // Fill with test pattern
     for (size_t i = 0; i < ros_image.data.size(); ++i) {
@@ -401,16 +431,16 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Performance and memory eff
     size_t initial_bytes = allocator->allocated_bytes();
 
     sensor_msgs::msg::Image test_image;
-    test_image.height = 480;
-    test_image.width = 640;
+    test_image.height = 100;
+    test_image.width = 100;
     test_image.encoding = "rgb8";
-    test_image.step = 640 * 3;
-    test_image.data.resize(480 * 640 * 3);
+    test_image.step = 100 * 3;
+    test_image.data.resize(100 * 100 * 3);
 
     auto tensor = from_image(test_image, allocator);
 
     REQUIRE(allocator->allocated_bytes() > initial_bytes);
-    REQUIRE(allocator->allocated_bytes() >= 480 * 640 * 3);  // At least image size
+    REQUIRE(allocator->allocated_bytes() >= 100 * 100 * 3);  // At least image size
   }
 }
 
