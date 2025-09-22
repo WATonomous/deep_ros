@@ -17,6 +17,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <bondcpp/bond.hpp>
@@ -190,7 +191,7 @@ void DeepNodeBase::unload_model()
   }
 }
 
-Tensor DeepNodeBase::run_inference(Tensor inputs)
+Tensor DeepNodeBase::run_inference(Tensor && inputs)
 {
   if (!plugin_) {
     throw std::runtime_error("No plugin loaded");
@@ -205,7 +206,7 @@ Tensor DeepNodeBase::run_inference(Tensor inputs)
     throw std::runtime_error("No inference executor available");
   }
 
-  return executor->run_inference(inputs);
+  return executor->run_inference(std::move(inputs));
 }
 
 std::string DeepNodeBase::get_backend_name() const

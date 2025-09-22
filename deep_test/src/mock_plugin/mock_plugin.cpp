@@ -15,6 +15,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <pluginlib/class_list_macros.hpp>
@@ -79,9 +80,9 @@ public:
     return true;
   }
 
-  Tensor run_inference_impl(Tensor input) override
+  Tensor run_inference_impl(Tensor && input) override
   {
-    return input;
+    return std::move(input);
   }
 
   void unload_model_impl() override

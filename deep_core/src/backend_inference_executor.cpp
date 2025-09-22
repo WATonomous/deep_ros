@@ -34,7 +34,7 @@ bool BackendInferenceExecutor::load_model(const std::filesystem::path & model_pa
   return success;
 }
 
-Tensor BackendInferenceExecutor::run_inference(Tensor input)
+Tensor BackendInferenceExecutor::run_inference(Tensor && input)
 {
   // Validate input tensor
   if (input.data() == nullptr) {

@@ -138,7 +138,7 @@ protected:
    * @param inputs Input tensor for inference
    * @return Output tensor from inference
    */
-  Tensor run_inference(Tensor inputs);
+  Tensor run_inference(Tensor && inputs);
 
   /**
    * @brief Check if a backend plugin is loaded
