@@ -39,11 +39,21 @@ function(add_deep_test TEST_NAME TEST_SOURCE)
   # Create the test executable
   add_executable(${TEST_NAME} ${TEST_SOURCE})
 
-  # Link with Catch2, ROS dependencies, and specified libraries
+  # Determine deep_test library target name
+  # When building within deep_test package: use local target
+  # When building in external packages: use exported target
+  if(TARGET deep_test_lib)
+    set(DEEP_TEST_LIB_TARGET deep_test_lib)
+  else()
+    set(DEEP_TEST_LIB_TARGET deep_test::deep_test_lib)
+  endif()
+
+  # Link with Catch2, ROS dependencies, deep_test library, and specified libraries
   target_link_libraries(${TEST_NAME}
     Catch2::Catch2WithMain
     rclcpp::rclcpp
     rclcpp_lifecycle::rclcpp_lifecycle
+    ${DEEP_TEST_LIB_TARGET}
     ${ARG_LIBRARIES}
   )
 

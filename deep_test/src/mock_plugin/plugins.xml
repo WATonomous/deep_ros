@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<library path="deep_test_lib">
+  <class name="mock_backend" type="deep_ros::mock::MockBackendPlugin" base_class_type="deep_ros::DeepBackendPlugin">
+    <description>Mock backend plugin for deep_core testing (WARNING: For testing purposes only)</description>
+  </class>
+</library>
