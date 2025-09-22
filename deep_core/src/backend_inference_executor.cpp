@@ -34,7 +34,7 @@ bool BackendInferenceExecutor::load_model(const std::filesystem::path & model_pa
   return success;
 }
 
-Tensor BackendInferenceExecutor::run_inference(Tensor && input)
+Tensor BackendInferenceExecutor::run_inference(const Tensor & input)
 {
   // Validate input tensor
   if (input.data() == nullptr) {
@@ -55,7 +55,7 @@ Tensor BackendInferenceExecutor::run_inference(Tensor && input)
     throw std::runtime_error("No model loaded for inference");
   }
 
-  return run_inference_impl(std::move(input));
+  return run_inference_impl(input);
 }
 
 void BackendInferenceExecutor::unload_model()

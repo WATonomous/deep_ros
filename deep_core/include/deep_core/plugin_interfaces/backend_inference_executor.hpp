@@ -50,7 +50,7 @@ public:
    * @throws std::invalid_argument if input tensor is invalid
    * @throws std::runtime_error if no model is loaded
    */
-  Tensor run_inference(Tensor && input);
+  Tensor run_inference(const Tensor & input);
 
   /**
    * @brief Unload the currently loaded model
@@ -81,7 +81,7 @@ protected:
   /**
    * @brief Implementation of run_inference (to be overridden by backends)
    */
-  virtual Tensor run_inference_impl(Tensor && input) = 0;
+  virtual Tensor run_inference_impl(const Tensor & input) = 0;
 
   /**
    * @brief Implementation of unload_model (to be overridden by backends)

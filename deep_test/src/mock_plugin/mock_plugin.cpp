@@ -80,9 +80,10 @@ public:
     return true;
   }
 
-  Tensor run_inference_impl(Tensor && input) override
+  Tensor run_inference_impl(const Tensor & input) override
   {
-    return std::move(input);
+    // For testing, just return a copy of the input tensor
+    return input;
   }
 
   void unload_model_impl() override
