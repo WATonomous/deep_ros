@@ -25,10 +25,10 @@
 
 namespace deep_ros
 {
-namespace test
+namespace mock
 {
 
-class TestMemoryAllocator : public BackendMemoryAllocator
+class MockMemoryAllocator : public BackendMemoryAllocator
 {
 public:
   void * allocate(size_t bytes) override
@@ -66,11 +66,11 @@ public:
 
   std::string device_name() const override
   {
-    return "test_cpu";
+    return "mock_cpu";
   }
 };
 
-class TestInferenceExecutor : public BackendInferenceExecutor
+class MockInferenceExecutor : public BackendInferenceExecutor
 {
 public:
   bool load_model(const std::filesystem::path & model_path) override
@@ -98,7 +98,7 @@ public:
 
   std::vector<std::string> supported_model_formats() const override
   {
-    return {"test", "dummy"};
+    return {"mock", "dummy"};
   }
 
 private:
@@ -106,18 +106,18 @@ private:
   std::filesystem::path current_model_path_;
 };
 
-class TestBackendPlugin : public DeepBackendPlugin
+class MockBackendPlugin : public DeepBackendPlugin
 {
 public:
-  TestBackendPlugin()
+  MockBackendPlugin()
   {
-    allocator_ = std::make_shared<TestMemoryAllocator>();
-    executor_ = std::make_shared<TestInferenceExecutor>();
+    allocator_ = std::make_shared<MockMemoryAllocator>();
+    executor_ = std::make_shared<MockInferenceExecutor>();
   }
 
   std::string backend_name() const override
   {
-    return "test_backend";
+    return "mock_backend";
   }
 
   std::shared_ptr<BackendMemoryAllocator> get_allocator() const override
@@ -131,11 +131,11 @@ public:
   }
 
 private:
-  std::shared_ptr<TestMemoryAllocator> allocator_;
-  std::shared_ptr<TestInferenceExecutor> executor_;
+  std::shared_ptr<MockMemoryAllocator> allocator_;
+  std::shared_ptr<MockInferenceExecutor> executor_;
 };
 
-}  // namespace test
+}  // namespace mock
 }  // namespace deep_ros
 
-PLUGINLIB_EXPORT_CLASS(deep_ros::test::TestBackendPlugin, deep_ros::DeepBackendPlugin)
+PLUGINLIB_EXPORT_CLASS(deep_ros::mock::MockBackendPlugin, deep_ros::DeepBackendPlugin)

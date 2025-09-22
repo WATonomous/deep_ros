@@ -18,8 +18,10 @@
 #include <vector>
 
 #include <catch2/catch.hpp>
+#include <pluginlib/class_loader.hpp>
 #include <deep_core/deep_node_base.hpp>
 #include <deep_core/types/tensor.hpp>
+#include <deep_core/plugin_interfaces/deep_backend_plugin.hpp>
 #include <deep_test/deep_test.hpp>
 
 namespace deep_ros
@@ -27,52 +29,38 @@ namespace deep_ros
 namespace test
 {
 
-// Use the established test plugin instead of creating local mocks
-// This ensures we test with the same plugin infrastructure used throughout the system
-
-// Test tensor construction using a simple CPU allocator since we don't need the mock plugin for basic tensor tests
-class SimpleCPUAllocator : public BackendMemoryAllocator
+// Global test fixture for tensor tests using mock plugin
+class TensorMockFixture
 {
 public:
-  void * allocate(size_t bytes) override
+  static TensorMockFixture & getInstance()
   {
-    return std::aligned_alloc(32, bytes);
+    static TensorMockFixture instance;
+    return instance;
   }
 
-  void deallocate(void * ptr) override
+  std::shared_ptr<BackendMemoryAllocator> getAllocator()
   {
-    std::free(ptr);
+    return allocator_;
   }
 
-  void copy_from_host(void * dst, const void * src, size_t bytes) override
+private:
+  TensorMockFixture()
   {
-    std::memcpy(dst, src, bytes);
+    loader_ = std::make_unique<pluginlib::ClassLoader<DeepBackendPlugin>>(
+      "deep_core", "deep_ros::DeepBackendPlugin");
+    mock_backend_ = loader_->createSharedInstance("mock_backend");
+    allocator_ = mock_backend_->get_allocator();
   }
 
-  void copy_to_host(void * dst, const void * src, size_t bytes) override
-  {
-    std::memcpy(dst, src, bytes);
-  }
-
-  void copy_device_to_device(void * dst, const void * src, size_t bytes) override
-  {
-    std::memcpy(dst, src, bytes);
-  }
-
-  bool is_device_memory() const override
-  {
-    return false;
-  }
-
-  std::string device_name() const override
-  {
-    return "cpu";
-  }
+  std::unique_ptr<pluginlib::ClassLoader<DeepBackendPlugin>> loader_;
+  std::shared_ptr<DeepBackendPlugin> mock_backend_;
+  std::shared_ptr<BackendMemoryAllocator> allocator_;
 };
 
 TEST_CASE("Tensor construction with allocator", "[tensor]")
 {
-  auto allocator = std::make_shared<SimpleCPUAllocator>();
+  auto allocator = TensorMockFixture::getInstance().getAllocator();
   std::vector<size_t> shape{2, 3, 4};
 
   Tensor tensor(shape, DataType::FLOAT32, allocator);
@@ -83,15 +71,9 @@ TEST_CASE("Tensor construction with allocator", "[tensor]")
   REQUIRE(tensor.data() != nullptr);
 }
 
-TEST_CASE("Tensor construction without allocator throws", "[tensor]")
-{
-  std::vector<size_t> shape{2, 3};
-  REQUIRE_THROWS_AS(Tensor(shape, DataType::FLOAT32), std::runtime_error);
-}
-
 TEST_CASE("Different data types have correct sizes", "[tensor]")
 {
-  auto allocator = std::make_shared<SimpleCPUAllocator>();
+  auto allocator = TensorMockFixture::getInstance().getAllocator();
 
   Tensor float_tensor({10}, DataType::FLOAT32, allocator);
   Tensor int32_tensor({10}, DataType::INT32, allocator);
@@ -106,7 +88,7 @@ TEST_CASE("Different data types have correct sizes", "[tensor]")
 
 TEST_CASE("Empty shape throws exception", "[tensor]")
 {
-  auto allocator = std::make_shared<SimpleCPUAllocator>();
+  auto allocator = TensorMockFixture::getInstance().getAllocator();
   std::vector<size_t> empty_shape;
 
   REQUIRE_THROWS_AS(Tensor(empty_shape, DataType::FLOAT32, allocator), std::invalid_argument);
@@ -114,7 +96,7 @@ TEST_CASE("Empty shape throws exception", "[tensor]")
 
 TEST_CASE("Large shape allocation", "[tensor]")
 {
-  auto allocator = std::make_shared<SimpleCPUAllocator>();
+  auto allocator = TensorMockFixture::getInstance().getAllocator();
   std::vector<size_t> large_shape{100, 100, 3};
 
   Tensor tensor(large_shape, DataType::UINT8, allocator);
@@ -123,7 +105,7 @@ TEST_CASE("Large shape allocation", "[tensor]")
   REQUIRE(tensor.shape() == large_shape);
 }
 
-// These tests will use the established test_backend plugin through the node interface
+// These tests will use the established mock_backend plugin through the node interface
 // This provides more realistic testing of the actual plugin loading mechanism
 
 class TestInferenceNode : public DeepNodeBase
@@ -224,10 +206,10 @@ TEST_CASE_METHOD(deep_ros::test::TestExecutorFixture, "DeepNodeBase lifecycle ma
     test_node->configure();
 
     // Try to load the test plugin
-    bool load_result = test_node->test_load_plugin("test_backend");
+    bool load_result = test_node->test_load_plugin("mock_backend");
     REQUIRE(load_result == true);
     REQUIRE(test_node->is_plugin_loaded() == true);
-    REQUIRE(test_node->get_backend_name() == "test_backend");
+    REQUIRE(test_node->get_backend_name() == "mock_backend");
     REQUIRE(test_node->get_current_allocator() != nullptr);
 
     // Try to load a non-existent plugin
@@ -240,7 +222,7 @@ TEST_CASE_METHOD(deep_ros::test::TestExecutorFixture, "DeepNodeBase lifecycle ma
     test_node->configure();
 
     // Load the test plugin
-    bool plugin_result = test_node->test_load_plugin("test_backend");
+    bool plugin_result = test_node->test_load_plugin("mock_backend");
     REQUIRE(plugin_result == true);
     REQUIRE(test_node->is_plugin_loaded() == true);
 

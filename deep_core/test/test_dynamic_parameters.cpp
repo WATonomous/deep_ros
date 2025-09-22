@@ -73,7 +73,7 @@ TEST_CASE_METHOD(deep_ros::test::TestExecutorFixture, "Dynamic model reconfigura
 {
   // Create node with test plugin enabled by default
   rclcpp::NodeOptions options;
-  options.parameter_overrides({{"Backend.plugin", "test_backend"}, {"model_path", ""}, {"Bond.enable", false}});
+  options.parameter_overrides({{"Backend.plugin", "mock_backend"}, {"model_path", ""}, {"Bond.enable", false}});
 
   auto test_node = std::make_shared<TestDynamicReconfigurationNode>(options);
   add_node(test_node);
@@ -167,7 +167,7 @@ TEST_CASE_METHOD(deep_ros::test::TestExecutorFixture, "Dynamic model reconfigura
 
   SECTION("Model change with same path still processes")
   {
-    // Ensure plugin is set (test_node should already have test_backend from options)
+    // Ensure plugin is set (test_node should already have mock_backend from options)
     // Configure and activate the node with plugin
     auto configure_result = test_node->configure();
     REQUIRE(configure_result.id() == lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE);

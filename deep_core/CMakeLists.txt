@@ -67,18 +67,40 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
+# Create testing utilities library (always available for other packages)
+# WARNING: This target is for testing purposes only and should not be used in production code
+add_library(${PROJECT_NAME}_testing SHARED
+  test/mock_plugin/mock_plugin.cpp
+)
+target_include_directories(${PROJECT_NAME}_testing PUBLIC
+  $<BUILD_INTERFACE:${include_dir}>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(${PROJECT_NAME}_testing PUBLIC
+  ${DEEP_CORE_LIB}
+  pluginlib::pluginlib
+)
 
-# Add test plugin source to main library when testing
-if(BUILD_TESTING)
-  target_sources(${DEEP_CORE_LIB} PRIVATE
-    test/mock_plugin/test_plugin.cpp
-  )
-  install(FILES test/mock_plugin/plugins.xml
-    DESTINATION share/${PROJECT_NAME}
-  )
-  # Export plugin description file to ament index
-  pluginlib_export_plugin_description_file(deep_core test/mock_plugin/plugins.xml)
-endif()
+# Install testing utilities and mock plugin
+install(TARGETS ${PROJECT_NAME}_testing ${DEEP_CORE_LIB}
+  EXPORT ${PROJECT_NAME}TestingTargets
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+install(EXPORT ${PROJECT_NAME}TestingTargets
+  NAMESPACE ${PROJECT_NAME}::
+  DESTINATION share/${PROJECT_NAME}/cmake
+)
+
+# Install the mock plugin description file
+install(FILES test/mock_plugin/plugins.xml
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# Export plugin description file to ament index for the testing library
+pluginlib_export_plugin_description_file(deep_core test/mock_plugin/plugins.xml)
 
 if(BUILD_TESTING)
   find_package(deep_test REQUIRED)
@@ -86,17 +108,21 @@ if(BUILD_TESTING)
   add_deep_test(test_deep_core test/test_deep_core.cpp
     LIBRARIES
       ${DEEP_CORE_LIB}
+      ${PROJECT_NAME}_testing
   )
   add_deep_test(test_tensor test/test_tensor.cpp
     LIBRARIES
       ${DEEP_CORE_LIB}
+      ${PROJECT_NAME}_testing
   )
   add_deep_test(test_dynamic_parameters test/test_dynamic_parameters.cpp
     LIBRARIES
       ${DEEP_CORE_LIB}
+      ${PROJECT_NAME}_testing
   )
 
 endif()
 
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
+ament_export_targets(${PROJECT_NAME}TestingTargets)
 ament_package()
