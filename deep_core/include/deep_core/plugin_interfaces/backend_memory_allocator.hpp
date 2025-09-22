@@ -107,6 +107,15 @@ public:
    * @return Device name (e.g., "cpu", "cuda", "opencl")
    */
   virtual std::string device_name() const = 0;
+
+  /**
+   * @brief Get total bytes allocated by this allocator
+   * @return Number of bytes currently allocated (for testing/debugging)
+   */
+  virtual size_t allocated_bytes() const
+  {
+    return 0;
+  }
 };
 
 }  // namespace deep_ros

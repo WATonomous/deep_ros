@@ -124,9 +124,9 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Image conversion from ROS 
   }
 }
 
-TEST_CASE("Batch image conversion", "[conversions][image][batch]")
+TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Batch image conversion", "[conversions][image][batch]")
 {
-  auto allocator = std::make_shared<MockMemoryAllocator>();
+  auto allocator = getAllocator();
 
   SECTION("Multiple RGB8 images")
   {
@@ -151,9 +151,10 @@ TEST_CASE("Batch image conversion", "[conversions][image][batch]")
   }
 }
 
-TEST_CASE("Image conversion from Tensor to ROS", "[conversions][image][output]")
+TEST_CASE_METHOD(
+  deep_ros::test::MockBackendFixture, "Image conversion from Tensor to ROS", "[conversions][image][output]")
 {
-  auto allocator = std::make_shared<MockMemoryAllocator>();
+  auto allocator = getAllocator();
 
   SECTION("Tensor to single RGB8 image")
   {
@@ -183,9 +184,9 @@ TEST_CASE("Image conversion from Tensor to ROS", "[conversions][image][output]")
   }
 }
 
-TEST_CASE("PointCloud2 conversion", "[conversions][pointcloud]")
+TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "PointCloud2 conversion", "[conversions][pointcloud]")
 {
-  auto allocator = std::make_shared<MockMemoryAllocator>();
+  auto allocator = getAllocator();
 
   SECTION("Basic pointcloud conversion")
   {
@@ -242,9 +243,9 @@ TEST_CASE("PointCloud2 conversion", "[conversions][pointcloud]")
   }
 }
 
-TEST_CASE("LaserScan conversion", "[conversions][laserscan]")
+TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "LaserScan conversion", "[conversions][laserscan]")
 {
-  auto allocator = std::make_shared<MockMemoryAllocator>();
+  auto allocator = getAllocator();
 
   SECTION("LaserScan with ranges only")
   {
@@ -285,9 +286,9 @@ TEST_CASE("LaserScan conversion", "[conversions][laserscan]")
   }
 }
 
-TEST_CASE("IMU conversion", "[conversions][imu]")
+TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "IMU conversion", "[conversions][imu]")
 {
-  auto allocator = std::make_shared<MockMemoryAllocator>();
+  auto allocator = getAllocator();
 
   SECTION("Complete IMU data")
   {
@@ -332,9 +333,9 @@ TEST_CASE("IMU conversion", "[conversions][imu]")
   }
 }
 
-TEST_CASE("Error handling and edge cases", "[conversions][error]")
+TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Error handling and edge cases", "[conversions][error]")
 {
-  auto allocator = std::make_shared<MockMemoryAllocator>();
+  auto allocator = getAllocator();
 
   SECTION("Invalid image encoding")
   {
@@ -372,9 +373,9 @@ TEST_CASE("Error handling and edge cases", "[conversions][error]")
   }
 }
 
-TEST_CASE("Performance and memory efficiency", "[conversions][performance]")
+TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Performance and memory efficiency", "[conversions][performance]")
 {
-  auto allocator = std::make_shared<MockMemoryAllocator>();
+  auto allocator = getAllocator();
 
   SECTION("Large image processing")
   {

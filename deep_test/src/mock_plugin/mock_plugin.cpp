@@ -35,7 +35,11 @@ public:
   void * allocate(size_t bytes) override
   {
     if (bytes == 0) return nullptr;
-    return std::malloc(bytes);
+    void * ptr = std::malloc(bytes);
+    if (ptr) {
+      allocated_bytes_ += bytes;
+    }
+    return ptr;
   }
 
   void deallocate(void * ptr) override
@@ -69,6 +73,14 @@ public:
   {
     return "mock_cpu";
   }
+
+  size_t allocated_bytes() const
+  {
+    return allocated_bytes_;
+  }
+
+private:
+  size_t allocated_bytes_{0};
 };
 
 class MockInferenceExecutor : public BackendInferenceExecutor
