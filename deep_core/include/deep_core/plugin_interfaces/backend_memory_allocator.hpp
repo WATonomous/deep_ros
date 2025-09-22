@@ -39,6 +39,14 @@ public:
   virtual void * allocate(size_t bytes) = 0;
 
   /**
+   * @brief Allocate aligned memory
+   * @param bytes Number of bytes to allocate
+   * @param alignment Alignment requirement in bytes (must be power of 2)
+   * @return Pointer to allocated memory, nullptr on failure
+   */
+  virtual void * allocate(size_t bytes, size_t alignment);
+
+  /**
    * @brief Deallocate memory
    * @param ptr Pointer to memory allocated by this allocator
    */

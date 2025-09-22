@@ -23,6 +23,7 @@
 #include <deep_conversions/imu_conversions.hpp>
 #include <deep_conversions/laserscan_conversions.hpp>
 #include <deep_conversions/pointcloud_conversions.hpp>
+#include <deep_test/deep_test.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
@@ -34,60 +35,6 @@ namespace ros_conversions
 {
 namespace test
 {
-
-class MockMemoryAllocator : public BackendMemoryAllocator
-{
-public:
-  void * allocate(size_t bytes) override
-  {
-    if (bytes == 0) return nullptr;
-
-    // Ensure size is a multiple of alignment for std::aligned_alloc
-    size_t aligned_size = ((bytes + 63) / 64) * 64;
-    allocated_bytes_ += aligned_size;
-    return std::aligned_alloc(64, aligned_size);  // 64-byte alignment
-  }
-
-  void deallocate(void * ptr) override
-  {
-    if (ptr) {
-      std::free(ptr);
-    }
-  }
-
-  void copy_from_host(void * dst, const void * src, size_t bytes) override
-  {
-    std::memcpy(dst, src, bytes);
-  }
-
-  void copy_to_host(void * dst, const void * src, size_t bytes) override
-  {
-    std::memcpy(dst, src, bytes);
-  }
-
-  void copy_device_to_device(void * dst, const void * src, size_t bytes) override
-  {
-    std::memcpy(dst, src, bytes);
-  }
-
-  bool is_device_memory() const override
-  {
-    return false;
-  }
-
-  std::string device_name() const override
-  {
-    return "mock_device";
-  }
-
-  size_t allocated_bytes() const
-  {
-    return allocated_bytes_;
-  }
-
-private:
-  size_t allocated_bytes_{0};
-};
 
 TEST_CASE("Image encoding info parsing", "[conversions][image]")
 {
@@ -132,9 +79,9 @@ TEST_CASE("Image encoding info parsing", "[conversions][image]")
   }
 }
 
-TEST_CASE("Image conversion from ROS to Tensor", "[conversions][image]")
+TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Image conversion from ROS to Tensor", "[conversions][image]")
 {
-  auto allocator = std::make_shared<MockMemoryAllocator>();
+  auto allocator = getAllocator();
 
   SECTION("RGB8 image conversion")
   {

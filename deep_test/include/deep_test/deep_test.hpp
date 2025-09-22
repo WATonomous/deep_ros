@@ -18,6 +18,7 @@
 // Include this to access all deep_test functionality
 
 // Test fixtures
+#include "test_fixtures/mock_backend_fixture.hpp"
 #include "test_fixtures/test_executor_fixture.hpp"
 
 // Test nodes
