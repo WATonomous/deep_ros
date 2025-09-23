@@ -39,6 +39,14 @@ public:
   virtual void * allocate(size_t bytes) = 0;
 
   /**
+   * @brief Allocate aligned memory
+   * @param bytes Number of bytes to allocate
+   * @param alignment Alignment requirement in bytes (must be power of 2)
+   * @return Pointer to allocated memory, nullptr on failure
+   */
+  virtual void * allocate(size_t bytes, size_t alignment);
+
+  /**
    * @brief Deallocate memory
    * @param ptr Pointer to memory allocated by this allocator
    */
@@ -99,6 +107,15 @@ public:
    * @return Device name (e.g., "cpu", "cuda", "opencl")
    */
   virtual std::string device_name() const = 0;
+
+  /**
+   * @brief Get total bytes allocated by this allocator
+   * @return Number of bytes currently allocated (for testing/debugging)
+   */
+  virtual size_t allocated_bytes() const
+  {
+    return 0;
+  }
 };
 
 }  // namespace deep_ros

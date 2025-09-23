@@ -43,4 +43,11 @@ void BackendMemoryAllocator::copy_device_to_device(void * dst, const void * src,
   copy_device_to_device_impl(dst, src, bytes);
 }
 
+void * BackendMemoryAllocator::allocate(size_t bytes, size_t alignment)
+{
+  (void)bytes;  // Suppress unused parameter warning
+  (void)alignment;  // Suppress unused parameter warning
+  throw std::runtime_error("Aligned allocation not implemented for this backend");
+}
+
 }  // namespace deep_ros
