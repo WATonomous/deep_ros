@@ -76,11 +76,17 @@ public:
       "T must inherit from rclcpp::Node or rclcpp_lifecycle::LifecycleNode");
 
     executor_.add_node(node->get_node_base_interface());
+
+    // Track lifecycle nodes for cleanup
+    if constexpr (std::is_base_of_v<rclcpp_lifecycle::LifecycleNode, T>) {
+      lifecycle_nodes_.push_back(std::static_pointer_cast<rclcpp_lifecycle::LifecycleNode>(node));
+    }
   }
 
 protected:
   rclcpp::executors::SingleThreadedExecutor executor_;
   std::thread spin_thread_;
+  std::vector<std::shared_ptr<rclcpp_lifecycle::LifecycleNode>> lifecycle_nodes_;
 };
 
 }  // namespace deep_ros::test
