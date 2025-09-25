@@ -22,6 +22,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(message_filters REQUIRED)
@@ -31,11 +32,12 @@ find_package(deep_msgs REQUIRED)
 # Create include directory
 include_directories(include)
 
-# Add the multi-camera sync node
-add_executable(multi_camera_sync_node src/multi_camera_sync_node.cpp)
-ament_target_dependencies(multi_camera_sync_node
+# Add the multi-camera sync library for component
+add_library(multi_camera_sync_component SHARED src/multi_camera_sync_node.cpp)
+ament_target_dependencies(multi_camera_sync_component
   rclcpp
   rclcpp_lifecycle
+  rclcpp_components
   sensor_msgs
   cv_bridge
   message_filters
@@ -43,7 +45,31 @@ ament_target_dependencies(multi_camera_sync_node
   deep_msgs
 )
 
-# Install executables
+# Register the component
+rclcpp_components_register_nodes(multi_camera_sync_component "camera_sync::MultiCameraSyncNode")
+set(node_plugins "${node_plugins}camera_sync::MultiCameraSyncNode;$<TARGET_FILE:multi_camera_sync_component>\n")
+
+# Add the multi-camera sync node executable (optional, for standalone use)
+add_executable(multi_camera_sync_node src/multi_camera_sync_node.cpp)
+ament_target_dependencies(multi_camera_sync_node
+  rclcpp
+  rclcpp_lifecycle
+  rclcpp_components
+  sensor_msgs
+  cv_bridge
+  message_filters
+  image_transport
+  deep_msgs
+)
+
+# Install executables and libraries
+install(TARGETS
+  multi_camera_sync_component
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
 install(TARGETS
   multi_camera_sync_node
   DESTINATION lib/${PROJECT_NAME}
@@ -57,7 +83,13 @@ install(DIRECTORY include/
 # Install launch files if any
 install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch
-  FILES_MATCHING PATTERN "*.py"
+  FILES_MATCHING PATTERN "*.py" PATTERN "*.yaml" PATTERN "*.md"
+)
+
+# Install config files
+install(DIRECTORY config/
+  DESTINATION share/${PROJECT_NAME}/config
+  FILES_MATCHING PATTERN "*.yaml"
 )
 
 if(BUILD_TESTING)

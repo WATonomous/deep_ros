@@ -1,0 +1,54 @@
+#  Copyright (c) 2025-present WATonomous. All rights reserved.
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http:www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
+
+# Configuration file for multi-camera synchronization node
+#
+# This file contains the parameters for the multi_camera_sync_node.
+# You can modify these values to suit your camera setup.
+
+---
+multi_camera_sync:
+  ros__parameters:
+    # Camera topics to synchronize
+    # For raw images, use topics like: ["/camera1/image_raw", "/camera2/image_raw"]
+    # For compressed images, use topics like: ["/camera1/image_raw/compressed", "/camera2/image_raw/compressed"]
+    camera_topics: ["/front/image_compressed", "/back/image_compressed", "/port/image_compressed"]
+
+    # Optional names for the cameras (if not provided, will auto-generate camera_1, camera_2, etc.)
+    camera_names: ["front", "back", "port"]
+
+    # Whether to use compressed images (sensor_msgs/CompressedImage) instead of raw (sensor_msgs/Image)
+    # Set to true if your camera topics publish compressed images
+    use_compressed: true
+
+    # Maximum time difference in milliseconds for message synchronization
+    # Larger values allow more tolerance but may reduce temporal accuracy
+    sync_tolerance_ms: 33.0
+
+    # Queue size for message filters
+    # Larger values can handle more variable frame rates but use more memory
+    queue_size: 10
+
+    # Whether to publish synchronization information and statistics
+    publish_sync_info: true
+
+    # IPC-specific optimizations
+    use_intra_process_comms: true
+
+    # QoS settings optimized for camera data with IPC
+    qos_depth: 5
+    qos_reliability: "reliable"  # reliable or "best_effort" for higher throughput
+    qos_durability: "volatile"
+    qos_history: "keep_last"

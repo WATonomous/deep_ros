@@ -17,7 +17,12 @@
 #include <algorithm>
 #include <functional>
 #include <iomanip>
+#include <memory>
 #include <sstream>
+#include <string>
+#include <vector>
+
+#include <rclcpp_components/register_node_macro.hpp>
 
 #include "deep_msgs/msg/multi_image.hpp"
 #include "deep_msgs/msg/multi_image_raw.hpp"
@@ -497,13 +502,12 @@ void MultiCameraSyncNode::processSynchronizedImages(const std::vector<rclcpp::Ti
   }
   ss << " (spread: " << time_spread_ms << " ms)";
   RCLCPP_DEBUG(this->get_logger(), "Synchronized timestamps: %s", ss.str().c_str());
-
-  // TODO: Add your custom multi-camera processing logic here
-  // You can access the original images via the image_array if needed for actual processing
-  // This method provides timestamp synchronization statistics with minimal copying overhead
 }
 
 }  // namespace camera_sync
+
+// Register the component
+RCLCPP_COMPONENTS_REGISTER_NODE(camera_sync::MultiCameraSyncNode)
 
 // Main function
 int main(int argc, char ** argv)
