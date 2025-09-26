@@ -47,11 +47,18 @@ public:
   ~OrtBackendExecutor() override = default;
 
   /**
+   * @brief Get supported model formats
+   * @return Vector containing "onnx"
+   */
+  std::vector<std::string> supported_model_formats() const override;
+
+protected:
+  /**
    * @brief Load an ONNX model from file
    * @param model_path Path to the .onnx model file
    * @return true if successful, false otherwise
    */
-  bool load_model(const std::filesystem::path & model_path) override;
+  bool load_model_impl(const std::filesystem::path & model_path) override;
 
   /**
    * @brief Run inference using zero-copy IO binding
@@ -59,21 +66,14 @@ public:
    * @return Output tensor with inference results
    * @throws std::runtime_error if inference fails or no model loaded
    */
-  deep_ros::Tensor run_inference(deep_ros::Tensor input) override;
+  deep_ros::Tensor run_inference_impl(deep_ros::Tensor & input) override;
 
   /**
    * @brief Unload the currently loaded model
    */
-  void unload_model() override;
-
-  /**
-   * @brief Get supported model formats
-   * @return Vector containing "onnx"
-   */
-  std::vector<std::string> supported_model_formats() const override;
+  void unload_model_impl() override;
 
 private:
-  bool model_loaded_{false};
   std::filesystem::path model_path_;
 
   std::unique_ptr<Ort::Env> env_;

@@ -14,6 +14,9 @@
 
 #include "deep_ort_backend_plugin/ort_backend_executor.hpp"
 
+#include <onnxruntime_cxx_api.h>
+
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -29,9 +32,19 @@ OrtBackendExecutor::OrtBackendExecutor()
 {
   env_ = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "deep_ort_backend");
   memory_info_ = Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
+
+  // Register our custom allocator with the environment
+  auto custom_allocator_shared = get_ort_cpu_allocator();
+  auto * custom_allocator = static_cast<OrtCpuMemoryAllocator *>(custom_allocator_shared.get());
+  OrtStatus * status =
+    OrtGetApiBase()->GetApi(ORT_API_VERSION)->RegisterAllocator(*env_, custom_allocator->get_ort_allocator());
+  if (status != nullptr) {
+    OrtGetApiBase()->GetApi(ORT_API_VERSION)->ReleaseStatus(status);
+    // Log warning but don't fail - we can still work with default allocator
+  }
 }
 
-bool OrtBackendExecutor::load_model(const std::filesystem::path & model_path)
+bool OrtBackendExecutor::load_model_impl(const std::filesystem::path & model_path)
 {
   if (!std::filesystem::exists(model_path)) {
     return false;
@@ -42,23 +55,20 @@ bool OrtBackendExecutor::load_model(const std::filesystem::path & model_path)
     session_options.SetIntraOpNumThreads(1);
     session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
 
+    // Configure session to use environment allocators (our custom allocator)
+    session_options.AddConfigEntry("session.use_env_allocators", "1");
+
     session_ = std::make_unique<Ort::Session>(*env_, model_path.c_str(), session_options);
 
     model_path_ = model_path;
-    model_loaded_ = true;
     return true;
   } catch (const std::exception & e) {
-    model_loaded_ = false;
     return false;
   }
 }
 
-deep_ros::Tensor OrtBackendExecutor::run_inference(deep_ros::Tensor input)
+deep_ros::Tensor OrtBackendExecutor::run_inference_impl(deep_ros::Tensor & input)
 {
-  if (!model_loaded_) {
-    throw std::runtime_error("No model loaded for inference");
-  }
-
   if (!session_) {
     throw std::runtime_error("No ONNX session available");
   }
@@ -66,11 +76,14 @@ deep_ros::Tensor OrtBackendExecutor::run_inference(deep_ros::Tensor input)
   try {
     // Convert deep_ros::DataType to ONNX tensor element type
     ONNXTensorElementDataType onnx_type = convert_to_onnx_type(input.dtype());
-
-    // Create input OrtValue that wraps the input tensor's memory (zero-copy!)
-    size_t input_size_bytes = input.size() * get_element_size(input.dtype());
     std::vector<int64_t> input_shape_int64(input.shape().begin(), input.shape().end());
 
+    // Get our custom allocator for output binding
+    auto custom_allocator_shared = get_ort_cpu_allocator();
+    auto * custom_allocator = static_cast<OrtCpuMemoryAllocator *>(custom_allocator_shared.get());
+
+    // Create input tensor that wraps existing input memory (zero-copy!)
+    size_t input_size_bytes = input.size() * get_element_size(input.dtype());
     Ort::Value ort_input = Ort::Value::CreateTensor(
       memory_info_, input.data(), input_size_bytes, input_shape_int64.data(), input_shape_int64.size(), onnx_type);
 
@@ -79,28 +92,27 @@ deep_ros::Tensor OrtBackendExecutor::run_inference(deep_ros::Tensor input)
     auto input_name = session_->GetInputNameAllocated(0, allocator);
     auto output_name = session_->GetOutputNameAllocated(0, allocator);
 
-    // Get output shape (assuming we know it or can infer it)
-    auto output_shape = get_output_shape(input.shape());
-
-    // Allocate output tensor using our custom allocator
-    auto tensor_allocator = get_ort_cpu_allocator();
-    deep_ros::Tensor output(output_shape, input.dtype(), tensor_allocator);
-
-    // Create output OrtValue that wraps the output tensor's memory (zero-copy!)
-    size_t output_size_bytes = output.size() * get_element_size(output.dtype());
-    std::vector<int64_t> output_shape_int64(output.shape().begin(), output.shape().end());
-
-    Ort::Value ort_output = Ort::Value::CreateTensor(
-      memory_info_, output.data(), output_size_bytes, output_shape_int64.data(), output_shape_int64.size(), onnx_type);
-
     // Create IO binding for zero-copy inference
     Ort::IoBinding binding(*session_);
     binding.BindInput(input_name.get(), ort_input);
-    binding.BindOutput(output_name.get(), ort_output);
 
-    // Run inference with IO binding (zero-copy!)
+    // Bind output to use our custom allocator - ONNX Runtime will allocate using our allocator
+    binding.BindOutput(output_name.get(), custom_allocator->get_ort_memory_info());
+
+    // Run inference with IO binding (zero-copy for both input and output!)
     Ort::RunOptions run_options;
     session_->Run(run_options, binding);
+
+    // Get output values allocated by ONNX Runtime using our custom allocator
+    Ort::AllocatorWithDefaultOptions default_allocator;
+    std::vector<Ort::Value> output_tensors = binding.GetOutputValues(default_allocator);
+
+    // Get output shape and create our tensor wrapping the ONNX-allocated memory
+    auto output_shape = get_output_shape(input.shape());
+    void * output_data = output_tensors[0].GetTensorMutableData<void>();
+
+    // Create deep_ros tensor that wraps the ONNX-allocated memory (zero-copy!)
+    deep_ros::Tensor output(output_data, output_shape, input.dtype());
 
     return output;
   } catch (const std::exception & e) {
@@ -108,13 +120,10 @@ deep_ros::Tensor OrtBackendExecutor::run_inference(deep_ros::Tensor input)
   }
 }
 
-void OrtBackendExecutor::unload_model()
+void OrtBackendExecutor::unload_model_impl()
 {
-  if (model_loaded_) {
-    session_.reset();
-    model_loaded_ = false;
-    model_path_.clear();
-  }
+  session_.reset();
+  model_path_.clear();
 }
 
 std::vector<std::string> OrtBackendExecutor::supported_model_formats() const

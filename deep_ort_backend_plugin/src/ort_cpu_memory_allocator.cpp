@@ -23,9 +23,79 @@
 namespace deep_ort_backend
 {
 
+// Static instance pointer for callbacks
+OrtCpuMemoryAllocator * OrtCpuMemoryAllocator::instance_ = nullptr;
+
 OrtCpuMemoryAllocator::OrtCpuMemoryAllocator()
+: ort_memory_info_(nullptr)
 {
-  // TODO(wato): Initialize with ONNX Runtime CPU allocator if available
+  // Set the static instance pointer for callbacks
+  instance_ = this;
+
+  // Initialize OrtAllocator struct
+  ort_allocator_.version = ORT_API_VERSION;
+  ort_allocator_.Alloc = &OrtCpuMemoryAllocator::ort_alloc;
+  ort_allocator_.Free = &OrtCpuMemoryAllocator::ort_free;
+  ort_allocator_.Info = &OrtCpuMemoryAllocator::ort_info;
+  ort_allocator_.Reserve = &OrtCpuMemoryAllocator::ort_reserve;
+
+  // Create OrtMemoryInfo for CPU allocator
+  OrtStatus * status = OrtGetApiBase()
+                         ->GetApi(ORT_API_VERSION)
+                         ->CreateCpuMemoryInfo(OrtArenaAllocator, OrtMemTypeDefault, &ort_memory_info_);
+  if (status != nullptr) {
+    OrtGetApiBase()->GetApi(ORT_API_VERSION)->ReleaseStatus(status);
+    throw std::runtime_error("Failed to create OrtMemoryInfo");
+  }
+}
+
+OrtCpuMemoryAllocator::~OrtCpuMemoryAllocator()
+{
+  if (ort_memory_info_) {
+    OrtGetApiBase()->GetApi(ORT_API_VERSION)->ReleaseMemoryInfo(ort_memory_info_);
+  }
+}
+
+OrtAllocator * OrtCpuMemoryAllocator::get_ort_allocator()
+{
+  return &ort_allocator_;
+}
+
+const OrtMemoryInfo * OrtCpuMemoryAllocator::get_ort_memory_info() const
+{
+  return ort_memory_info_;
+}
+
+void * ORT_API_CALL OrtCpuMemoryAllocator::ort_alloc(OrtAllocator * this_, size_t size)
+{
+  if (instance_) {
+    return instance_->allocate(size);
+  }
+  return nullptr;
+}
+
+void ORT_API_CALL OrtCpuMemoryAllocator::ort_free(OrtAllocator * this_, void * p)
+{
+  if (instance_) {
+    instance_->deallocate(p);
+  }
+}
+
+const OrtMemoryInfo * ORT_API_CALL OrtCpuMemoryAllocator::ort_info(const OrtAllocator * this_)
+{
+  if (instance_) {
+    return instance_->get_ort_memory_info();
+  }
+  return nullptr;
+}
+
+void * ORT_API_CALL OrtCpuMemoryAllocator::ort_reserve(OrtAllocator * this_, size_t size)
+{
+  // For CPU allocator, Reserve can be the same as Alloc
+  if (instance_) {
+    return instance_->allocate(size);
+  }
+  return nullptr;
 }
 
 void * OrtCpuMemoryAllocator::allocate(size_t bytes)
@@ -49,21 +119,21 @@ void OrtCpuMemoryAllocator::deallocate(void * ptr)
   }
 }
 
-void OrtCpuMemoryAllocator::copy_from_host(void * dst, const void * src, size_t bytes)
+void OrtCpuMemoryAllocator::copy_from_host_impl(void * dst, const void * src, size_t bytes)
 {
   if (dst && src && bytes > 0) {
     std::memcpy(dst, src, bytes);
   }
 }
 
-void OrtCpuMemoryAllocator::copy_to_host(void * dst, const void * src, size_t bytes)
+void OrtCpuMemoryAllocator::copy_to_host_impl(void * dst, const void * src, size_t bytes)
 {
   if (dst && src && bytes > 0) {
     std::memcpy(dst, src, bytes);
   }
 }
 
-void OrtCpuMemoryAllocator::copy_device_to_device(void * dst, const void * src, size_t bytes)
+void OrtCpuMemoryAllocator::copy_device_to_device_impl(void * dst, const void * src, size_t bytes)
 {
   if (dst && src && bytes > 0) {
     std::memcpy(dst, src, bytes);

@@ -31,6 +31,9 @@ This project includes VS Code dev container configurations for easy ROS2 develop
 Inside the container:
 
 ```bash
+# Update apt
+sudo apt update
+
 # Update rosdep
 rosdep update
 

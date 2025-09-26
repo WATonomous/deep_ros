@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <onnxruntime_c_api.h>
+
 #include <memory>
 #include <string>
 
@@ -26,7 +28,8 @@ namespace deep_ort_backend
  * @brief ONNX Runtime optimized CPU memory allocator
  *
  * Provides CPU memory allocation optimized for ONNX Runtime operations
- * with proper alignment for SIMD operations.
+ * with proper alignment for SIMD operations. Implements both deep_ros
+ * BackendMemoryAllocator interface and OrtAllocator interface directly.
  */
 class OrtCpuMemoryAllocator : public deep_ros::BackendMemoryAllocator
 {
@@ -39,7 +42,19 @@ public:
   /**
    * @brief Destructor
    */
-  ~OrtCpuMemoryAllocator() override = default;
+  ~OrtCpuMemoryAllocator() override;
+
+  /**
+   * @brief Get the OrtAllocator interface for use with ONNX Runtime
+   * @return Pointer to OrtAllocator struct
+   */
+  OrtAllocator * get_ort_allocator();
+
+  /**
+   * @brief Get the OrtMemoryInfo for this allocator
+   * @return Pointer to OrtMemoryInfo
+   */
+  const OrtMemoryInfo * get_ort_memory_info() const;
 
   /**
    * @brief Allocate aligned memory for CPU operations
@@ -55,30 +70,6 @@ public:
   void deallocate(void * ptr) override;
 
   /**
-   * @brief Copy from host memory (same as device for CPU)
-   * @param dst Destination pointer
-   * @param src Source pointer
-   * @param bytes Number of bytes to copy
-   */
-  void copy_from_host(void * dst, const void * src, size_t bytes) override;
-
-  /**
-   * @brief Copy to host memory (same as device for CPU)
-   * @param dst Destination pointer
-   * @param src Source pointer
-   * @param bytes Number of bytes to copy
-   */
-  void copy_to_host(void * dst, const void * src, size_t bytes) override;
-
-  /**
-   * @brief Copy between CPU memory locations
-   * @param dst Destination pointer
-   * @param src Source pointer
-   * @param bytes Number of bytes to copy
-   */
-  void copy_device_to_device(void * dst, const void * src, size_t bytes) override;
-
-  /**
    * @brief Check if this is device memory
    * @return false (CPU memory is host memory)
    */
@@ -89,6 +80,44 @@ public:
    * @return "cpu"
    */
   std::string device_name() const override;
+
+protected:
+  /**
+   * @brief Copy from host memory (same as device for CPU)
+   * @param dst Destination pointer
+   * @param src Source pointer
+   * @param bytes Number of bytes to copy
+   */
+  void copy_from_host_impl(void * dst, const void * src, size_t bytes) override;
+
+  /**
+   * @brief Copy to host memory (same as device for CPU)
+   * @param dst Destination pointer
+   * @param src Source pointer
+   * @param bytes Number of bytes to copy
+   */
+  void copy_to_host_impl(void * dst, const void * src, size_t bytes) override;
+
+  /**
+   * @brief Copy between CPU memory locations
+   * @param dst Destination pointer
+   * @param src Source pointer
+   * @param bytes Number of bytes to copy
+   */
+  void copy_device_to_device_impl(void * dst, const void * src, size_t bytes) override;
+
+private:
+  OrtAllocator ort_allocator_;
+  OrtMemoryInfo * ort_memory_info_;
+
+  // Store a pointer to self in a way that callbacks can access it
+  static OrtCpuMemoryAllocator * instance_;
+
+  // Static callback functions for OrtAllocator interface
+  static void * ORT_API_CALL ort_alloc(OrtAllocator * this_, size_t size);
+  static void ORT_API_CALL ort_free(OrtAllocator * this_, void * p);
+  static const OrtMemoryInfo * ORT_API_CALL ort_info(const OrtAllocator * this_);
+  static void * ORT_API_CALL ort_reserve(OrtAllocator * this_, size_t size);
 };
 
 /**
