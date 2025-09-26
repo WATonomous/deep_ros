@@ -58,7 +58,7 @@ The node uses ROS2 message filters with approximate time synchronization policy 
 
 1. **Message Subscribers**: Creates subscribers for each camera topic
 2. **Synchronizer**: Uses `message_filters::sync_policies::ApproximateTime` to match messages
-3. **Callback & Publishing**: Creates MultiImage msgs with timestamp to batch the camera images together 
+3. **Callback & Publishing**: Creates MultiImage msgs with timestamp to batch the camera images together
 4. **Statistics**: Tracks synchronization rate and timing spread
 
 ### Synchronization Logic
@@ -67,7 +67,6 @@ The node uses ROS2 message filters with approximate time synchronization policy 
 - The synchronizer maintains a queue of recent messages from each camera
 - When a valid sync set is found, all cameras' images are processed together
 - Unmatched messages are eventually dropped when they exceed the age penalty
-
 
 ## Monitoring
 
@@ -78,6 +77,7 @@ The node provides several ways to monitor synchronization performance:
 3. **Debug output**: Detailed timestamp information (when debug logging enabled)
 
 Example log output:
+
 ```
 [INFO] [multi_camera_sync]: Sync #500: compressed images from 4 cameras, spread: 12.3 ms, rate: 29.8 Hz
 ```
