@@ -97,10 +97,10 @@ public:
     return true;
   }
 
-  Tensor run_inference_impl(const Tensor & input) override
+  Tensor run_inference_impl(Tensor & input) override
   {
-    // For testing, just return a copy of the input tensor
-    return input;
+    // For testing, create a simple output tensor with same shape/dtype using input's allocator
+    return Tensor(input.shape(), input.dtype(), input.allocator());
   }
 
   void unload_model_impl() override

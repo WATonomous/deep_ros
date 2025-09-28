@@ -243,12 +243,12 @@ TEST_CASE_METHOD(
   {
     // Inference without model should fail
     deep_ros::Tensor input({2, 2}, deep_ros::DataType::FLOAT32, allocator);
-    REQUIRE_THROWS_AS(executor->run_inference(std::move(input)), std::runtime_error);
+    REQUIRE_THROWS_AS(executor->run_inference(input), std::runtime_error);
 
     // After loading model, inference should work
     executor->load_model("/test/model.onnx");
     deep_ros::Tensor input2({2, 2}, deep_ros::DataType::FLOAT32, allocator);
-    REQUIRE_NOTHROW(executor->run_inference(std::move(input2)));
+    REQUIRE_NOTHROW(executor->run_inference(input2));
   }
 
   SECTION("Inference with valid input produces valid output")
@@ -266,7 +266,7 @@ TEST_CASE_METHOD(
     }
 
     // Run inference
-    auto output = executor->run_inference(std::move(input));
+    auto output = executor->run_inference(input);
 
     // Output should be valid tensor
     REQUIRE(output.data() != nullptr);
@@ -285,7 +285,7 @@ TEST_CASE_METHOD(
 
     // Inference after unload should fail
     deep_ros::Tensor input({1, 1}, deep_ros::DataType::FLOAT32, allocator);
-    REQUIRE_THROWS_AS(executor->run_inference(std::move(input)), std::runtime_error);
+    REQUIRE_THROWS_AS(executor->run_inference(input), std::runtime_error);
   }
 }
 
@@ -301,7 +301,7 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Error Handl
 
     // Empty tensor should be rejected
     deep_ros::Tensor empty_tensor;
-    REQUIRE_THROWS(executor->run_inference(std::move(empty_tensor)));
+    REQUIRE_THROWS(executor->run_inference(empty_tensor));
   }
 
   SECTION("Memory allocation failures are handled")
@@ -324,7 +324,7 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Error Handl
     // Failed operations shouldn't break the plugin
     try {
       deep_ros::Tensor empty_tensor;
-      executor->run_inference(std::move(empty_tensor));
+      executor->run_inference(empty_tensor);
     } catch (...) {
       // Error is expected
     }
@@ -333,6 +333,6 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Plugin System: Error Handl
     REQUIRE(executor->load_model("/recovery/model.onnx") == true);
 
     deep_ros::Tensor valid_input({2, 2}, deep_ros::DataType::FLOAT32, allocator);
-    REQUIRE_NOTHROW(executor->run_inference(std::move(valid_input)));
+    REQUIRE_NOTHROW(executor->run_inference(valid_input));
   }
 }

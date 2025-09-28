@@ -61,7 +61,7 @@ TEST_CASE_METHOD(
     }
 
     // Run inference
-    auto output = node->run_inference(std::move(input));
+    auto output = node->run_inference(input);
 
     // Verify output
     REQUIRE(output.data() != nullptr);
@@ -88,7 +88,7 @@ TEST_CASE_METHOD(
         data[j] = static_cast<float>(i * 100 + j);
       }
 
-      auto output = node->run_inference(std::move(input));
+      auto output = node->run_inference(input);
       REQUIRE(output.size() == shape[0] * shape[1] * shape[2] * shape[3]);
     }
   }
@@ -108,7 +108,7 @@ TEST_CASE_METHOD(
       std::vector<size_t> shape = {2, 3};
       deep_ros::Tensor input(shape, dtype, allocator);
 
-      auto output = node->run_inference(std::move(input));
+      auto output = node->run_inference(input);
       REQUIRE(output.dtype() == dtype);
       REQUIRE(output.shape() == shape);
     }
@@ -146,7 +146,7 @@ TEST_CASE_METHOD(
     // Test inference with first model
     auto allocator = node->get_current_allocator();
     deep_ros::Tensor input1({2, 2}, deep_ros::DataType::FLOAT32, allocator);
-    auto output1 = node->run_inference(std::move(input1));
+    auto output1 = node->run_inference(input1);
     REQUIRE(output1.size() == 4);
 
     // Switch to second model
@@ -157,7 +157,7 @@ TEST_CASE_METHOD(
 
     // Test inference with second model
     deep_ros::Tensor input2({3, 3}, deep_ros::DataType::FLOAT32, allocator);
-    auto output2 = node->run_inference(std::move(input2));
+    auto output2 = node->run_inference(input2);
     REQUIRE(output2.size() == 9);
   }
 
@@ -176,7 +176,7 @@ TEST_CASE_METHOD(
     for (int i = 0; i < 3; ++i) {
       // Run inference
       deep_ros::Tensor input({1, 3}, deep_ros::DataType::FLOAT32, allocator);
-      auto output = node->run_inference(std::move(input));
+      auto output = node->run_inference(input);
       REQUIRE(output.size() == 3);
 
       // Change configuration
@@ -219,7 +219,7 @@ TEST_CASE_METHOD(
     // Inference should work
     auto allocator = node->get_current_allocator();
     deep_ros::Tensor input({2, 2}, deep_ros::DataType::FLOAT32, allocator);
-    REQUIRE_NOTHROW(node->run_inference(std::move(input)));
+    REQUIRE_NOTHROW(node->run_inference(input));
   }
 
   SECTION("Graceful handling of inference errors")
@@ -235,15 +235,15 @@ TEST_CASE_METHOD(
 
     // Valid inference should work
     deep_ros::Tensor valid_input({2, 2}, deep_ros::DataType::FLOAT32, allocator);
-    REQUIRE_NOTHROW(node->run_inference(std::move(valid_input)));
+    REQUIRE_NOTHROW(node->run_inference(valid_input));
 
     // Invalid inference should fail gracefully
     deep_ros::Tensor invalid_input;  // Empty tensor
-    REQUIRE_THROWS(node->run_inference(std::move(invalid_input)));
+    REQUIRE_THROWS(node->run_inference(invalid_input));
 
     // Node should still work after error
     deep_ros::Tensor recovery_input({3, 3}, deep_ros::DataType::FLOAT32, allocator);
-    REQUIRE_NOTHROW(node->run_inference(std::move(recovery_input)));
+    REQUIRE_NOTHROW(node->run_inference(recovery_input));
   }
 
   SECTION("Lifecycle error recovery")
@@ -360,7 +360,7 @@ TEST_CASE_METHOD(deep_ros::test::TestExecutorFixture, "Integration: Resource Man
       }
 
       // Process
-      auto output = node->run_inference(std::move(input));
+      auto output = node->run_inference(input);
 
       // Tensors should be automatically cleaned up
       REQUIRE(output.data() != nullptr);

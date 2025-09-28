@@ -83,7 +83,7 @@ deep_ros::Tensor OrtBackendExecutor::run_inference_impl(deep_ros::Tensor & input
     auto * custom_allocator = static_cast<OrtCpuMemoryAllocator *>(custom_allocator_shared.get());
 
     // Create input tensor that wraps existing input memory (zero-copy!)
-    size_t input_size_bytes = input.size() * get_element_size(input.dtype());
+    size_t input_size_bytes = input.byte_size();
     Ort::Value ort_input = Ort::Value::CreateTensor(
       memory_info_, input.data(), input_size_bytes, input_shape_int64.data(), input_shape_int64.size(), onnx_type);
 
@@ -136,12 +136,26 @@ ONNXTensorElementDataType OrtBackendExecutor::convert_to_onnx_type(deep_ros::Dat
   switch (dtype) {
     case deep_ros::DataType::FLOAT32:
       return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
+    case deep_ros::DataType::FLOAT64:
+      return ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE;
+    case deep_ros::DataType::INT8:
+      return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8;
+    case deep_ros::DataType::INT16:
+      return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16;
     case deep_ros::DataType::INT32:
       return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32;
     case deep_ros::DataType::INT64:
       return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64;
     case deep_ros::DataType::UINT8:
       return ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8;
+    case deep_ros::DataType::UINT16:
+      return ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16;
+    case deep_ros::DataType::UINT32:
+      return ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32;
+    case deep_ros::DataType::UINT64:
+      return ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64;
+    case deep_ros::DataType::BOOL:
+      return ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL;
     default:
       throw std::runtime_error("Unsupported data type for ONNX Runtime");
   }
@@ -190,18 +204,7 @@ std::vector<size_t> OrtBackendExecutor::get_output_shape(const std::vector<size_
 
 size_t OrtBackendExecutor::get_element_size(deep_ros::DataType dtype) const
 {
-  switch (dtype) {
-    case deep_ros::DataType::FLOAT32:
-      return sizeof(float);
-    case deep_ros::DataType::INT32:
-      return sizeof(int32_t);
-    case deep_ros::DataType::INT64:
-      return sizeof(int64_t);
-    case deep_ros::DataType::UINT8:
-      return sizeof(uint8_t);
-    default:
-      throw std::runtime_error("Unsupported data type");
-  }
+  return deep_ros::get_dtype_size(dtype);
 }
 
 }  // namespace deep_ort_backend
