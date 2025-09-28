@@ -135,10 +135,10 @@ protected:
 
   /**
    * @brief Run inference on input tensor
-   * @param inputs Input tensor for inference
+   * @param inputs Input tensor for inference (note: some backends may require mutable access for zero-copy operations)
    * @return Output tensor from inference
    */
-  Tensor run_inference(const Tensor & inputs);
+  Tensor run_inference(Tensor & inputs);
 
   /**
    * @brief Check if a backend plugin is loaded
