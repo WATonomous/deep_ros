@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>deep_ort_backend_plugin</name>
+  <version>0.1.0</version>
+  <description>ONNX Runtime backend plugin for Deep ROS, providing CPU memory allocation and inference execution</description>
+  <maintainer email="hello@watonomous.ca">WATonomous</maintainer>
+  <license>Apache 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>deep_core</depend>
+  <depend>onnxruntime_vendor</depend>
+  <depend>pluginlib</depend>
+  <depend>rclcpp</depend>
+
+  <test_depend>deep_test</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

@@ -15,17 +15,18 @@
 #include "deep_core/types/tensor.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <numeric>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
 namespace deep_ros
 {
 
-namespace
-{
 size_t get_dtype_size(DataType dtype)
 {
   switch (dtype) {
@@ -33,121 +34,255 @@ size_t get_dtype_size(DataType dtype)
       return sizeof(float);
     case DataType::FLOAT64:
       return sizeof(double);
+    case DataType::INT8:
+      return sizeof(int8_t);
+    case DataType::INT16:
+      return sizeof(int16_t);
     case DataType::INT32:
       return sizeof(int32_t);
     case DataType::INT64:
       return sizeof(int64_t);
     case DataType::UINT8:
       return sizeof(uint8_t);
+    case DataType::UINT16:
+      return sizeof(uint16_t);
+    case DataType::UINT32:
+      return sizeof(uint32_t);
+    case DataType::UINT64:
+      return sizeof(uint64_t);
     case DataType::BOOL:
       return sizeof(bool);
     default:
-      throw TensorError(std::format("Unknown data type: {}", static_cast<int>(dtype)));
+      throw std::invalid_argument("Unknown data type");
   }
 }
-}  // namespace
 
-Tensor::Tensor(std::vector<int64_t> shape, DataType dtype, size_t size_bytes)
-: shape_(std::move(shape))
+Tensor::Tensor()
+: dtype_(DataType::FLOAT32)
+, byte_size_(0)
+, data_(nullptr)
+, is_owner_(false)
+, allocator_(nullptr)
+{}
+
+Tensor::Tensor(const std::vector<size_t> & shape, DataType dtype, std::shared_ptr<BackendMemoryAllocator> allocator)
+: shape_(shape)
 , dtype_(dtype)
-, size_bytes_(size_bytes)
+, byte_size_(0)
+, data_(nullptr)
+, is_owner_(true)
+, allocator_(allocator)
 {
-  if (size_bytes_ > 0) {
-    data_ = std::make_unique<uint8_t[]>(size_bytes_);
-  }
-}
-
-std::unique_ptr<Tensor> Tensor::create_float32(std::vector<int64_t> shape, std::vector<float> data)
-{
-  validate_shape_and_data(shape, data.size());
-
-  size_t size_bytes = data.size() * sizeof(float);
-  auto tensor = std::unique_ptr<Tensor>(new Tensor(shape, DataType::FLOAT32, size_bytes));
-
-  std::memcpy(tensor->data_.get(), data.data(), size_bytes);
-  return tensor;
-}
-
-std::unique_ptr<Tensor> Tensor::create_int32(std::vector<int64_t> shape, std::vector<int32_t> data)
-{
-  validate_shape_and_data(shape, data.size());
-
-  size_t size_bytes = data.size() * sizeof(int32_t);
-  auto tensor = std::unique_ptr<Tensor>(new Tensor(shape, DataType::INT32, size_bytes));
-
-  std::memcpy(tensor->data_.get(), data.data(), size_bytes);
-  return tensor;
-}
-
-std::unique_ptr<Tensor> Tensor::clone() const
-{
-  if (!data_) {
-    throw TensorError("Cannot clone tensor with null data");
+  if (shape_.empty()) {
+    throw std::invalid_argument("Tensor shape cannot be empty");
   }
 
-  auto cloned = std::unique_ptr<Tensor>(new Tensor(shape_, dtype_, size_bytes_));
-  std::memcpy(cloned->data_.get(), data_.get(), size_bytes_);
-  return cloned;
-}
-
-size_t Tensor::element_count() const noexcept
-{
-  if (shape_.empty()) return 0;
-  return std::accumulate(shape_.begin(), shape_.end(), 1LL, std::multiplies<int64_t>());
-}
-
-template <>
-bool Tensor::validate_type<float>() const
-{
-  return dtype_ == DataType::FLOAT32;
-}
-
-template <>
-bool Tensor::validate_type<double>() const
-{
-  return dtype_ == DataType::FLOAT64;
-}
-
-template <>
-bool Tensor::validate_type<int32_t>() const
-{
-  return dtype_ == DataType::INT32;
-}
-
-template <>
-bool Tensor::validate_type<int64_t>() const
-{
-  return dtype_ == DataType::INT64;
-}
-
-template <>
-bool Tensor::validate_type<uint8_t>() const
-{
-  return dtype_ == DataType::UINT8;
-}
-
-template <>
-bool Tensor::validate_type<bool>() const
-{
-  return dtype_ == DataType::BOOL;
-}
-
-void Tensor::validate_shape_and_data(const std::vector<int64_t> & shape, size_t data_size)
-{
-  if (shape.empty()) {
-    throw TensorError("Tensor shape cannot be empty");
-  }
-
-  for (const auto & dim : shape) {
-    if (dim <= 0) {
-      throw TensorError(std::format("Invalid shape dimension: {}", dim));
+  // Check for zero dimensions
+  for (size_t dim : shape_) {
+    if (dim == 0) {
+      throw std::invalid_argument("Tensor shape cannot contain zero dimensions");
     }
   }
 
-  size_t expected_size = std::accumulate(shape.begin(), shape.end(), 1LL, std::multiplies<int64_t>());
-  if (data_size != expected_size) {
-    throw TensorError(std::format("Data size {} doesn't match shape size {}", data_size, expected_size));
+  calculate_strides();
+
+  size_t total_elements = std::accumulate(shape_.begin(), shape_.end(), 1UL, std::multiplies<size_t>());
+  byte_size_ = total_elements * get_dtype_size(dtype_);
+
+  allocate_memory();
+}
+
+Tensor::Tensor(void * data, const std::vector<size_t> & shape, DataType dtype)
+: shape_(shape)
+, dtype_(dtype)
+, data_(data)
+, is_owner_(false)
+, allocator_(nullptr)
+{
+  if (shape_.empty()) {
+    throw std::invalid_argument("Tensor shape cannot be empty");
   }
+
+  // Check for zero dimensions
+  for (size_t dim : shape_) {
+    if (dim == 0) {
+      throw std::invalid_argument("Tensor shape cannot contain zero dimensions");
+    }
+  }
+
+  calculate_strides();
+
+  size_t total_elements = std::accumulate(shape_.begin(), shape_.end(), 1UL, std::multiplies<size_t>());
+  byte_size_ = total_elements * get_dtype_size(dtype_);
+}
+
+Tensor::~Tensor()
+{
+  deallocate_memory();
+}
+
+Tensor::Tensor(const Tensor & other)
+: shape_(other.shape_)
+, strides_(other.strides_)
+, dtype_(other.dtype_)
+, byte_size_(other.byte_size_)
+, data_(nullptr)
+, is_owner_(other.allocator_ != nullptr)
+, allocator_(other.allocator_)
+{
+  if (is_owner_) {
+    allocate_memory();
+    if (other.data_ && data_) {
+      if (allocator_ && other.allocator_) {
+        allocator_->copy_device_to_device(data_, other.data_, byte_size_);
+      } else {
+        allocator_->copy_from_host(data_, other.data_, byte_size_);
+      }
+    }
+  } else {
+    // Copying from external data - cannot create owned copy without allocator
+    throw std::runtime_error("Cannot copy tensor with external data: no allocator available");
+  }
+}
+
+Tensor & Tensor::operator=(const Tensor & other)
+{
+  if (this != &other) {
+    deallocate_memory();
+
+    shape_ = other.shape_;
+    strides_ = other.strides_;
+    dtype_ = other.dtype_;
+    byte_size_ = other.byte_size_;
+    is_owner_ = (other.allocator_ != nullptr);
+    allocator_ = other.allocator_;
+
+    if (is_owner_) {
+      allocate_memory();
+      if (other.data_ && data_) {
+        if (allocator_ && other.allocator_ && allocator_ == other.allocator_) {
+          allocator_->copy_device_to_device(data_, other.data_, byte_size_);
+        } else {
+          allocator_->copy_from_host(data_, other.data_, byte_size_);
+        }
+      }
+    } else {
+      // Assigning from external data - cannot create owned copy without allocator
+      throw std::runtime_error("Cannot assign tensor with external data: no allocator available");
+    }
+  }
+  return *this;
+}
+
+Tensor::Tensor(Tensor && other) noexcept
+: shape_(std::move(other.shape_))
+, strides_(std::move(other.strides_))
+, dtype_(other.dtype_)
+, byte_size_(other.byte_size_)
+, data_(other.data_)
+, is_owner_(other.is_owner_)
+, allocator_(std::move(other.allocator_))
+{
+  other.data_ = nullptr;
+  other.is_owner_ = false;
+  other.byte_size_ = 0;
+  other.allocator_ = nullptr;
+  other.shape_.clear();
+  other.strides_.clear();
+}
+
+Tensor & Tensor::operator=(Tensor && other) noexcept
+{
+  if (this != &other) {
+    deallocate_memory();
+
+    shape_ = std::move(other.shape_);
+    strides_ = std::move(other.strides_);
+    dtype_ = other.dtype_;
+    byte_size_ = other.byte_size_;
+    data_ = other.data_;
+    is_owner_ = other.is_owner_;
+    allocator_ = std::move(other.allocator_);
+
+    other.data_ = nullptr;
+    other.is_owner_ = false;
+    other.byte_size_ = 0;
+    other.allocator_ = nullptr;
+    other.shape_.clear();
+    other.strides_.clear();
+  }
+  return *this;
+}
+
+void Tensor::calculate_strides()
+{
+  strides_.resize(shape_.size());
+  if (shape_.empty()) return;
+
+  strides_.back() = get_dtype_size(dtype_);
+  for (int i = static_cast<int>(shape_.size()) - 2; i >= 0; --i) {
+    strides_[i] = strides_[i + 1] * shape_[i + 1];
+  }
+}
+
+void Tensor::allocate_memory()
+{
+  if (byte_size_ > 0 && is_owner_ && data_ == nullptr) {
+    if (allocator_) {
+      data_ = allocator_->allocate(byte_size_);
+      if (!data_) {
+        throw std::bad_alloc();
+      }
+    } else {
+      throw std::runtime_error("Cannot allocate memory: no allocator provided");
+    }
+  }
+}
+
+void Tensor::deallocate_memory()
+{
+  if (is_owner_ && data_ && allocator_) {
+    allocator_->deallocate(data_);
+    data_ = nullptr;
+  }
+}
+
+Tensor Tensor::reshape(const std::vector<size_t> & new_shape) const
+{
+  size_t new_total = std::accumulate(new_shape.begin(), new_shape.end(), 1UL, std::multiplies<size_t>());
+  size_t current_total = std::accumulate(shape_.begin(), shape_.end(), 1UL, std::multiplies<size_t>());
+
+  if (new_total != current_total) {
+    throw std::invalid_argument("Cannot reshape tensor: total size mismatch");
+  }
+
+  if (!is_contiguous()) {
+    throw std::runtime_error("Cannot reshape non-contiguous tensor");
+  }
+
+  return Tensor(data_, new_shape, dtype_);
+}
+
+size_t Tensor::size() const
+{
+  if (shape_.empty()) {
+    return 0;  // Empty tensor has size 0
+  }
+  return std::accumulate(shape_.begin(), shape_.end(), 1UL, std::multiplies<size_t>());
+}
+
+bool Tensor::is_contiguous() const
+{
+  if (shape_.empty()) return true;
+
+  size_t expected_stride = get_dtype_size(dtype_);
+  for (int i = static_cast<int>(shape_.size()) - 1; i >= 0; --i) {
+    if (strides_[i] != expected_stride) {
+      return false;
+    }
+    expected_stride *= shape_[i];
+  }
+  return true;
 }
 
 }  // namespace deep_ros
