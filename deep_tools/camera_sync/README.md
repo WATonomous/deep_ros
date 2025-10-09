@@ -16,40 +16,21 @@ A ROS2 node that uses message filters to time-synchronize N camera image message
 |-----------|------|---------|-------------|
 | `camera_topics` | string[] | `[]` | List of camera image topics to synchronize |
 | `camera_names` | string[] | `[]` | Names for cameras (auto-generated if empty) |
-| `use_compressed` | bool | `false` | Use compressed images instead of raw |
+| `use_compressed` | bool | `false` | Use compressed images instead of raw RGB |
 | `sync_tolerance_ms` | double | `50.0` | Max time difference for sync (milliseconds) |
 | `queue_size` | int | `10` | Message filter queue size |
 | `publish_sync_info` | bool | `true` | Publish synchronization statistics |
 
 ## Usage
 
-### Basic 2-camera setup (raw images):
+### Parameter usage:
+All configuration changes can be passed through CLI. Here are some example arguments:
 
 ```bash
-ros2 run camera_sync multi_camera_sync_node --ros-args \
   -p camera_topics:="['/camera1/image_raw', '/camera2/image_raw']" \
-  -p camera_names:="['left_camera', 'right_camera']"
-```
-
-### 4-camera setup (compressed images):
-
-```bash
-ros2 run camera_sync multi_camera_sync_node --ros-args \
-  -p camera_topics:="['/front/image_raw/compressed', '/rear/image_raw/compressed', '/left/image_raw/compressed', '/right/image_raw/compressed']" \
-  -p camera_names:="['front', 'rear', 'left', 'right']" \
+  -p camera_names:="['left_camera', 'right_camera']" \
   -p use_compressed:=true \
   -p sync_tolerance_ms:=30.0
-```
-
-### Using launch files:
-
-```bash
-# Basic launch with configurable parameters
-ros2 launch camera_sync multi_camera_sync.launch.py \
-  camera_topics:="['/cam1/image_raw', '/cam2/image_raw', '/cam3/image_raw']" \
-  use_compressed:=false \
-  sync_tolerance_ms:=25.0
-
 ```
 
 ## How It Works

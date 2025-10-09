@@ -43,35 +43,23 @@ endif()
 
 # Add the multi-camera sync library for component
 add_library(multi_camera_sync_component SHARED src/multi_camera_sync_node.cpp)
-ament_target_dependencies(multi_camera_sync_component
-  rclcpp
-  rclcpp_lifecycle
-  rclcpp_components
-  lifecycle_msgs
-  sensor_msgs
-  cv_bridge
-  message_filters
-  image_transport
-  deep_msgs
+target_link_libraries(multi_camera_sync_component
+  rclcpp::rclcpp
+  rclcpp_lifecycle::rclcpp_lifecycle
+  rclcpp_components::component_manager
+  lifecycle_msgs::lifecycle_msgs__rosidl_typesupport_cpp
+  sensor_msgs::sensor_msgs__rosidl_typesupport_cpp
+  cv_bridge::cv_bridge
+  message_filters::message_filters
+  image_transport::image_transport
+  deep_msgs::deep_msgs__rosidl_typesupport_cpp
 )
 
 # Register the component
 rclcpp_components_register_nodes(multi_camera_sync_component "camera_sync::MultiCameraSyncNode")
 set(node_plugins "${node_plugins}camera_sync::MultiCameraSyncNode;$<TARGET_FILE:multi_camera_sync_component>\n")
 
-# Add the multi-camera sync node executable (optional, for standalone use)
-add_executable(multi_camera_sync_node src/multi_camera_sync_node.cpp)
-ament_target_dependencies(multi_camera_sync_node
-  rclcpp
-  rclcpp_lifecycle
-  rclcpp_components
-  lifecycle_msgs
-  sensor_msgs
-  cv_bridge
-  message_filters
-  image_transport
-  deep_msgs
-)
+
 
 # Install executables and libraries
 install(TARGETS
@@ -81,10 +69,7 @@ install(TARGETS
   RUNTIME DESTINATION bin
 )
 
-install(TARGETS
-  multi_camera_sync_node
-  DESTINATION lib/${PROJECT_NAME}
-)
+
 
 # Install include directory
 install(DIRECTORY include/

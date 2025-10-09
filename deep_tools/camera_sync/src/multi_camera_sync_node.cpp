@@ -599,32 +599,3 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn MultiC
 
 // Register the component
 RCLCPP_COMPONENTS_REGISTER_NODE(camera_sync::MultiCameraSyncNode)
-
-// Main function
-int main(int argc, char ** argv)
-{
-  rclcpp::init(argc, argv);
-
-  auto node = std::make_shared<camera_sync::MultiCameraSyncNode>();
-
-#if USE_LIFECYCLE_NODE
-  RCLCPP_INFO(node->get_logger(), "Multi-Camera Sync Lifecycle Node started");
-  RCLCPP_INFO(node->get_logger(), "Node state: %s", node->get_current_state().label().c_str());
-#else
-  RCLCPP_INFO(node->get_logger(), "Multi-Camera Sync Node started");
-#endif
-
-  try {
-#if USE_LIFECYCLE_NODE
-    rclcpp::spin(node->get_node_base_interface());
-#else
-    rclcpp::spin(node);
-#endif
-  } catch (const std::exception & e) {
-    RCLCPP_ERROR(node->get_logger(), "Node crashed: %s", e.what());
-    return 1;
-  }
-
-  rclcpp::shutdown();
-  return 0;
-}

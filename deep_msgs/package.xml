@@ -2,9 +2,9 @@
 <package format="3">
   <name>deep_msgs</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Package for deep ros specific msgs</description>
   <maintainer email="lucas.reljic@gmail.com">lucas</maintainer>
-  <license>TODO: License declaration</license>
+  <license>Apache 2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <depend>std_msgs</depend>
