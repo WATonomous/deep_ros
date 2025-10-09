@@ -23,6 +23,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(rclcpp_components REQUIRED)
+find_package(lifecycle_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(message_filters REQUIRED)
@@ -32,12 +33,21 @@ find_package(deep_msgs REQUIRED)
 # Create include directory
 include_directories(include)
 
+# Define lifecycle node support based on ROS distro
+get_filename_component(ROS_DISTRO_NAME "$ENV{ROS_DISTRO}" NAME)
+if(ROS_DISTRO_NAME STREQUAL "rolling") # Currently only Rolling supports lifecycle nodes with compressed image subs
+  add_definitions(-DUSE_LIFECYCLE_NODE=1)
+else()
+  add_definitions(-DUSE_LIFECYCLE_NODE=0)
+endif()
+
 # Add the multi-camera sync library for component
 add_library(multi_camera_sync_component SHARED src/multi_camera_sync_node.cpp)
 ament_target_dependencies(multi_camera_sync_component
   rclcpp
   rclcpp_lifecycle
   rclcpp_components
+  lifecycle_msgs
   sensor_msgs
   cv_bridge
   message_filters
@@ -55,6 +65,7 @@ ament_target_dependencies(multi_camera_sync_node
   rclcpp
   rclcpp_lifecycle
   rclcpp_components
+  lifecycle_msgs
   sensor_msgs
   cv_bridge
   message_filters
@@ -92,9 +103,5 @@ install(DIRECTORY config/
   FILES_MATCHING PATTERN "*.yaml"
 )
 
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  ament_lint_auto_find_test_dependencies()
-endif()
 
 ament_package()

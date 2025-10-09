@@ -31,13 +31,19 @@ namespace camera_sync
 {
 
 MultiCameraSyncNode::MultiCameraSyncNode(const rclcpp::NodeOptions & options)
+#if USE_LIFECYCLE_NODE
+: rclcpp_lifecycle::LifecycleNode("multi_camera_sync_node", options)
+#else
 : Node("multi_camera_sync_node", options)
+#endif
 , sync_count_(0)
 , last_sync_time_(this->get_clock()->now())
 , start_time_(std::chrono::steady_clock::now())
 {
   RCLCPP_INFO(this->get_logger(), "Initializing Multi-Camera Sync Node");
 
+#if !USE_LIFECYCLE_NODE
+  // For regular nodes, initialize immediately
   initializeParameters();
   setupSynchronization();
 
@@ -46,6 +52,10 @@ MultiCameraSyncNode::MultiCameraSyncNode(const rclcpp::NodeOptions & options)
     "Multi-Camera Sync Node initialized with %zu cameras, using %s images",
     camera_topics_.size(),
     use_compressed_ ? "compressed" : "raw");
+#else
+  // For lifecycle nodes, initialization happens in on_configure
+  RCLCPP_INFO(this->get_logger(), "Lifecycle node created, waiting for configuration");
+#endif
 }
 
 void MultiCameraSyncNode::initializeParameters()
@@ -504,6 +514,87 @@ void MultiCameraSyncNode::processSynchronizedImages(const std::vector<rclcpp::Ti
   RCLCPP_DEBUG(this->get_logger(), "Synchronized timestamps: %s", ss.str().c_str());
 }
 
+#if USE_LIFECYCLE_NODE
+// Lifecycle node callbacks
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn MultiCameraSyncNode::on_configure(
+  const rclcpp_lifecycle::State & /*state*/)
+{
+  RCLCPP_INFO(this->get_logger(), "Configuring Multi-Camera Sync Node");
+
+  try {
+    initializeParameters();
+    setupSynchronization();
+
+    RCLCPP_INFO(
+      this->get_logger(),
+      "Multi-Camera Sync Node configured with %zu cameras, using %s images",
+      camera_topics_.size(),
+      use_compressed_ ? "compressed" : "raw");
+
+    return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(this->get_logger(), "Failed to configure: %s", e.what());
+    return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
+  }
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn MultiCameraSyncNode::on_activate(
+  const rclcpp_lifecycle::State & /*state*/)
+{
+  RCLCPP_INFO(this->get_logger(), "Activating Multi-Camera Sync Node");
+
+  // Publishers are automatically activated for lifecycle nodes
+  return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn MultiCameraSyncNode::on_deactivate(
+  const rclcpp_lifecycle::State & /*state*/)
+{
+  RCLCPP_INFO(this->get_logger(), "Deactivating Multi-Camera Sync Node");
+
+  // Publishers are automatically deactivated for lifecycle nodes
+  return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn MultiCameraSyncNode::on_cleanup(
+  const rclcpp_lifecycle::State & /*state*/)
+{
+  RCLCPP_INFO(this->get_logger(), "Cleaning up Multi-Camera Sync Node");
+
+  // Reset subscribers and synchronizers
+  image_subscribers_.clear();
+  compressed_subscribers_.clear();
+
+  sync2_raw_.reset();
+  sync3_raw_.reset();
+  sync4_raw_.reset();
+  sync5_raw_.reset();
+  sync6_raw_.reset();
+
+  sync2_compressed_.reset();
+  sync3_compressed_.reset();
+  sync4_compressed_.reset();
+  sync5_compressed_.reset();
+  sync6_compressed_.reset();
+
+  // Reset publishers
+  multi_image_raw_pub_.reset();
+  multi_image_compressed_pub_.reset();
+  sync_info_pub_.reset();
+
+  return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn MultiCameraSyncNode::on_shutdown(
+  const rclcpp_lifecycle::State & /*state*/)
+{
+  RCLCPP_INFO(this->get_logger(), "Shutting down Multi-Camera Sync Node");
+
+  // Cleanup is called automatically before shutdown
+  return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
+}
+#endif
+
 }  // namespace camera_sync
 
 // Register the component
@@ -516,10 +607,19 @@ int main(int argc, char ** argv)
 
   auto node = std::make_shared<camera_sync::MultiCameraSyncNode>();
 
+#if USE_LIFECYCLE_NODE
+  RCLCPP_INFO(node->get_logger(), "Multi-Camera Sync Lifecycle Node started");
+  RCLCPP_INFO(node->get_logger(), "Node state: %s", node->get_current_state().label().c_str());
+#else
   RCLCPP_INFO(node->get_logger(), "Multi-Camera Sync Node started");
+#endif
 
   try {
+#if USE_LIFECYCLE_NODE
+    rclcpp::spin(node->get_node_base_interface());
+#else
     rclcpp::spin(node);
+#endif
   } catch (const std::exception & e) {
     RCLCPP_ERROR(node->get_logger(), "Node crashed: %s", e.what());
     return 1;

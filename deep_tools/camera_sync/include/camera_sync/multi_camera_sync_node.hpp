@@ -30,6 +30,17 @@
 #include <sensor_msgs/msg/compressed_image.hpp>
 #include <sensor_msgs/msg/image.hpp>
 
+// Conditional lifecycle node support for Rolling and newer
+// USE_LIFECYCLE_NODE is defined by CMake based on ROS distribution
+#ifndef USE_LIFECYCLE_NODE
+  #define USE_LIFECYCLE_NODE 0  // Default fallback for intellisense
+#endif
+
+#if USE_LIFECYCLE_NODE
+  #include <lifecycle_msgs/msg/state.hpp>
+  #include <rclcpp_lifecycle/lifecycle_node.hpp>
+#endif
+
 #include "deep_msgs/msg/multi_image.hpp"
 #include "deep_msgs/msg/multi_image_raw.hpp"
 
@@ -43,11 +54,33 @@ namespace camera_sync
  * (sensor_msgs/CompressedImage) and synchronize them based on their timestamps.
  * Supports 2-6 cameras with a compact implementation.
  */
+#if USE_LIFECYCLE_NODE
+class MultiCameraSyncNode : public rclcpp_lifecycle::LifecycleNode
+#else
 class MultiCameraSyncNode : public rclcpp::Node
+#endif
 {
 public:
   explicit MultiCameraSyncNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
   ~MultiCameraSyncNode() = default;
+
+#if USE_LIFECYCLE_NODE
+  // Lifecycle node callbacks
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_configure(
+    const rclcpp_lifecycle::State & state) override;
+
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_activate(
+    const rclcpp_lifecycle::State & state) override;
+
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_deactivate(
+    const rclcpp_lifecycle::State & state) override;
+
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_cleanup(
+    const rclcpp_lifecycle::State & state) override;
+
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_shutdown(
+    const rclcpp_lifecycle::State & state) override;
+#endif
 
 private:
   // Message types
@@ -55,8 +88,13 @@ private:
   using CompressedImageMsg = sensor_msgs::msg::CompressedImage;
 
   // Subscriber types
+#if USE_LIFECYCLE_NODE
+  using ImageSubscriber = message_filters::Subscriber<ImageMsg, rclcpp_lifecycle::LifecycleNode>;
+  using CompressedImageSubscriber = message_filters::Subscriber<CompressedImageMsg, rclcpp_lifecycle::LifecycleNode>;
+#else
   using ImageSubscriber = message_filters::Subscriber<ImageMsg>;
   using CompressedImageSubscriber = message_filters::Subscriber<CompressedImageMsg>;
+#endif
 
   // Sync policies for raw images
   using ImageSyncPolicy2 = message_filters::sync_policies::ApproximateTime<ImageMsg, ImageMsg>;
