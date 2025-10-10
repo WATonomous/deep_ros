@@ -107,8 +107,7 @@ TEST_CASE_METHOD(SampleNodeTestFixture, "SampleInferenceNode lifecycle transitio
     // Create a fresh node with parameters passed via NodeOptions
     rclcpp::NodeOptions options;
     options.append_parameter_override("Backend.plugin", "onnxruntime_cpu");
-    options.append_parameter_override(
-      "model_path", "/workspaces/deep_ros/install/deep_sample/share/deep_sample/models/tiny_model.onnx");
+    options.append_parameter_override("model_path", TEST_MODEL_PATH);
 
     auto test_node = std::make_shared<SampleInferenceNode>(options);
 

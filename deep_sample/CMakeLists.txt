@@ -85,6 +85,11 @@ if(BUILD_TESTING)
       deep_conversions::deep_conversions_lib
       deep_core::deep_core_lib
   )
+
+  # Define the test model path for the test executable
+  target_compile_definitions(test_sample_node PRIVATE
+    TEST_MODEL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/models/tiny_model.onnx"
+  )
 endif()
 
 ament_package()
