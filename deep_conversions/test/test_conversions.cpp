@@ -399,6 +399,152 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Error handling and edge ca
   }
 }
 
+TEST_CASE_METHOD(
+  deep_ros::test::MockBackendFixture, "TensorLayout HWC vs CHW conversion", "[conversions][image][layout]")
+{
+  auto allocator = getAllocator();
+
+  SECTION("HWC layout (default)")
+  {
+    sensor_msgs::msg::Image ros_image;
+    ros_image.height = 32;
+    ros_image.width = 32;
+    ros_image.encoding = "32FC3";
+    ros_image.step = 32 * 3 * 4;
+    ros_image.data.resize(32 * 32 * 3 * 4);
+
+    // Fill with known pattern
+    float * float_data = reinterpret_cast<float *>(ros_image.data.data());
+    for (size_t h = 0; h < 32; ++h) {
+      for (size_t w = 0; w < 32; ++w) {
+        for (size_t c = 0; c < 3; ++c) {
+          float_data[(h * 32 + w) * 3 + c] = static_cast<float>(h * 1000 + w * 10 + c);
+        }
+      }
+    }
+
+    auto tensor_hwc = from_image(ros_image, allocator, TensorLayout::HWC);
+
+    REQUIRE(tensor_hwc.shape().size() == 4);
+    REQUIRE(tensor_hwc.shape()[0] == 1);  // Batch
+    REQUIRE(tensor_hwc.shape()[1] == 32);  // Height
+    REQUIRE(tensor_hwc.shape()[2] == 32);  // Width
+    REQUIRE(tensor_hwc.shape()[3] == 3);  // Channels
+    REQUIRE(tensor_hwc.dtype() == DataType::FLOAT32);
+
+    // Verify data is in HWC order
+    const float * tensor_data = tensor_hwc.data_as<float>();
+    // Check pixel at (0,0): should have channels [0, 1, 2] values
+    REQUIRE(tensor_data[0] == Approx(0.0f));  // Channel 0
+    REQUIRE(tensor_data[1] == Approx(1.0f));  // Channel 1
+    REQUIRE(tensor_data[2] == Approx(2.0f));  // Channel 2
+  }
+
+  SECTION("CHW layout for ONNX models")
+  {
+    sensor_msgs::msg::Image ros_image;
+    ros_image.height = 32;
+    ros_image.width = 32;
+    ros_image.encoding = "32FC3";
+    ros_image.step = 32 * 3 * 4;
+    ros_image.data.resize(32 * 32 * 3 * 4);
+
+    // Fill with known pattern
+    float * float_data = reinterpret_cast<float *>(ros_image.data.data());
+    for (size_t h = 0; h < 32; ++h) {
+      for (size_t w = 0; w < 32; ++w) {
+        for (size_t c = 0; c < 3; ++c) {
+          float_data[(h * 32 + w) * 3 + c] = static_cast<float>(h * 1000 + w * 10 + c);
+        }
+      }
+    }
+
+    auto tensor_chw = from_image(ros_image, allocator, TensorLayout::CHW);
+
+    REQUIRE(tensor_chw.shape().size() == 4);
+    REQUIRE(tensor_chw.shape()[0] == 1);  // Batch
+    REQUIRE(tensor_chw.shape()[1] == 3);  // Channels
+    REQUIRE(tensor_chw.shape()[2] == 32);  // Height
+    REQUIRE(tensor_chw.shape()[3] == 32);  // Width
+    REQUIRE(tensor_chw.dtype() == DataType::FLOAT32);
+
+    // Verify data is in CHW order
+    const float * tensor_data = tensor_chw.data_as<float>();
+    // Check that channel 0 comes first (all channel 0 values before channel 1)
+    // At (h=0, w=0), channel 0 should be at index 0
+    REQUIRE(tensor_data[0] == Approx(0.0f));  // h=0, w=0, c=0
+    // At (h=0, w=1), channel 0 should be at index 1
+    REQUIRE(tensor_data[1] == Approx(10.0f));  // h=0, w=1, c=0
+    // At (h=1, w=0), channel 0 should be at index 32
+    REQUIRE(tensor_data[32] == Approx(1000.0f));  // h=1, w=0, c=0
+
+    // Check that channel 1 starts after all channel 0 data
+    size_t channel1_start = 32 * 32;
+    REQUIRE(tensor_data[channel1_start] == Approx(1.0f));  // h=0, w=0, c=1
+  }
+
+  SECTION("Batch conversion with CHW layout")
+  {
+    std::vector<sensor_msgs::msg::Image> images;
+    for (int i = 0; i < 2; ++i) {
+      sensor_msgs::msg::Image img;
+      img.height = 8;
+      img.width = 8;
+      img.encoding = "32FC3";
+      img.step = 8 * 3 * 4;
+      img.data.resize(8 * 8 * 3 * 4);
+
+      float * data = reinterpret_cast<float *>(img.data.data());
+      for (size_t j = 0; j < 8 * 8 * 3; ++j) {
+        data[j] = static_cast<float>(i * 100 + j);
+      }
+      images.push_back(img);
+    }
+
+    auto batch_chw = from_image(images, allocator, TensorLayout::CHW);
+
+    REQUIRE(batch_chw.shape().size() == 4);
+    REQUIRE(batch_chw.shape()[0] == 2);  // Batch
+    REQUIRE(batch_chw.shape()[1] == 3);  // Channels
+    REQUIRE(batch_chw.shape()[2] == 8);  // Height
+    REQUIRE(batch_chw.shape()[3] == 8);  // Width
+  }
+
+  SECTION("uint8 RGB8 to CHW conversion")
+  {
+    sensor_msgs::msg::Image ros_image;
+    ros_image.height = 4;
+    ros_image.width = 4;
+    ros_image.encoding = "rgb8";
+    ros_image.step = 4 * 3;
+    ros_image.data.resize(4 * 4 * 3);
+
+    // Fill with pattern: pixel(h,w) = [h*16+w*4+0, h*16+w*4+1, h*16+w*4+2]
+    for (size_t h = 0; h < 4; ++h) {
+      for (size_t w = 0; w < 4; ++w) {
+        for (size_t c = 0; c < 3; ++c) {
+          ros_image.data[(h * 4 + w) * 3 + c] = static_cast<uint8_t>(h * 16 + w * 4 + c);
+        }
+      }
+    }
+
+    auto tensor_chw = from_image(ros_image, allocator, TensorLayout::CHW);
+
+    REQUIRE(tensor_chw.shape()[0] == 1);
+    REQUIRE(tensor_chw.shape()[1] == 3);
+    REQUIRE(tensor_chw.shape()[2] == 4);
+    REQUIRE(tensor_chw.shape()[3] == 4);
+    REQUIRE(tensor_chw.dtype() == DataType::UINT8);
+
+    const uint8_t * data = tensor_chw.data_as<uint8_t>();
+    // Verify CHW layout: channel 0 of all pixels, then channel 1, then channel 2
+    REQUIRE(data[0] == 0);  // (0,0) channel 0
+    REQUIRE(data[1] == 4);  // (0,1) channel 0
+    REQUIRE(data[16] == 1);  // (0,0) channel 1, starts at 4*4
+    REQUIRE(data[32] == 2);  // (0,0) channel 2, starts at 4*4*2
+  }
+}
+
 TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "Performance and memory efficiency", "[conversions][performance]")
 {
   auto allocator = getAllocator();

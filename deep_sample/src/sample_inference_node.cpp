@@ -115,11 +115,12 @@ void SampleInferenceNode::image_callback(const sensor_msgs::msg::Image::SharedPt
       return;
     }
 
-    // Convert image to tensor using deep_conversions
-    auto input_tensor = deep_ros::ros_conversions::from_image(*msg, allocator);
+    // Convert image to tensor using deep_conversions with CHW layout for ONNX models
+    auto input_tensor =
+      deep_ros::ros_conversions::from_image(*msg, allocator, deep_ros::ros_conversions::TensorLayout::CHW);
 
     // Run inference
-    auto output_tensor = run_inference(std::move(input_tensor));
+    auto output_tensor = run_inference(input_tensor);
 
     // Convert output to message and publish
     auto output_msg = tensor_to_output(output_tensor);

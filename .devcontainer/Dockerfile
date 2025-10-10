@@ -68,7 +68,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 
 # Install Claude Code CLI via npm
 # hadolint ignore=DL3016
-RUN npm install -g @anthropic-ai/claude-code
+# RUN npm install -g @anthropic-ai/claude-code
 
 # Initialize rosdep
 RUN rosdep init || true

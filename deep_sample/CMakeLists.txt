@@ -77,7 +77,14 @@ install(DIRECTORY config launch models
 )
 
 if(BUILD_TESTING)
+  find_package(deep_test REQUIRED)
 
+  add_deep_test(test_sample_node test/test_sample_node.cpp
+    LIBRARIES
+      sample_inference_component
+      deep_conversions::deep_conversions_lib
+      deep_core::deep_core_lib
+  )
 endif()
 
 ament_package()

@@ -18,10 +18,10 @@
 
   <depend>deep_core</depend>
   <depend>deep_conversions</depend>
-  <depend>bondcpp</depend>
 
   <exec_depend>nav2_lifecycle_manager</exec_depend>
   <test_depend>deep_test</test_depend>
+  <test_depend>deep_ort_backend_plugin</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
