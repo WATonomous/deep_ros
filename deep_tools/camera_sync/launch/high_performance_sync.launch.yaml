@@ -1,0 +1,55 @@
+#  Copyright (c) 2025-present WATonomous. All rights reserved.
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http:www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
+# High-Performance Multi-Camera Synchronization Launch Configuration
+#
+# This launch file is optimized for high-frequency camera data with:
+# - Interprocess communication (IPC) enabled
+# - Performance tuning
+# - Multi-threaded execution
+
+---
+launch:
+  - arg:
+      name: container_name
+      default: high_perf_camera_sync
+      description: "Name of the high-performance container"
+
+  - arg:
+      name: num_threads
+      default: "4"
+      description: "Number of threads for the executor"
+
+  # High-performance component container with multi-threading
+  - node_container:
+      pkg: rclcpp_components
+      exec: component_container_mt
+      name: $(var container_name)
+      namespace: ""
+      output: screen
+      param:
+        - name: use_intra_process_comms
+          value: true
+        - name: num_threads
+          value: $(var num_threads)
+      composable_node:
+        - pkg: camera_sync
+          plugin: camera_sync::MultiCameraSyncNode
+          name: multi_camera_sync
+          namespace: ""
+          param:
+            - from: $(find-pkg-share camera_sync)/config/multi_camera_sync_params.yaml
+          extra_arg:
+            - name: use_intra_process_comms
+              value: "true"
