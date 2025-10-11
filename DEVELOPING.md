@@ -13,10 +13,10 @@ This project includes VS Code dev container configurations for easy ROS2 develop
 
 1. **Choose ROS distribution**:
    - Press `Ctrl+Shift+P` and run "Tasks: Run Task"
-   - Select "Switch ROS Distro"
-   - Choose from: `humble`, `iron`, `jazzy`, or `rolling`
+   - Select "Setup Devcontainer (CPU Only)" or "Setup Devcontainer (GPU)" and follow prompts
 
 2. **Rebuild and open in container**:
+   - Press `Ctrl+Shift+P` and run "Dev Containers: Rebuild and Reopen in Container" or the other variants
    - The container will automatically rebuild and reopen with your selected ROS version
 
 ### Container Features
@@ -28,26 +28,4 @@ This project includes VS Code dev container configurations for easy ROS2 develop
 
 ### Common Commands
 
-Inside the container:
-
-```bash
-# Update apt
-sudo apt update
-
-# Update rosdep
-rosdep update
-
-# Install dependencies
-rosdep install --from-paths src --ignore-src -r -y
-
-# Build packages
-colcon build
-
-# Source workspace
-source install/setup.bash
-```
-
-### Troubleshooting
-
-- If the container fails to build, check that Docker is running
-- To rebuild from scratch: "Dev Containers: Rebuild Container"
+Inside the container, you can do ros2 commands, colcon commands, rosdep, etc.

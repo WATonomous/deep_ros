@@ -71,6 +71,7 @@ cat > .devcontainer/devcontainer.json << EOF
   "name": "$CONTAINER_NAME",
   "build": {
     "dockerfile": "Dockerfile",
+    "context": "..",
     "args": {
       $BUILD_ARGS
     }
