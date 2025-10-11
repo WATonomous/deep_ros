@@ -60,26 +60,37 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install pre-commit
 RUN python3 -m pip install --no-cache-dir pre-commit==3.8.0
 
-# Install Node.js 20 LTS (required for Claude Code)
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y --no-install-recommends nodejs && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install Claude Code CLI via npm
-# hadolint ignore=DL3016
-# RUN npm install -g @anthropic-ai/claude-code
-
-# Initialize rosdep
-RUN rosdep init || true
-
 # Set working dir (matches VSCode workspace)
 WORKDIR /deep_ros_ws
 
 # ===============================================
+# Gather Dependencies
+# ===============================================
+FROM dev-tools AS source
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN --mount=type=bind,source=.,target=/tmp/src \
+    apt-get -qq update && rosdep update && \
+    rosdep install --from-paths /tmp/src --ignore-src -r -s \
+        | (grep 'apt-get install' || true) \
+        | awk '{print $3}' \
+        | sort  > /tmp/colcon_install_list
+
+# ===============================================
+# Install Dependencies
+# ===============================================
+FROM dev-tools AS dependencies
+
+# Install Rosdep requirements
+COPY --from=source /tmp/colcon_install_list /tmp/colcon_install_list
+RUN apt-get update && \
+    xargs -a /tmp/colcon_install_list apt-get install -qq -y --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
+
+# ===============================================
 # Add User Configuration
 # ===============================================
-FROM dev-tools as user-conf
+FROM dependencies AS user-conf
 ARG USERNAME
 ARG USER_GID
 ARG USER_UID
@@ -101,6 +112,10 @@ RUN groupadd --gid ${USER_GID} ${USERNAME} \
 
 # Set the default user. Omit if you want to keep the default as root.
 USER $USERNAME
+
+# Install Claude Code natively
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN curl -fsSL https://claude.ai/install.sh | bash
 
 # Source ROS in user's bashrc
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/$USERNAME/.bashrc
