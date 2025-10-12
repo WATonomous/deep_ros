@@ -15,6 +15,7 @@
 #include "deep_core/plugin_interfaces/backend_memory_allocator.hpp"
 
 #include <stdexcept>
+#include <vector>
 
 namespace deep_ros
 {
@@ -25,6 +26,25 @@ void BackendMemoryAllocator::copy_from_host(void * dst, const void * src, size_t
     throw std::invalid_argument("Null pointer passed to copy_from_host");
   }
   copy_from_host_impl(dst, src, bytes);
+}
+
+void BackendMemoryAllocator::copy_from_host_permuted(
+  void * dst,
+  const void * src,
+  const std::vector<size_t> & src_shape,
+  const std::vector<size_t> & permutation,
+  size_t elem_size)
+{
+  if (dst == nullptr || src == nullptr) {
+    throw std::invalid_argument("Null pointer passed to copy_from_host_permuted");
+  }
+  if (src_shape.empty() || permutation.empty()) {
+    throw std::invalid_argument("Empty shape or permutation passed to copy_from_host_permuted");
+  }
+  if (src_shape.size() != permutation.size()) {
+    throw std::invalid_argument("Shape and permutation size mismatch in copy_from_host_permuted");
+  }
+  copy_from_host_permuted_impl(dst, src, src_shape, permutation, elem_size);
 }
 
 void BackendMemoryAllocator::copy_to_host(void * dst, const void * src, size_t bytes)

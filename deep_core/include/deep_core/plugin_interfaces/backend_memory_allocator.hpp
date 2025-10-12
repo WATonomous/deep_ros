@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace deep_ros
 {
@@ -62,6 +63,25 @@ public:
   void copy_from_host(void * dst, const void * src, size_t bytes);
 
   /**
+   * @brief Copy data from host memory to allocated memory with permutation
+   *
+   * Copies and transposes data in a single operation.
+   *
+   * @param dst Destination pointer (allocated by this allocator)
+   * @param src Source pointer (host memory)
+   * @param src_shape Shape of the source data
+   * @param permutation Dimension permutation to apply during copy
+   * @param elem_size Size of each element in bytes
+   * @throws std::invalid_argument if parameters are invalid
+   */
+  void copy_from_host_permuted(
+    void * dst,
+    const void * src,
+    const std::vector<size_t> & src_shape,
+    const std::vector<size_t> & permutation,
+    size_t elem_size);
+
+  /**
    * @brief Copy data from allocated memory to host (CPU) memory
    * @param dst Destination pointer (host memory)
    * @param src Source pointer (allocated by this allocator)
@@ -84,6 +104,16 @@ protected:
    * @brief Implementation of copy_from_host (to be overridden by backends)
    */
   virtual void copy_from_host_impl(void * dst, const void * src, size_t bytes) = 0;
+
+  /**
+   * @brief Implementation of copy_from_host_permuted (to be overridden by backends)
+   */
+  virtual void copy_from_host_permuted_impl(
+    void * dst,
+    const void * src,
+    const std::vector<size_t> & src_shape,
+    const std::vector<size_t> & permutation,
+    size_t elem_size) = 0;
 
   /**
    * @brief Implementation of copy_to_host (to be overridden by backends)

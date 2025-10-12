@@ -59,27 +59,28 @@ ImageEncoding get_image_encoding_info(const std::string & encoding);
 /**
  * @brief Convert sensor_msgs::msg::Image to Tensor
  * @param image ROS Image message
- * @param allocator Memory allocator to use (uses CPU allocator if nullptr)
+ * @param allocator Memory allocator to use (required)
  * @param layout Tensor layout format (HWC or CHW)
  * @return Tensor with shape [1, height, width, channels] (HWC) or [1, channels, height, width] (CHW)
- * @throws std::runtime_error if image dimensions are invalid or data size mismatches
+ * @throws std::runtime_error if image dimensions are invalid, data size mismatches, or allocator is nullptr
  */
 Tensor from_image(
   const sensor_msgs::msg::Image & image,
-  std::shared_ptr<BackendMemoryAllocator> allocator = nullptr,
+  std::shared_ptr<BackendMemoryAllocator> allocator,
   TensorLayout layout = TensorLayout::HWC);
 
 /**
  * @brief Convert vector of sensor_msgs::msg::Image to batched Tensor
  * @param images Vector of ROS Image messages
- * @param allocator Memory allocator to use (uses CPU allocator if nullptr)
+ * @param allocator Memory allocator to use (required)
  * @param layout Tensor layout format (HWC or CHW)
  * @return Tensor with shape [batch_size, height, width, channels] (HWC) or [batch_size, channels, height, width] (CHW)
  * @throws std::invalid_argument if batch is empty or images have mismatched dimensions/encodings
+ * @throws std::runtime_error if allocator is nullptr
  */
 Tensor from_image(
   const std::vector<sensor_msgs::msg::Image> & images,
-  std::shared_ptr<BackendMemoryAllocator> allocator = nullptr,
+  std::shared_ptr<BackendMemoryAllocator> allocator,
   TensorLayout layout = TensorLayout::HWC);
 
 /**
