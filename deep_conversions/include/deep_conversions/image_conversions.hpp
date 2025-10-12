@@ -30,6 +30,15 @@ namespace ros_conversions
 {
 
 /**
+ * @brief Tensor layout format for image data
+ */
+enum class TensorLayout
+{
+  HWC,  ///< Height, Width, Channels (e.g., [batch, height, width, channels])
+  CHW  ///< Channels, Height, Width (e.g., [batch, channels, height, width])
+};
+
+/**
  * @brief Image encoding information
  */
 struct ImageEncoding
@@ -51,20 +60,27 @@ ImageEncoding get_image_encoding_info(const std::string & encoding);
  * @brief Convert sensor_msgs::msg::Image to Tensor
  * @param image ROS Image message
  * @param allocator Memory allocator to use (uses CPU allocator if nullptr)
- * @return Tensor with shape [1, height, width, channels] or [1, height, width]
+ * @param layout Tensor layout format (HWC or CHW)
+ * @return Tensor with shape [1, height, width, channels] (HWC) or [1, channels, height, width] (CHW)
  * @throws std::runtime_error if image dimensions are invalid or data size mismatches
  */
-Tensor from_image(const sensor_msgs::msg::Image & image, std::shared_ptr<BackendMemoryAllocator> allocator = nullptr);
+Tensor from_image(
+  const sensor_msgs::msg::Image & image,
+  std::shared_ptr<BackendMemoryAllocator> allocator = nullptr,
+  TensorLayout layout = TensorLayout::HWC);
 
 /**
  * @brief Convert vector of sensor_msgs::msg::Image to batched Tensor
  * @param images Vector of ROS Image messages
  * @param allocator Memory allocator to use (uses CPU allocator if nullptr)
- * @return Tensor with shape [batch_size, height, width, channels] or [batch_size, height, width]
+ * @param layout Tensor layout format (HWC or CHW)
+ * @return Tensor with shape [batch_size, height, width, channels] (HWC) or [batch_size, channels, height, width] (CHW)
  * @throws std::invalid_argument if batch is empty or images have mismatched dimensions/encodings
  */
 Tensor from_image(
-  const std::vector<sensor_msgs::msg::Image> & images, std::shared_ptr<BackendMemoryAllocator> allocator = nullptr);
+  const std::vector<sensor_msgs::msg::Image> & images,
+  std::shared_ptr<BackendMemoryAllocator> allocator = nullptr,
+  TensorLayout layout = TensorLayout::HWC);
 
 /**
  * @brief Convert Tensor to sensor_msgs::msg::Image (single image from batch)
