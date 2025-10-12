@@ -127,25 +127,16 @@ ImageEncoding get_image_encoding_info(const std::string & encoding)
 Tensor from_image(
   const sensor_msgs::msg::Image & image, std::shared_ptr<BackendMemoryAllocator> allocator, TensorLayout layout)
 {
+  if (!allocator) {
+    throw std::runtime_error("Memory allocator is required for image conversion");
+  }
+
   if (image.height == 0 || image.width == 0) {
     throw std::runtime_error(
       "Invalid image dimensions: height=" + std::to_string(image.height) + ", width=" + std::to_string(image.width));
   }
 
   auto encoding_info = get_image_encoding_info(image.encoding);
-
-  // Create tensor with proper shape based on layout
-  std::vector<size_t> shape;
-  if (layout == TensorLayout::CHW) {
-    // CHW: [batch, channels, height, width]
-    shape = {1, encoding_info.channels, image.height, image.width};
-  } else {
-    // HWC: [batch, height, width, channels]
-    shape = {1, image.height, image.width};
-    if (encoding_info.channels > 1) {
-      shape.push_back(encoding_info.channels);
-    }
-  }
 
   // Validate step size (bytes per row)
   size_t expected_step = image.width * encoding_info.channels * encoding_info.bytes_per_channel;
@@ -162,30 +153,39 @@ Tensor from_image(
       std::to_string(image.data.size()));
   }
 
-  Tensor tensor(shape, encoding_info.dtype, allocator);
+  // Create tensor with shape and copy data based on layout
+  std::vector<size_t> shape;
+  Tensor tensor;
 
-  if (layout == TensorLayout::HWC) {
-    // Direct copy for HWC layout
-    if (allocator) {
-      allocator->copy_from_host(tensor.data(), image.data.data(), image.data.size());
-    } else {
-      std::memcpy(tensor.data(), image.data.data(), image.data.size());
+  switch (layout) {
+    case TensorLayout::CHW: {
+      // CHW: [batch, channels, height, width]
+      shape = {1, encoding_info.channels, image.height, image.width};
+      tensor = Tensor(shape, encoding_info.dtype, allocator);
+
+      // Use copy_from_host_permuted to copy and transpose in one operation
+      // Source is HWC: [1, height, width, channels]
+      // Permutation [0, 3, 1, 2] converts BHWC to BCHW
+      std::vector<size_t> src_shape = {1, image.height, image.width, encoding_info.channels};
+      std::vector<size_t> permutation = {0, 3, 1, 2};
+      allocator->copy_from_host_permuted(
+        tensor.data(), image.data.data(), src_shape, permutation, encoding_info.bytes_per_channel);
+      break;
     }
-  } else {
-    // Transpose HWC to CHW for CHW layout
-    const auto * src = image.data.data();
-    auto * dst = static_cast<uint8_t *>(tensor.data());
-    size_t pixel_bytes = encoding_info.bytes_per_channel;
-
-    for (size_t c = 0; c < encoding_info.channels; ++c) {
-      for (size_t h = 0; h < image.height; ++h) {
-        for (size_t w = 0; w < image.width; ++w) {
-          size_t src_idx = ((h * image.width + w) * encoding_info.channels + c) * pixel_bytes;
-          size_t dst_idx = ((c * image.height + h) * image.width + w) * pixel_bytes;
-          std::memcpy(dst + dst_idx, src + src_idx, pixel_bytes);
-        }
+    case TensorLayout::HWC: {
+      // HWC: [batch, height, width, channels]
+      shape = {1, image.height, image.width};
+      if (encoding_info.channels > 1) {
+        shape.push_back(encoding_info.channels);
       }
+      tensor = Tensor(shape, encoding_info.dtype, allocator);
+
+      // Direct copy for HWC layout
+      allocator->copy_from_host(tensor.data(), image.data.data(), image.data.size());
+      break;
     }
+    default:
+      throw std::invalid_argument("Unsupported tensor layout");
   }
 
   return tensor;
@@ -196,25 +196,16 @@ Tensor from_image(
   std::shared_ptr<BackendMemoryAllocator> allocator,
   TensorLayout layout)
 {
+  if (!allocator) {
+    throw std::runtime_error("Memory allocator is required for image conversion");
+  }
+
   if (images.empty()) {
     throw std::invalid_argument("Image batch is empty");
   }
 
   // Get encoding info from first image
   auto encoding_info = get_image_encoding_info(images[0].encoding);
-
-  // Create batch shape based on layout
-  std::vector<size_t> shape;
-  if (layout == TensorLayout::CHW) {
-    // CHW: [batch_size, channels, height, width]
-    shape = {images.size(), encoding_info.channels, images[0].height, images[0].width};
-  } else {
-    // HWC: [batch_size, height, width, channels]
-    shape = {images.size(), images[0].height, images[0].width};
-    if (encoding_info.channels > 1) {
-      shape.push_back(encoding_info.channels);
-    }
-  }
 
   // Validate all images have same dimensions and encoding
   size_t expected_size = images[0].height * images[0].width * encoding_info.channels * encoding_info.bytes_per_channel;
@@ -232,37 +223,50 @@ Tensor from_image(
     }
   }
 
-  Tensor tensor(shape, encoding_info.dtype, allocator);
-  auto * dst = static_cast<uint8_t *>(tensor.data());
-  size_t height = images[0].height;
-  size_t width = images[0].width;
-  size_t pixel_bytes = encoding_info.bytes_per_channel;
+  // Create batch tensor with shape and copy data based on layout
+  std::vector<size_t> shape;
+  Tensor tensor;
 
-  if (layout == TensorLayout::HWC) {
-    // Direct copy for HWC layout
-    for (size_t i = 0; i < images.size(); ++i) {
-      if (allocator) {
+  switch (layout) {
+    case TensorLayout::CHW: {
+      // CHW: [batch_size, channels, height, width]
+      shape = {images.size(), encoding_info.channels, images[0].height, images[0].width};
+      tensor = Tensor(shape, encoding_info.dtype, allocator);
+      auto * dst = static_cast<uint8_t *>(tensor.data());
+
+      // Use copy_from_host_permuted for each image
+      std::vector<size_t> src_shape = {1, images[0].height, images[0].width, encoding_info.channels};
+      std::vector<size_t> permutation = {0, 3, 1, 2};
+      size_t single_image_chw_size =
+        encoding_info.channels * images[0].height * images[0].width * encoding_info.bytes_per_channel;
+
+      for (size_t i = 0; i < images.size(); ++i) {
+        allocator->copy_from_host_permuted(
+          dst + i * single_image_chw_size,
+          images[i].data.data(),
+          src_shape,
+          permutation,
+          encoding_info.bytes_per_channel);
+      }
+      break;
+    }
+    case TensorLayout::HWC: {
+      // HWC: [batch_size, height, width, channels]
+      shape = {images.size(), images[0].height, images[0].width};
+      if (encoding_info.channels > 1) {
+        shape.push_back(encoding_info.channels);
+      }
+      tensor = Tensor(shape, encoding_info.dtype, allocator);
+      auto * dst = static_cast<uint8_t *>(tensor.data());
+
+      // Direct copy for HWC layout
+      for (size_t i = 0; i < images.size(); ++i) {
         allocator->copy_from_host(dst + i * images[i].data.size(), images[i].data.data(), images[i].data.size());
-      } else {
-        std::memcpy(dst + i * images[i].data.size(), images[i].data.data(), images[i].data.size());
       }
+      break;
     }
-  } else {
-    // Transpose HWC to CHW for each image in batch
-    for (size_t b = 0; b < images.size(); ++b) {
-      const auto * src = images[b].data.data();
-      size_t batch_offset = b * encoding_info.channels * height * width * pixel_bytes;
-
-      for (size_t c = 0; c < encoding_info.channels; ++c) {
-        for (size_t h = 0; h < height; ++h) {
-          for (size_t w = 0; w < width; ++w) {
-            size_t src_idx = ((h * width + w) * encoding_info.channels + c) * pixel_bytes;
-            size_t dst_idx = batch_offset + ((c * height + h) * width + w) * pixel_bytes;
-            std::memcpy(dst + dst_idx, src + src_idx, pixel_bytes);
-          }
-        }
-      }
-    }
+    default:
+      throw std::invalid_argument("Unsupported tensor layout");
   }
 
   return tensor;

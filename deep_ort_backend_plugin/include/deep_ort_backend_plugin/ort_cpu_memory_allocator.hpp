@@ -18,6 +18,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <deep_core/plugin_interfaces/backend_memory_allocator.hpp>
 
@@ -89,6 +90,21 @@ protected:
    * @param bytes Number of bytes to copy
    */
   void copy_from_host_impl(void * dst, const void * src, size_t bytes) override;
+
+  /**
+   * @brief Copy from host memory with permutation
+   * @param dst Destination pointer
+   * @param src Source pointer
+   * @param src_shape Shape of source data
+   * @param permutation Dimension permutation
+   * @param elem_size Element size in bytes
+   */
+  void copy_from_host_permuted_impl(
+    void * dst,
+    const void * src,
+    const std::vector<size_t> & src_shape,
+    const std::vector<size_t> & permutation,
+    size_t elem_size) override;
 
   /**
    * @brief Copy to host memory (same as device for CPU)

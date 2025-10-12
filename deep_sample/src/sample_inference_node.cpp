@@ -115,7 +115,7 @@ void SampleInferenceNode::image_callback(const sensor_msgs::msg::Image::SharedPt
       return;
     }
 
-    // Convert image to tensor using deep_conversions with CHW layout for ONNX models
+    // Convert image to tensor with CHW layout for ONNX models
     auto input_tensor =
       deep_ros::ros_conversions::from_image(*msg, allocator, deep_ros::ros_conversions::TensorLayout::CHW);
 
