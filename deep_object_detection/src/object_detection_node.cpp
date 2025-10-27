@@ -16,13 +16,15 @@
 
 #include <cv_bridge/cv_bridge.h>
 
+#include <memory>
+#include <string>
+#include <vector>
+
 #include <std_msgs/msg/string.hpp>
 #include <vision_msgs/msg/detection2_d.hpp>
 #include <vision_msgs/msg/object_hypothesis_with_pose.hpp>
 
 #include "deep_object_detection/inference_interface.hpp"
-
-#include <yaml-cpp/yaml.h>
 
 namespace deep_object_detection
 {

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <memory>
+
 #include "deep_object_detection/inference_interface.hpp"
 #include "deep_object_detection/onnx_inference.hpp"
 

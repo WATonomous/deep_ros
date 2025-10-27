@@ -18,6 +18,8 @@
 
 #include <memory>
 #include <mutex>
+#include <string>
+#include <vector>
 
 #include "deep_object_detection/inference_interface.hpp"
 

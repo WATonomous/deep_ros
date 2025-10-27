@@ -15,7 +15,10 @@
 #include "deep_object_detection/onnx_inference.hpp"
 
 #include <algorithm>
+#include <memory>
 #include <numeric>
+#include <string>
+#include <vector>
 
 #include <rclcpp/rclcpp.hpp>
 
@@ -54,7 +57,6 @@ bool ONNXInference::initialize()
 
     RCLCPP_INFO(rclcpp::get_logger("ONNXInference"), "ONNX Runtime inference engine initialized successfully");
     return true;
-
   } catch (const std::exception & e) {
     RCLCPP_ERROR(rclcpp::get_logger("ONNXInference"), "Failed to initialize ONNX Runtime: %s", e.what());
     return false;
@@ -115,7 +117,6 @@ bool ONNXInference::loadModel()
     }
 
     return true;
-
   } catch (const std::exception & e) {
     RCLCPP_ERROR(rclcpp::get_logger("ONNXInference"), "Failed to load model: %s", e.what());
     return false;
@@ -235,7 +236,6 @@ std::vector<std::vector<Detection>> ONNXInference::inferBatch(const std::vector<
     }
 
     return results;
-
   } catch (const std::exception & e) {
     RCLCPP_ERROR(rclcpp::get_logger("ONNXInference"), "Inference failed: %s", e.what());
     return {};

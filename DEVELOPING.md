@@ -28,26 +28,4 @@ This project includes VS Code dev container configurations for easy ROS2 develop
 
 ### Common Commands
 
-Inside the container:
-
-```bash
-# Update apt
-sudo apt update
-
-# Update rosdep
-rosdep update
-
-# Install dependencies
-rosdep install --from-paths . --ignore-src -r -y
-
-# Build packages
-colcon build
-
-# Source workspace
-source install/setup.bash
-```
-
-### Troubleshooting
-
-- If the container fails to build, check that Docker is running
-- To rebuild from scratch: "Dev Containers: Rebuild Container"
+Inside the container, you can do ros2 commands, colcon commands, rosdep, etc.
