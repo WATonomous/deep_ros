@@ -59,6 +59,7 @@ ament_target_dependencies(object_detection_node
 # Link libraries
 target_link_libraries(object_detection_node
     yaml-cpp
+    onnxruntime_gpu_vendor::onnxruntime_gpu_lib
 )
 
 # Install targets
