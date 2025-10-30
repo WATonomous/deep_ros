@@ -29,7 +29,7 @@ This package provides an abstracted inference interface that supports ONNX model
 
 ```bash
 cd ~/deep_ros
-rosdep install --from-paths src --ignore-src -r -y
+rosdep install --from-paths deep_object_detection/src --ignore-src -r -y
 ```
 
 1. Build the package:

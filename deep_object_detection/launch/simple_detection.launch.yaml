@@ -1,0 +1,13 @@
+# Simple Object Detection Launch Configuration
+# Usage: ros2 launch deep_object_detection simple_detection.launch.yaml
+
+launch:
+  # Simple single camera object detection node
+  - node:
+      pkg: "deep_object_detection"
+      exec: "object_detection_node"
+      name: "object_detection_node"
+      param:
+        - from: "$(find-pkg-share deep_object_detection)/config/object_detection_params.yaml"
+      output: "screen"
+      emulate_tty: true

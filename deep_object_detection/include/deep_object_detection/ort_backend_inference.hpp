@@ -14,30 +14,37 @@
 
 #pragma once
 
-#include <onnxruntime_cxx_api.h>
-
 #include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
 
+#include <deep_core/types/tensor.hpp>
+#include <opencv2/opencv.hpp>
+
 #include "deep_object_detection/inference_interface.hpp"
+#include "deep_ort_backend_plugin/ort_backend_executor.hpp"
 
 namespace deep_object_detection
 {
 
 /**
- * @brief ONNX Runtime implementation of the inference interface
+ * @brief ORT Backend inference adapter for object detection
+ *
+ * This class adapts the deep_ort_backend::OrtBackendExecutor to work with
+ * the object detection inference interface, providing zero-copy inference
+ * capabilities while maintaining compatibility with OpenCV images.
  */
-class ONNXInference : public InferenceInterface
+class OrtBackendInference : public InferenceInterface
 {
 public:
-  explicit ONNXInference(const InferenceConfig & config);
-  ~ONNXInference() override;
+  explicit OrtBackendInference(const InferenceConfig & config);
+  ~OrtBackendInference() override;
 
+  // InferenceInterface implementation
   bool initialize() override;
-  std::vector<std::vector<Detection>> inferBatch(const std::vector<cv::Mat> & images) override;
   std::vector<Detection> infer(const cv::Mat & image) override;
+  std::vector<std::vector<Detection>> inferBatch(const std::vector<cv::Mat> & images) override;
 
   int getInputWidth() const override
   {
@@ -60,28 +67,25 @@ public:
   }
 
 private:
+  // Configuration and state
   InferenceConfig config_;
   bool initialized_;
   std::mutex inference_mutex_;
 
-  // ONNX Runtime objects
-  std::unique_ptr<Ort::Env> env_;
-  std::unique_ptr<Ort::Session> session_;
-  std::unique_ptr<Ort::SessionOptions> session_options_;
-
-  // Model info
-  std::vector<std::string> input_names_;
-  std::vector<std::string> output_names_;
-  std::vector<std::vector<int64_t>> input_shapes_;
-  std::vector<std::vector<int64_t>> output_shapes_;
+  // ORT backend executor
+  std::unique_ptr<deep_ort_backend::OrtBackendExecutor> backend_executor_;
 
   // Helper methods
-  bool loadModel();
-  void setupProviders();
   cv::Mat preprocessImage(const cv::Mat & image);
-  std::vector<Detection> postprocessOutputs(const std::vector<Ort::Value> & outputs, const cv::Size & original_size);
+  deep_ros::Tensor convertImagesToTensor(const std::vector<cv::Mat> & images);
+  std::vector<std::vector<Detection>> postprocessOutput(
+    const deep_ros::Tensor & output_tensor, const std::vector<cv::Size> & original_sizes);
+  std::vector<Detection> processDetectionsForImage(
+    const float * output_data,
+    const std::vector<size_t> & output_shape,
+    size_t image_index,
+    const cv::Size & original_size);
   std::vector<Detection> applyNMS(const std::vector<Detection> & detections);
-  void logModelInfo();
 };
 
 }  // namespace deep_object_detection

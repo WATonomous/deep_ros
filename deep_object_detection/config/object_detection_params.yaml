@@ -1,32 +1,37 @@
+---
 object_detection_node:
   ros__parameters:
     # Model configuration
-    model_path: "/path/to/your/model.onnx"
+    model_path: "./yolov8m.onnx"
     use_gpu: true
 
     # Input/output configuration
     input_width: 640
     input_height: 640
-    confidence_threshold: 0.5
+    confidence_threshold: 0.2
     nms_threshold: 0.4
-    max_batch_size: 4
+    max_batch_size: 1
 
-    # Camera topics (can be multiple cameras)
-    camera_topics: ["/camera/image_raw"]
-    queue_size: 10
+    # Image topic configuration
+    image_topic: "/CAM_FRONT/image_rect_compressed"
+    topic_type: "compressed_image"  # Options: "raw_image", "compressed_image", "multi_image", "multi_image_raw"
+    queue_size: 2
 
     # Output topics
     detection_topic: "/detections"
     visualization_topic: "/detection_markers"
 
     # Performance settings
-    inference_rate: 30.0  # Hz
-    enable_visualization: true
+    inference_rate: 1.0  # Hz
+    enable_visualization: false
     enable_debug: false
 
     # Model-specific configuration
     input_blob_name: "images"
     output_blob_name: "output0"
+
+    # Inference backend selection
+    inference_backend: "ort_backend"  # Options: "auto", "ort_backend", "onnx_runtime"
 
     # Class names (COCO dataset example)
     class_names: [

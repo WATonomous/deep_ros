@@ -20,6 +20,9 @@
   <depend>opencv2</depend>
   <depend>yaml-cpp</depend>
   <depend>onnxruntime_gpu_vendor</depend>
+  <depend>deep_msgs</depend>
+  <depend>deep_core</depend>
+  <depend>deep_ort_backend_plugin</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

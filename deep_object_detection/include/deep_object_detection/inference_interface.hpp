@@ -31,6 +31,12 @@ struct Detection
   std::string class_name;  // Class name
 };
 
+enum class InferenceBackend
+{
+  AUTO,  // Automatically select best available backend
+  ORT_BACKEND  // Use zero-copy ORT backend (recommended)
+};
+
 struct InferenceConfig
 {
   std::string model_path;
@@ -43,6 +49,7 @@ struct InferenceConfig
   bool use_gpu = true;
   std::string input_blob_name = "images";
   std::string output_blob_name = "output0";
+  InferenceBackend backend = InferenceBackend::AUTO;
 };
 
 /**

@@ -15,16 +15,23 @@
 #include <memory>
 
 #include "deep_object_detection/inference_interface.hpp"
-#include "deep_object_detection/onnx_inference.hpp"
+// #include "deep_object_detection/onnx_inference.hpp"
+#include "deep_object_detection/ort_backend_inference.hpp"
 
 namespace deep_object_detection
 {
 
 std::unique_ptr<InferenceInterface> createInferenceEngine(const InferenceConfig & config)
 {
-  // For now, we only support ONNX Runtime
-  // In the future, we could add logic to select different engines based on config
-  return std::make_unique<ONNXInference>(config);
+  switch (config.backend) {
+    case InferenceBackend::ORT_BACKEND:
+      return std::make_unique<OrtBackendInference>(config);
+
+    case InferenceBackend::AUTO:
+    default:
+      // Fall back to ONNX inference if else fails
+      return std::make_unique<OrtBackendInference>(config);
+  }
 }
 
 }  // namespace deep_object_detection

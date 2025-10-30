@@ -25,15 +25,26 @@
 
 #include <image_transport/image_transport.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/compressed_image.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <vision_msgs/msg/detection2_d_array.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
+#include "deep_msgs/msg/multi_image.hpp"
+#include "deep_msgs/msg/multi_image_raw.hpp"
 #include "deep_object_detection/inference_interface.hpp"
 
 namespace deep_object_detection
 {
+
+enum class ImageTopicType
+{
+  RAW_IMAGE,
+  COMPRESSED_IMAGE,
+  MULTI_IMAGE,
+  MULTI_IMAGE_RAW
+};
 
 class ObjectDetectionNode : public rclcpp::Node
 {
@@ -41,12 +52,16 @@ public:
   explicit ObjectDetectionNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
   ~ObjectDetectionNode();
 
+  // Start subscribers and timers after node construction
+  void start();
+
 private:
   // Configuration parameters
   struct NodeConfig
   {
     std::string model_path;
-    std::vector<std::string> camera_topics;
+    std::string image_topic;
+    ImageTopicType topic_type;
     std::string detection_topic;
     std::string visualization_topic;
     int max_batch_size;
@@ -65,14 +80,18 @@ private:
   void setupTimers();
 
   // Callback methods
-  void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr & msg, int camera_id);
+  void rawImageCallback(const sensor_msgs::msg::Image::ConstSharedPtr & msg);
+  void compressedImageCallback(const sensor_msgs::msg::CompressedImage::ConstSharedPtr & msg);
+  void multiImageCallback(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg);
+  void multiImageRawCallback(const deep_msgs::msg::MultiImageRaw::ConstSharedPtr & msg);
   void batchInferenceCallback();
   void publishDetections(
     const std::vector<std::vector<Detection>> & batch_detections, const std::vector<std_msgs::msg::Header> & headers);
   void publishVisualization(
     const std::vector<std::vector<Detection>> & batch_detections,
     const std::vector<cv::Mat> & images,
-    const std::vector<std_msgs::msg::Header> & headers);
+    const std::vector<std_msgs::msg::Header> & headers,
+    const std::vector<int> & camera_ids);
 
   // Image batch management
   struct ImageBatch
@@ -100,9 +119,10 @@ private:
     }
   };
 
-  void addImageToBatch(const cv::Mat & image, const std_msgs::msg::Header & header, int camera_id);
+  void addImageToBatch(const cv::Mat & image, const std_msgs::msg::Header & header, int camera_id = 0);
+  void addImagesToBatch(const std::vector<cv::Mat> & images, const std_msgs::msg::Header & header);
   bool shouldProcessBatch() const;
-  void processBatch();
+  void processBatch(const ImageBatch & batch_to_process);
 
   // Utility methods
   cv::Scalar getClassColor(int class_id);
@@ -110,12 +130,14 @@ private:
     const std::vector<Detection> & detections, const std_msgs::msg::Header & header, int camera_id);
 
   // ROS2 components
-  std::vector<std::shared_ptr<image_transport::Subscriber>> image_subscribers_;
+  rclcpp::SubscriptionBase::SharedPtr image_subscriber_;
+  std::shared_ptr<image_transport::Subscriber> image_transport_subscriber_;
   rclcpp::Publisher<vision_msgs::msg::Detection2DArray>::SharedPtr detection_publisher_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr visualization_publisher_;
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr visualization_image_publisher_;
   rclcpp::TimerBase::SharedPtr batch_timer_;
 
-  // Image transport
+  // Image transport (only used for raw images)
   std::shared_ptr<image_transport::ImageTransport> image_transport_;
 
   // Inference engine

@@ -31,6 +31,9 @@ find_package(message_filters REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(onnxruntime_gpu_vendor REQUIRED)
+find_package(deep_msgs REQUIRED)
+find_package(deep_core REQUIRED)
+find_package(deep_ort_backend_plugin REQUIRED)
 
 # Include directories
 include_directories(include)
@@ -38,7 +41,7 @@ include_directories(include)
 # Add executable
 add_executable(object_detection_node
     src/object_detection_node.cpp
-    src/onnx_inference.cpp
+    src/ort_backend_inference.cpp
     src/inference_factory.cpp
 )
 
@@ -54,12 +57,15 @@ ament_target_dependencies(object_detection_node
     message_filters
     OpenCV
     onnxruntime_gpu_vendor
+    deep_core
+    deep_ort_backend_plugin
 )
 
 # Link libraries
 target_link_libraries(object_detection_node
     yaml-cpp
     onnxruntime_gpu_vendor::onnxruntime_gpu_lib
+    deep_msgs::deep_msgs__rosidl_typesupport_cpp
 )
 
 # Install targets
