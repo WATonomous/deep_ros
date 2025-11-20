@@ -15,16 +15,16 @@ object_detection_node:
     # Image topic configuration
     image_topic: "/CAM_FRONT/image_rect_compressed"
     topic_type: "compressed_image"  # Options: "raw_image", "compressed_image", "multi_image", "multi_image_raw"
-    queue_size: 2
+    queue_size: 10
 
     # Output topics
     detection_topic: "/detections"
     visualization_topic: "/detection_markers"
 
     # Performance settings
-    inference_rate: 1.0  # Hz
-    enable_visualization: false
-    enable_debug: false
+    inference_rate: 33.0  # Hz
+    enable_visualization: true
+    enable_debug: true
 
     # Model-specific configuration
     input_blob_name: "images"

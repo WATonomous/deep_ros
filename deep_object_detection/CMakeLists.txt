@@ -34,6 +34,8 @@ find_package(onnxruntime_gpu_vendor REQUIRED)
 find_package(deep_msgs REQUIRED)
 find_package(deep_core REQUIRED)
 find_package(deep_ort_backend_plugin REQUIRED)
+find_package(deep_ort_gpu_backend_plugin REQUIRED)
+
 
 # Include directories
 include_directories(include)
@@ -59,6 +61,7 @@ ament_target_dependencies(object_detection_node
     onnxruntime_gpu_vendor
     deep_core
     deep_ort_backend_plugin
+    deep_ort_gpu_backend_plugin
 )
 
 # Link libraries
@@ -66,6 +69,7 @@ target_link_libraries(object_detection_node
     yaml-cpp
     onnxruntime_gpu_vendor::onnxruntime_gpu_lib
     deep_msgs::deep_msgs__rosidl_typesupport_cpp
+    deep_ort_gpu_backend_plugin::deep_ort_gpu_backend_plugin_lib
 )
 
 # Install targets

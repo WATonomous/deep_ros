@@ -16,8 +16,17 @@ project(onnxruntime_gpu_vendor VERSION 1.22.0)
 
 find_package(ament_cmake REQUIRED)
 
+# Find CUDA libraries (optional, don't fail if not found)
+find_package(CUDAToolkit QUIET)
+if(CUDAToolkit_FOUND)
+  message(STATUS "CUDA found: ${CUDAToolkit_VERSION}")
+else()
+  message(WARNING "CUDA not found - GPU acceleration may not work")
+endif()
+
 set(ONNXRUNTIME_VERSION "${PROJECT_VERSION}")
 set(ONNXRUNTIME_URL
+
   "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-gpu-${ONNXRUNTIME_VERSION}.tgz"
 )
 set(ONNXRUNTIME_DOWNLOAD_DIR "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime-download")
@@ -72,9 +81,11 @@ target_include_directories(onnxruntime_gpu_lib INTERFACE
 target_link_libraries(onnxruntime_gpu_lib INTERFACE
   $<BUILD_INTERFACE:${ONNXRUNTIME_EXTRACT_DIR}/lib/libonnxruntime.so>
   $<BUILD_INTERFACE:${ONNXRUNTIME_EXTRACT_DIR}/lib/libonnxruntime_providers_cuda.so>
+  $<BUILD_INTERFACE:${ONNXRUNTIME_EXTRACT_DIR}/lib/libonnxruntime_providers_tensorrt.so>
   $<BUILD_INTERFACE:${ONNXRUNTIME_EXTRACT_DIR}/lib/libonnxruntime_providers_shared.so>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/lib/libonnxruntime.so>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/lib/libonnxruntime_providers_cuda.so>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/lib/libonnxruntime_providers_tensorrt.so>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/lib/libonnxruntime_providers_shared.so>
 )
 

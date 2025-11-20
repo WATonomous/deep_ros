@@ -19,26 +19,44 @@
 #include <string>
 #include <vector>
 
+#include <deep_core/plugin_interfaces/backend_inference_executor.hpp>
 #include <deep_core/types/tensor.hpp>
 #include <opencv2/opencv.hpp>
 
 #include "deep_object_detection/inference_interface.hpp"
-#include "deep_ort_backend_plugin/ort_backend_executor.hpp"
 
 namespace deep_object_detection
 {
 
 /**
+ * @brief Backend type enumeration
+ */
+enum class BackendType
+{
+  CPU,  ///< Use CPU backend (deep_ort_backend_plugin)
+  GPU  ///< Use GPU backend (deep_ort_gpu_backend_plugin)
+};
+
+/**
  * @brief ORT Backend inference adapter for object detection
  *
- * This class adapts the deep_ort_backend::OrtBackendExecutor to work with
+ * This class adapts both CPU and GPU ORT backend executors to work with
  * the object detection inference interface, providing zero-copy inference
  * capabilities while maintaining compatibility with OpenCV images.
+ *
+ * The backend type can be configured to use either CPU or GPU execution.
  */
 class OrtBackendInference : public InferenceInterface
 {
 public:
-  explicit OrtBackendInference(const InferenceConfig & config);
+  /**
+   * @brief Constructor with backend type selection
+   * @param config Inference configuration
+   * @param backend_type Backend type (CPU or GPU)
+   * @param device_id GPU device ID (only used for GPU backend, default: 0)
+   */
+  explicit OrtBackendInference(
+    const InferenceConfig & config, BackendType backend_type = BackendType::GPU, int device_id = 0);
   ~OrtBackendInference() override;
 
   // InferenceInterface implementation
@@ -66,14 +84,35 @@ public:
     return initialized_;
   }
 
+  /**
+   * @brief Get current backend type
+   * @return Current backend type (CPU or GPU)
+   */
+  BackendType getBackendType() const
+  {
+    return backend_type_;
+  }
+
+  /**
+   * @brief Get GPU device ID (only relevant for GPU backend)
+   * @return GPU device ID
+   */
+  int getDeviceId() const
+  {
+    return device_id_;
+  }
+
 private:
   // Configuration and state
   InferenceConfig config_;
+  BackendType backend_type_;
+  int device_id_;
   bool initialized_;
   std::mutex inference_mutex_;
 
-  // ORT backend executor
-  std::unique_ptr<deep_ort_backend::OrtBackendExecutor> backend_executor_;
+  // Backend components (using base interfaces for polymorphism)
+  std::shared_ptr<deep_ros::BackendInferenceExecutor> backend_executor_;
+  std::shared_ptr<deep_ros::BackendMemoryAllocator> backend_allocator_;
 
   // Helper methods
   cv::Mat preprocessImage(const cv::Mat & image);

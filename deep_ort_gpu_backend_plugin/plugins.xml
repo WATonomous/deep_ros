@@ -1,0 +1,5 @@
+<library path="deep_ort_gpu_backend_plugin_lib">
+  <class name="onnxruntime_gpu" type="deep_ort_gpu_backend::OrtGpuBackendPlugin" base_class_type="deep_ros::DeepBackendPlugin">
+    <description>ONNX Runtime GPU backend with optimized memory allocation and inference execution using GPU execution providers such as CUDA or TensorRT</description>
+  </class>
+</library>

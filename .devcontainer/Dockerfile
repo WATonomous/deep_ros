@@ -70,12 +70,13 @@ FROM dev-tools AS source
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN --mount=type=bind,source=.,target=/tmp/src \
-    apt-get -qq update && rosdep update && \
+    apt-get -qq update && \
+    rosdep init || true && \
+    rosdep update && \
     rosdep install --from-paths /tmp/src --ignore-src -r -s \
         | (grep 'apt-get install' || true) \
         | awk '{print $3}' \
         | sort  > /tmp/colcon_install_list
-
 # ===============================================
 # Install Dependencies
 # ===============================================

@@ -393,6 +393,10 @@ void ObjectDetectionNode::processBatch(const ImageBatch & batch_to_process)
   }
 
   // Run inference
+  if (inference_engine_ == nullptr) {
+    RCLCPP_ERROR(this->get_logger(), "Inference engine is not initialized");
+    return;
+  }
   auto batch_detections = inference_engine_->inferBatch(batch_to_process.images);
 
   auto end_time = std::chrono::steady_clock::now();
