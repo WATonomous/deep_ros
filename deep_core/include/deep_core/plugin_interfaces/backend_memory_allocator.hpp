@@ -99,6 +99,17 @@ public:
    */
   void copy_device_to_device(void * dst, const void * src, size_t bytes);
 
+  /**
+   * @brief Copy data from host (CPU) to device memory - alias for copy_from_host
+   * @param dst Destination device memory pointer
+   * @param src Source host memory pointer
+   * @param bytes Number of bytes to copy
+   */
+  void copy_host_to_device(void * dst, const void * src, size_t bytes)
+  {
+    copy_from_host(dst, src, bytes);
+  }
+
 protected:
   /**
    * @brief Implementation of copy_from_host (to be overridden by backends)
