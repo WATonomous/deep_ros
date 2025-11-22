@@ -221,11 +221,6 @@ if(NOT CUDA_RUNTIME_LINKED)
   endif()
 endif()
 
-
-if(NOT CUDA_RUNTIME_LINKED)
-  message(FATAL_ERROR "No CUDA runtime found - required for GPU functionality")
-endif()
-
 # Add CUDA include directories if found
 if(CUDAToolkit_FOUND)
   target_include_directories(${DEEP_ORT_LIB} PRIVATE ${CUDAToolkit_INCLUDE_DIRS})

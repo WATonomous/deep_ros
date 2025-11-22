@@ -16,13 +16,6 @@ project(onnxruntime_gpu_vendor VERSION 1.22.0)
 
 find_package(ament_cmake REQUIRED)
 
-# Find CUDA libraries (optional, don't fail if not found)
-find_package(CUDAToolkit QUIET)
-if(CUDAToolkit_FOUND)
-  message(STATUS "CUDA found: ${CUDAToolkit_VERSION}")
-else()
-  message(WARNING "CUDA not found - GPU acceleration may not work")
-endif()
 
 set(ONNXRUNTIME_VERSION "${PROJECT_VERSION}")
 set(ONNXRUNTIME_URL
