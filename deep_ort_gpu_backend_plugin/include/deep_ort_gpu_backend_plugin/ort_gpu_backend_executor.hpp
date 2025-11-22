@@ -107,6 +107,7 @@ private:
   std::unique_ptr<Ort::Session> session_;
   std::unique_ptr<Ort::SessionOptions> session_options_;
   Ort::MemoryInfo memory_info_;
+  std::shared_ptr<deep_ros::BackendMemoryAllocator> custom_allocator_;
 
   /**
    * @brief Initialize session options with GPU execution provider

@@ -30,19 +30,11 @@ namespace deep_ort_gpu_backend
 enum class GpuExecutionProvider;
 
 /**
- * @brief Get a simple CPU allocator for use in other packages
- * This function allows other packages to get a CPU allocator without
- * including CUDA headers or GPU-specific dependencies
- * @return Shared pointer to a simple CPU allocator
- */
-std::shared_ptr<deep_ros::BackendMemoryAllocator> create_simple_cpu_allocator();
-
-/**
  * @brief ONNX Runtime GPU backend plugin
  *
  * Combines ORT GPU memory allocator and inference executor into a single
- * backend plugin for use with pluginlib. Supports both CUDA and TensorRT
- * execution providers.
+ * backend plugin for use with pluginlib. Supports CUDA
+ * execution provider and possible more in the future.
  */
 class OrtGpuBackendPlugin : public deep_ros::DeepBackendPlugin
 {

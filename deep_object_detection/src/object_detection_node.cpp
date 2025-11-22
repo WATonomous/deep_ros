@@ -154,7 +154,7 @@ void ObjectDetectionNode::initializeInference()
 
 void ObjectDetectionNode::initializeSubscribers()
 {
-  auto qos = rclcpp::QoS(rclcpp::KeepLast(config_.queue_size)).reliable();
+  auto qos = rclcpp::QoS(rclcpp::KeepLast(config_.queue_size)).best_effort();
   switch (config_.topic_type) {
     case ImageTopicType::RAW_IMAGE:
       image_transport_ = std::make_unique<image_transport::ImageTransport>(shared_from_this());

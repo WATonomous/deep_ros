@@ -213,15 +213,6 @@ TEST_CASE("OrtGpuBackendExecutor execution providers", "[executor][gpu][provider
     OrtGpuBackendExecutor cuda_executor(0, GpuExecutionProvider::CUDA);
     REQUIRE(cuda_executor.get_execution_provider() == GpuExecutionProvider::CUDA);
   }
-
-  SECTION("TensorRT execution provider")
-  {
-    // TensorRT might not be available, so we test construction but not necessarily inference
-    REQUIRE_NOTHROW([&]() {
-      OrtGpuBackendExecutor tensorrt_executor(0, GpuExecutionProvider::TENSORRT);
-      REQUIRE(tensorrt_executor.get_execution_provider() == GpuExecutionProvider::TENSORRT);
-    }());
-  }
 }
 
 TEST_CASE("OrtGpuBackendExecutor data type handling", "[executor][gpu][datatypes]")

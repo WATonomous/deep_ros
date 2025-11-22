@@ -162,6 +162,7 @@ target_link_libraries(${DEEP_ORT_LIB}
     onnxruntime_gpu_vendor::onnxruntime_gpu_lib
 )
 
+
 # CUDA runtime is required since code calls CUDA functions directly
 # Try multiple strategies to find and link CUDA runtime
 set(CUDA_RUNTIME_LINKED FALSE)

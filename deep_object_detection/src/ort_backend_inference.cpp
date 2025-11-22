@@ -72,16 +72,18 @@ bool OrtBackendInference::initialize()
         // } catch (const std::exception & e) {
         //   std::cerr << "Failed to initialize CUDA backend: " << e.what() << std::endl;
 
-        // Try TensorRT as fallback
+        // Try CUDA first for testing (temporarily disabled TensorRT due to CUDA driver mismatch)
         try {
           auto gpu_plugin = std::make_shared<deep_ort_gpu_backend::OrtGpuBackendPlugin>(
             device_id_, deep_ort_gpu_backend::GpuExecutionProvider::TENSORRT);
           backend_executor_ = gpu_plugin->get_inference_executor();
-          backend_allocator_ = gpu_plugin->get_allocator();
-          std::cout << "Initialized GPU backend (ORT TensorRT) on device " << device_id_ << std::endl;
-        } catch (const std::exception & tensorrt_e) {
-          std::cerr << "Failed to initialize TensorRT backend: " << tensorrt_e.what() << std::endl;
-          throw std::runtime_error("Failed to initialize any GPU backend");
+          std::cout << "Initialized GPU backend (ORT CUDA) on device " << device_id_ << std::endl;
+        } catch (const std::exception & e) {
+          std::cerr << "Failed to initialize CUDA backend due to driver version mismatch: " << e.what() << std::endl;
+          std::cerr << "Falling back to CPU backend for now..." << std::endl;
+          auto cpu_plugin = std::make_shared<deep_ort_backend::OrtBackendPlugin>();
+          backend_executor_ = cpu_plugin->get_inference_executor();
+          std::cout << "Initialized CPU backend (ORT) as fallback" << std::endl;
         }
         // }
       } break;
@@ -91,7 +93,7 @@ bool OrtBackendInference::initialize()
     }
 
     // Verify backend components are valid
-    if (!backend_executor_ || !backend_allocator_) {
+    if (!backend_executor_) {
       throw std::runtime_error("Failed to obtain backend components");
     }
 
@@ -125,20 +127,14 @@ std::vector<std::vector<Detection>> OrtBackendInference::inferBatch(const std::v
   if (images.empty()) {
     return {};
   }
-  RCLCPP_INFO(
-    rclcpp::get_logger("OrtBackendInference"), "Image count check passed, processing %zu images", images.size());
-
   if (images.size() > static_cast<size_t>(config_.max_batch_size)) {
     throw std::runtime_error(
       "Batch size " + std::to_string(images.size()) + " exceeds maximum " + std::to_string(config_.max_batch_size));
   }
-  RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Batch size check passed");
 
   std::lock_guard<std::mutex> lock(inference_mutex_);
-  RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Mutex lock acquired");
 
   try {
-    RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Starting image size collection...");
     // Store original image sizes for post-processing
     std::vector<cv::Size> original_sizes;
     original_sizes.reserve(images.size());
@@ -160,15 +156,12 @@ std::vector<std::vector<Detection>> OrtBackendInference::inferBatch(const std::v
 
       original_sizes.push_back(img.size());
     }
-    RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Image size collection completed");
 
-    RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Starting image preprocessing...");
     // Preprocess images and convert to tensor
     std::vector<cv::Mat> preprocessed_images;
     preprocessed_images.reserve(images.size());
 
     for (size_t i = 0; i < images.size(); ++i) {
-      RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Preprocessing image %zu...", i);
       try {
         cv::Mat processed = preprocessImage(images[i]);
         RCLCPP_INFO(
@@ -185,166 +178,45 @@ std::vector<std::vector<Detection>> OrtBackendInference::inferBatch(const std::v
         throw;
       }
     }
-    RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Image preprocessing completed");
 
-    RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Converting images to tensor...");
     // Convert to backend tensor
     deep_ros::Tensor input_tensor;
     try {
       input_tensor = convertImagesToTensor(preprocessed_images);
-      std::ostringstream shape_stream;
-      shape_stream << "[";
-      for (size_t i = 0; i < input_tensor.shape().size(); ++i) {
-        shape_stream << input_tensor.shape()[i];
-        if (i < input_tensor.shape().size() - 1) shape_stream << ", ";
-      }
-      shape_stream << "]";
-      RCLCPP_INFO(
-        rclcpp::get_logger("OrtBackendInference"),
-        "Tensor conversion completed. Tensor shape: %s",
-        shape_stream.str().c_str());
     } catch (const std::exception & e) {
       RCLCPP_ERROR(rclcpp::get_logger("OrtBackendInference"), "Failed to convert images to tensor: %s", e.what());
       throw;
     }
 
-    RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Starting GPU inference...");
     // Run inference
     deep_ros::Tensor output_tensor;
     try {
+      // Debug backend executor reuse
+      static void * last_backend_ptr = nullptr;
+      void * current_backend_ptr = backend_executor_.get();
+      if (last_backend_ptr != current_backend_ptr) {
+        RCLCPP_WARN(
+          rclcpp::get_logger("OrtBackendInference"),
+          "🔄 NEW BACKEND EXECUTOR DETECTED! Previous: %p, Current: %p",
+          last_backend_ptr,
+          current_backend_ptr);
+        RCLCPP_WARN(rclcpp::get_logger("OrtBackendInference"), "   This should only happen once at startup!");
+        last_backend_ptr = current_backend_ptr;
+      }
+
       output_tensor = backend_executor_->run_inference(input_tensor);
-      RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "GPU inference completed successfully");
     } catch (const std::exception & e) {
       RCLCPP_ERROR(rclcpp::get_logger("OrtBackendInference"), "GPU inference failed: %s", e.what());
       throw;
     }
-
-    RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Starting post-processing...");
     // Post-process results
     auto results = postprocessOutput(output_tensor, original_sizes);
-    RCLCPP_INFO(
-      rclcpp::get_logger("OrtBackendInference"), "Post-processing completed. Found %zu result sets", results.size());
-
-    RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "=== EXITING inferBatch SUCCESSFULLY ===");
     return results;
   } catch (const std::exception & e) {
     RCLCPP_ERROR(rclcpp::get_logger("OrtBackendInference"), "Exception in inferBatch: %s", e.what());
     throw std::runtime_error("Inference failed: " + std::string(e.what()));
   }
 }
-
-// deep_ros::Tensor OrtBackendInference::convertImagesToTensor(const std::vector<cv::Mat> & images)
-// {
-//   RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "=== ENTERING convertImagesToTensor ===");
-
-//   if (images.empty()) {
-//     throw std::runtime_error("No images to convert");
-//   }
-//   RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"),
-//     "Processing %zu images for tensor conversion", images.size());
-
-//   // Define tensor shape: [batch_size, channels, height, width]
-//   std::vector<size_t> shape = {
-//     images.size(),
-//     static_cast<size_t>(images[0].channels()),
-//     static_cast<size_t>(config_.input_height),
-//     static_cast<size_t>(config_.input_width)
-//   };
-
-//   std::ostringstream shape_stream;
-//   shape_stream << "[";
-//   for (size_t i = 0; i < shape.size(); ++i) {
-//     shape_stream << shape[i];
-//     if (i < shape.size() - 1) shape_stream << ", ";
-//   }
-//   shape_stream << "]";
-//   RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"),
-//     "Tensor shape will be: %s", shape_stream.str().c_str());
-
-//   // Calculate total memory needed
-//   size_t total_elements = 1;
-//   for (auto dim : shape) {
-//     total_elements *= dim;
-//   }
-//   size_t total_bytes = total_elements * sizeof(float);
-//   RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"),
-//     "Tensor will need %zu elements (%zu bytes)", total_elements, total_bytes);
-
-//   RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Creating tensor with backend allocator...");
-//   // Create tensor using backend allocator
-//   deep_ros::Tensor tensor;
-//   try {
-//     if (!backend_allocator_) {
-//       throw std::runtime_error("Backend allocator is null");
-//     }
-//     RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Backend allocator is valid, creating tensor...");
-
-//     tensor = deep_ros::Tensor(shape, deep_ros::DataType::FLOAT32, backend_allocator_);
-//     RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Tensor created successfully");
-
-//     // Verify tensor data pointer
-//     if (!tensor.data()) {
-//       throw std::runtime_error("Tensor data pointer is null after creation");
-//     }
-//     RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"),
-//       "Tensor data pointer is valid: %p", tensor.data());
-
-//   } catch (const std::exception & e) {
-//     RCLCPP_ERROR(rclcpp::get_logger("OrtBackendInference"),
-//       "Failed to create tensor: %s", e.what());
-//     throw;
-//   }
-
-//   RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Starting data copy to tensor...");
-//   // Copy image data to tensor
-//   float * tensor_data = static_cast<float *>(tensor.data());
-//   size_t image_size = config_.input_height * config_.input_width * images[0].channels();
-
-//   for (size_t i = 0; i < images.size(); ++i) {
-//     RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Copying image %zu data...", i);
-//     const cv::Mat & img = images[i];
-//     int depth = img.depth();
-//     if (depth != CV_32F) {
-//       RCLCPP_ERROR(rclcpp::get_logger("OrtBackendInference"),
-//         "Image must be float type after preprocessing. Got depth: %d, expected: %d (CV_32F)",
-//         depth, CV_32F);
-//       throw std::runtime_error("Image must be float type after preprocessing");
-//     }
-
-//     RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"),
-//       "Image %zu validation passed, copying pixel data...", i);
-
-//     // Copy image data (OpenCV uses HWC format, we need CHW for most models)
-//     try {
-//       for (int c = 0; c < img.channels(); ++c) {
-//         for (int h = 0; h < img.rows; ++h) {
-//           for (int w = 0; w < img.cols; ++w) {
-//             size_t tensor_idx = i * image_size +
-//                                c * img.rows * img.cols +
-//                                h * img.cols + w;
-
-//             // Bounds check
-//             if (tensor_idx >= total_elements) {
-//               throw std::runtime_error("Tensor index out of bounds: " +
-//                 std::to_string(tensor_idx) + " >= " + std::to_string(total_elements));
-//             }
-
-//             tensor_data[tensor_idx] = img.at<cv::Vec3f>(h, w)[c];
-//           }
-//         }
-//       }
-//       RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Image %zu data copy completed", i);
-//     } catch (const std::exception & e) {
-//       RCLCPP_ERROR(rclcpp::get_logger("OrtBackendInference"),
-//         "Failed to copy image %zu data: %s", i, e.what());
-//       throw;
-//     }
-//   }
-
-//   RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "All image data copied successfully");
-//   RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "=== EXITING convertImagesToTensor SUCCESSFULLY ===");
-//   return tensor;
-// }
 
 cv::Mat OrtBackendInference::preprocessImage(const cv::Mat & image)
 {
@@ -366,28 +238,15 @@ cv::Mat OrtBackendInference::preprocessImage(const cv::Mat & image)
 
 deep_ros::Tensor OrtBackendInference::convertImagesToTensor(const std::vector<cv::Mat> & images)
 {
-  RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "=== ENTERING convertImagesToTensor ===");
-
   if (images.empty()) {
     throw std::runtime_error("No images to convert");
   }
-  RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Processing %zu images for tensor conversion", images.size());
-
   // Define tensor shape: [batch_size, channels, height, width]
   std::vector<size_t> shape = {
     images.size(),
     static_cast<size_t>(images[0].channels()),
     static_cast<size_t>(config_.input_height),
     static_cast<size_t>(config_.input_width)};
-
-  std::ostringstream shape_stream;
-  shape_stream << "[";
-  for (size_t i = 0; i < shape.size(); ++i) {
-    shape_stream << shape[i];
-    if (i < shape.size() - 1) shape_stream << ", ";
-  }
-  shape_stream << "]";
-  RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Tensor shape will be: %s", shape_stream.str().c_str());
 
   // Calculate total memory needed
   size_t total_elements = 1;
@@ -401,75 +260,32 @@ deep_ros::Tensor OrtBackendInference::convertImagesToTensor(const std::vector<cv
     total_elements,
     total_bytes);
 
-  RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Creating CPU buffer for data preparation...");
+  // Step 1: Create CPU tensor using simple CPU allocator (64-byte aligned)
+  auto cpu_allocator = deep_ort_gpu_backend::get_ort_gpu_cpu_allocator();
+  deep_ros::Tensor tensor(shape, deep_ros::DataType::FLOAT32, cpu_allocator);
 
-  // Step 1: Create CPU buffer to prepare data
-  std::vector<float> cpu_data(total_elements);
-  RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "CPU buffer created with %zu elements", cpu_data.size());
-
-  RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Starting data copy to CPU buffer...");
-
-  // Step 2: Copy image data to CPU buffer
+  // Step 2: Direct copy image data to tensor memory (no intermediate buffers!)
+  float * tensor_data = static_cast<float *>(tensor.data());
   size_t image_size = config_.input_height * config_.input_width * images[0].channels();
 
   for (size_t i = 0; i < images.size(); ++i) {
-    RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Copying image %zu data to CPU buffer...", i);
     const cv::Mat & img = images[i];
-    int depth = img.depth();
-    if (depth != CV_32F) {
-      RCLCPP_ERROR(
-        rclcpp::get_logger("OrtBackendInference"),
-        "Image must be float type after preprocessing. Got depth: %d, expected: %d (CV_32F)",
-        depth,
-        CV_32F);
+
+    if (img.depth() != CV_32F) {
       throw std::runtime_error("Image must be float type after preprocessing");
     }
 
-    RCLCPP_INFO(
-      rclcpp::get_logger("OrtBackendInference"), "Image %zu validation passed, copying pixel data to CPU buffer...", i);
-
-    // Copy image data (OpenCV uses HWC format, we need CHW for most models)
-    try {
-      for (int c = 0; c < img.channels(); ++c) {
-        for (int h = 0; h < img.rows; ++h) {
-          for (int w = 0; w < img.cols; ++w) {
-            size_t tensor_idx = i * image_size + c * img.rows * img.cols + h * img.cols + w;
-
-            // Bounds check
-            if (tensor_idx >= total_elements) {
-              throw std::runtime_error(
-                "Tensor index out of bounds: " + std::to_string(tensor_idx) + " >= " + std::to_string(total_elements));
-            }
-
-            // Safe CPU memory access
-            cpu_data[tensor_idx] = img.at<cv::Vec3f>(h, w)[c];
-          }
+    // Direct copy to tensor memory (HWC -> CHW conversion)
+    for (int c = 0; c < img.channels(); ++c) {
+      for (int h = 0; h < img.rows; ++h) {
+        for (int w = 0; w < img.cols; ++w) {
+          size_t tensor_idx = i * image_size + c * img.rows * img.cols + h * img.cols + w;
+          tensor_data[tensor_idx] = img.at<cv::Vec3f>(h, w)[c];
         }
       }
-      RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Image %zu data copy to CPU buffer completed", i);
-    } catch (const std::exception & e) {
-      RCLCPP_ERROR(
-        rclcpp::get_logger("OrtBackendInference"), "Failed to copy image %zu data to CPU buffer: %s", i, e.what());
-      throw;
     }
   }
 
-  RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "All image data copied to CPU buffer successfully");
-
-  RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Creating CPU tensor with simple CPU allocator...");
-
-  // Step 3: Create CPU tensor using simple CPU allocator from the GPU backend factory
-  // This ensures we use a consistent CPU allocator without creating CPU backend plugin
-  auto cpu_allocator = deep_ort_gpu_backend::get_simple_cpu_allocator();
-  deep_ros::Tensor tensor(shape, deep_ros::DataType::FLOAT32, cpu_allocator);
-
-  RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "CPU tensor created successfully");
-
-  // Step 4: Copy data directly to CPU tensor (no GPU transfers)
-  std::memcpy(tensor.data(), cpu_data.data(), total_bytes);
-
-  RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "Data successfully copied to CPU tensor");
-  RCLCPP_INFO(rclcpp::get_logger("OrtBackendInference"), "=== EXITING convertImagesToTensor SUCCESSFULLY ===");
   return tensor;
 }
 

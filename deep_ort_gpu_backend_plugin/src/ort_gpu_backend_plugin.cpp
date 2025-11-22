@@ -65,11 +65,9 @@ bool OrtGpuBackendPlugin::initialize_gpu_components()
   try {
     // Create GPU executor
     executor_ = std::make_shared<OrtGpuBackendExecutor>(device_id_, execution_provider_);
-
     return true;
   } catch (const std::exception & e) {
     std::cerr << "Failed to initialize GPU components: " << e.what() << std::endl;
-    allocator_.reset();
     executor_.reset();
     return false;
   }

@@ -42,63 +42,63 @@ namespace deep_ort_gpu_backend
 {
 
 /**
- * @brief Simple CPU memory allocator for output tensors
+ * @brief CPU memory allocator for GPU backend output tensors (similar to CPU backend)
  */
-class SimpleCpuAllocator : public deep_ros::BackendMemoryAllocator
+class OrtGpuCpuMemoryAllocator : public deep_ros::BackendMemoryAllocator
 {
 public:
-  void * allocate(size_t bytes) override
-  {
-    return std::malloc(bytes);
-  }
+  /**
+   * @brief Constructor - initializes ORT allocator integration
+   */
+  OrtGpuCpuMemoryAllocator();
 
-  void deallocate(void * ptr) override
-  {
-    std::free(ptr);
-  }
+  /**
+   * @brief Destructor - cleans up ORT resources
+   */
+  ~OrtGpuCpuMemoryAllocator() override;
 
-  bool is_device_memory() const override
-  {
-    return false;
-  }
+  /**
+   * @brief Get the ORT allocator for integration
+   * @return Pointer to OrtAllocator
+   */
+  OrtAllocator * get_ort_allocator();
 
-  std::string device_name() const override
-  {
-    return "cpu";
-  }
+  /**
+   * @brief Get the ORT memory info
+   * @return Pointer to OrtMemoryInfo
+   */
+  const OrtMemoryInfo * get_ort_memory_info() const;
+
+  // BackendMemoryAllocator interface implementation
+  void * allocate(size_t bytes) override;
+  void deallocate(void * ptr) override;
+  bool is_device_memory() const override;
+  std::string device_name() const override;
 
 protected:
-  void copy_from_host_impl(void * dst, const void * src, size_t bytes) override
-  {
-    memcpy(dst, src, bytes);
-  }
-
+  void copy_from_host_impl(void * dst, const void * src, size_t bytes) override;
   void copy_from_host_permuted_impl(
     void * dst,
     const void * src,
     const std::vector<size_t> & src_shape,
     const std::vector<size_t> & permutation,
-    size_t elem_size) override
-  {
-    // Simple implementation - just copy without permutation
-    size_t total_elements = 1;
-    for (size_t dim : src_shape) {
-      total_elements *= dim;
-    }
-    memcpy(dst, src, total_elements * elem_size);
-  }
+    size_t elem_size) override;
+  void copy_to_host_impl(void * dst, const void * src, size_t bytes) override;
+  void copy_device_to_device_impl(void * dst, const void * src, size_t bytes) override;
 
-  void copy_to_host_impl(void * dst, const void * src, size_t bytes) override
-  {
-    memcpy(dst, src, bytes);
-  }
+private:
+  // ORT allocator integration (static instance for callbacks)
+  static OrtGpuCpuMemoryAllocator * instance_;
+  OrtAllocator ort_allocator_;
+  OrtMemoryInfo * ort_memory_info_;
 
-  void copy_device_to_device_impl(void * dst, const void * src, size_t bytes) override
-  {
-    memcpy(dst, src, bytes);
-  }
+  // Static callback functions for ORT integration
+  static void * ORT_API_CALL ort_alloc(OrtAllocator * this_, size_t size);
+  static void ORT_API_CALL ort_free(OrtAllocator * this_, void * p);
+  static const OrtMemoryInfo * ORT_API_CALL ort_info(const OrtAllocator * this_);
+  static void * ORT_API_CALL ort_reserve(OrtAllocator * this_, size_t size);
 };
 
-std::shared_ptr<deep_ros::BackendMemoryAllocator> get_simple_cpu_allocator();
+std::shared_ptr<deep_ros::BackendMemoryAllocator> get_ort_gpu_cpu_allocator();
 
 }  // namespace deep_ort_gpu_backend

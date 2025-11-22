@@ -15,11 +15,14 @@
 #include "deep_ort_gpu_backend_plugin/ort_gpu_backend_executor.hpp"
 
 #include <dlfcn.h>
+#include <onnxruntime_cxx_api.h>
 
 #include <cstdlib>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <memory>
+#include <numeric>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -27,19 +30,21 @@
 
 #include "deep_ort_gpu_backend_plugin/ort_gpu_memory_allocator.hpp"
 
-// Forward declaration in global scope
+// Forward declarations
 std::shared_ptr<deep_ros::BackendMemoryAllocator> get_simple_cpu_allocator();
 
 namespace deep_ort_gpu_backend
 {
+// Forward declaration for cast
+class OrtGpuCpuMemoryAllocator;
 
 OrtGpuBackendExecutor::OrtGpuBackendExecutor(int device_id, GpuExecutionProvider execution_provider)
 : device_id_(device_id)
 , execution_provider_(execution_provider)
 , memory_info_(nullptr)
 {
-  // Initialize ORT environment
-  env_ = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_VERBOSE, "OrtGpuBackendExecutor");
+  // Initialize ORT environment with minimal logging
+  env_ = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_ERROR, "OrtGpuBackendExecutor");
 
   // Initialize session options
   session_options_ = std::make_unique<Ort::SessionOptions>();
@@ -48,6 +53,10 @@ OrtGpuBackendExecutor::OrtGpuBackendExecutor(int device_id, GpuExecutionProvider
   // Create memory info for GPU
   memory_info_ =
     Ort::MemoryInfo("Cuda", OrtAllocatorType::OrtArenaAllocator, device_id_, OrtMemType::OrtMemTypeDefault);
+
+  // Register our custom CPU allocator for output tensors (similar to CPU backend)
+  auto custom_allocator_shared = get_ort_gpu_cpu_allocator();
+  custom_allocator_ = custom_allocator_shared;
 }
 
 OrtGpuBackendExecutor::~OrtGpuBackendExecutor()
@@ -87,125 +96,54 @@ bool OrtGpuBackendExecutor::load_model_impl(const std::filesystem::path & model_
 deep_ros::Tensor OrtGpuBackendExecutor::run_inference_impl(deep_ros::Tensor & input)
 {
   if (!session_) {
-    throw std::runtime_error("No model loaded");
+    throw std::runtime_error("No ONNX session available");
   }
 
   try {
-    std::cout << "Starting GPU inference..." << std::endl;
+    // Get input/output names (cached for performance)
+    static thread_local Ort::AllocatorWithDefaultOptions allocator;
+    static thread_local auto input_name = session_->GetInputNameAllocated(0, allocator);
+    static thread_local auto output_name = session_->GetOutputNameAllocated(0, allocator);
+    static thread_local const char * input_names[] = {input_name.get()};
+    static thread_local const char * output_names[] = {output_name.get()};
 
-    // Get input/output names
-    Ort::AllocatorWithDefaultOptions allocator;
-    auto input_name = session_->GetInputNameAllocated(0, allocator);
-    auto output_name = session_->GetOutputNameAllocated(0, allocator);
-
-    const char * input_names[] = {input_name.get()};
-    const char * output_names[] = {output_name.get()};
-
-    std::cout << "Input name: " << input_names[0] << ", Output name: " << output_names[0] << std::endl;
-
-    // Validate input tensor shape
-    std::cout << "Input tensor shape: [";
-    for (size_t i = 0; i < input.shape().size(); ++i) {
-      std::cout << input.shape()[i];
-      if (i < input.shape().size() - 1) std::cout << ", ";
-    }
-    std::cout << "], dtype: " << static_cast<int>(input.dtype()) << std::endl;
-
-    // Input tensor is already on CPU - create ONNXRuntime tensor directly
-    std::cout << "Creating ONNXRuntime tensor from CPU input..." << std::endl;
-
+    // Create input tensor using CPU memory (input data is on CPU)
     std::vector<int64_t> input_shape_int64(input.shape().begin(), input.shape().end());
-    size_t total_elements = 1;
-    for (size_t dim : input.shape()) {
-      total_elements *= dim;
-    }
+    auto cpu_memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
-    // Get ONNXRuntime's CPU allocator for proper memory management
-    Ort::AllocatorWithDefaultOptions ort_allocator;
+    Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
+      cpu_memory_info,
+      static_cast<float *>(input.data()),
+      input.shape().size() > 0
+        ? std::accumulate(input.shape().begin(), input.shape().end(), 1ULL, std::multiplies<size_t>())
+        : 0,
+      input_shape_int64.data(),
+      input_shape_int64.size());
 
-    // Let ONNXRuntime allocate and manage CPU memory completely
-    Ort::Value input_tensor =
-      Ort::Value::CreateTensor<float>(ort_allocator, input_shape_int64.data(), input_shape_int64.size());
-
-    std::cout << "Created empty ONNXRuntime tensor, copying our data..." << std::endl;
-
-    // Get ONNXRuntime's allocated memory and copy our data into it
-    float * ort_input_data = input_tensor.GetTensorMutableData<float>();
-    std::memcpy(ort_input_data, input.data(), total_elements * sizeof(float));
-
-    std::cout << "Created ONNXRuntime input tensor, running inference..." << std::endl;
-
-    // Run inference - ONNXRuntime will handle all GPU memory management internally
+    // Run inference using simple session Run (ONNX Runtime handles GPU transfers)
     auto output_tensors = session_->Run(Ort::RunOptions{nullptr}, input_names, &input_tensor, 1, output_names, 1);
 
     if (output_tensors.empty()) {
-      throw std::runtime_error("Inference returned no outputs");
+      throw std::runtime_error("ONNX GPU Inference returned no outputs");
     }
-
-    std::cout << "Inference completed, processing outputs..." << std::endl;
 
     // Get output tensor info
     auto & output_tensor = output_tensors[0];
-    auto output_tensor_info = output_tensor.GetTensorTypeAndShapeInfo();
-    auto output_shape = output_tensor_info.GetShape();
-    auto output_type = output_tensor_info.GetElementType();
+    auto output_info = output_tensor.GetTensorTypeAndShapeInfo();
+    auto output_shape_int64 = output_info.GetShape();
 
-    // Convert shape from int64_t to size_t
-    std::vector<size_t> output_shape_sizet(output_shape.begin(), output_shape.end());
+    // Convert output shape to size_t
+    std::vector<size_t> output_shape(output_shape_int64.begin(), output_shape_int64.end());
 
-    std::cout << "Output shape: [";
-    for (size_t i = 0; i < output_shape_sizet.size(); ++i) {
-      std::cout << output_shape_sizet[i];
-      if (i < output_shape_sizet.size() - 1) std::cout << ", ";
-    }
-    std::cout << "]" << std::endl;
-
-    // Convert ONNX type back to deep_ros type
-    deep_ros::DataType output_dtype;
-    switch (output_type) {
-      case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
-        output_dtype = deep_ros::DataType::FLOAT32;
-        break;
-      case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
-        output_dtype = deep_ros::DataType::INT32;
-        break;
-      case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
-        output_dtype = deep_ros::DataType::INT64;
-        break;
-      case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
-        output_dtype = deep_ros::DataType::UINT8;
-        break;
-      case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
-        output_dtype = deep_ros::DataType::INT8;
-        break;
-      default:
-        throw std::runtime_error("Unsupported output data type from ONNX model");
-    }
-
-    // Get output data - ONNXRuntime manages this memory
+    // Get output data pointer (this is on CPU after ONNX Runtime handles GPU->CPU transfer)
     const float * output_data = output_tensor.GetTensorData<float>();
-    size_t output_total_elements = 1;
-    for (size_t dim : output_shape_sizet) {
-      output_total_elements *= dim;
-    }
-    size_t output_bytes = output_total_elements * get_element_size(output_dtype);
 
-    std::cout << "Creating output tensor with " << output_total_elements << " elements" << std::endl;
+    // Create result tensor that wraps the ONNX-allocated memory
+    deep_ros::Tensor result(const_cast<void *>(static_cast<const void *>(output_data)), output_shape, input.dtype());
 
-    // Create output tensor on CPU using our simple CPU allocator
-    auto cpu_allocator = deep_ort_gpu_backend::get_simple_cpu_allocator();
-    deep_ros::Tensor output_tensor_result(output_shape_sizet, output_dtype, cpu_allocator);
-
-    std::cout << "Copying output data from ONNXRuntime to our CPU tensor..." << std::endl;
-
-    // Simple memory copy - both are CPU memory
-    std::memcpy(output_tensor_result.data(), output_data, output_bytes);
-
-    std::cout << "GPU inference completed successfully" << std::endl;
-    return output_tensor_result;
+    return result;
   } catch (const std::exception & e) {
-    std::cerr << "GPU inference failed: " << e.what() << std::endl;
-    throw std::runtime_error("Inference failed: " + std::string(e.what()));
+    throw std::runtime_error("GPU inference failed: " + std::string(e.what()));
   }
 }
 
@@ -221,7 +159,7 @@ void OrtGpuBackendExecutor::initialize_session_options()
   session_options_->SetIntraOpNumThreads(1);
   session_options_->SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
 
-  // Configure execution provider with fallback
+  // Configure execution provider
   try {
     switch (execution_provider_) {
       case GpuExecutionProvider::CUDA:
@@ -230,12 +168,10 @@ void OrtGpuBackendExecutor::initialize_session_options()
       case GpuExecutionProvider::TENSORRT:
         try {
           configure_tensorrt_provider();
-          std::cout << "TensorRT provider configured successfully" << std::endl;
         } catch (const std::exception & tensorrt_e) {
           std::cerr << "TensorRT failed during configuration, falling back to CUDA: " << tensorrt_e.what() << std::endl;
           execution_provider_ = GpuExecutionProvider::CUDA;
           configure_cuda_provider();
-          std::cout << "Successfully fell back to CUDA provider" << std::endl;
         }
         break;
     }
@@ -250,11 +186,21 @@ void OrtGpuBackendExecutor::configure_cuda_provider()
     OrtCUDAProviderOptions cuda_options{};
     cuda_options.device_id = device_id_;
     cuda_options.arena_extend_strategy = 0;  // kNextPowerOfTwo
-    cuda_options.gpu_mem_limit = 0;  // Use default
-    cuda_options.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchExhaustive;
+    cuda_options.gpu_mem_limit = 0;  // No memory limit
+    cuda_options.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchDefault;
     cuda_options.do_copy_in_default_stream = 1;
 
     session_options_->AppendExecutionProvider_CUDA(cuda_options);
+
+    // Set optimization level
+    session_options_->SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+    session_options_->SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+    session_options_->EnableMemPattern();
+    session_options_->EnableCpuMemArena();
+    session_options_->DisableProfiling();
+
+    // Use environment allocators
+    session_options_->AddConfigEntry("session.use_env_allocators", "1");
   } catch (const std::exception & e) {
     throw std::runtime_error("Failed to configure CUDA provider: " + std::string(e.what()));
   }
@@ -263,27 +209,25 @@ void OrtGpuBackendExecutor::configure_cuda_provider()
 void OrtGpuBackendExecutor::configure_tensorrt_provider()
 {
   try {
-    if (!check_tensorrt_dependencies()) {
-      throw std::runtime_error("TensorRT dependencies not satisfied");
-    }
+    // Disable DirectX interop that causes libdxcore issues on Linux
+    setenv("CUDA_MODULE_LOADING", "LAZY", 1);
+    setenv("TRT_DISABLE_D3D12", "1", 1);
 
-    std::cout << "All TensorRT dependencies found, configuring TensorRT provider..." << std::endl;
-
-    int cuda_runtime_version = 0;
-    // Removed: cudaRuntimeGetVersion(&cuda_runtime_version);
-    // std::cout << "CUDA runtime version detected: " << cuda_runtime_version << std::endl;
-
-    // Use string-based provider configuration for better compatibility
     std::unordered_map<std::string, std::string> tensorrt_options;
     tensorrt_options["device_id"] = std::to_string(device_id_);
     tensorrt_options["trt_max_workspace_size"] = "67108864";  // 64MB
     tensorrt_options["trt_max_partition_iterations"] = "1";
     tensorrt_options["trt_min_subgraph_size"] = "1";
-    tensorrt_options["trt_fp16_enable"] = "0";
     tensorrt_options["trt_engine_cache_enable"] = "0";
+    tensorrt_options["trt_force_sequential_engine_build"] = "1";
+    tensorrt_options["trt_cuda_graph_enable"] = "0";
+    tensorrt_options["trt_disable_d3d12"] = "1";  // Force disable DirectX
+    tensorrt_options["trt_profiling_verbosity"] = "0";
 
-    std::cout << "Attempting TensorRT provider registration..." << std::endl;
-    session_options_->AppendExecutionProvider("NvTensorRTRTXExecutionProvider", tensorrt_options);
+    std::string tensorrt_provider_name = "NvTensorRtRtx";
+
+    std::cout << "Attempting TensorRT provider registration with name: '" << tensorrt_provider_name << "'" << std::endl;
+    session_options_->AppendExecutionProvider(tensorrt_provider_name, tensorrt_options);
     std::cout << "TensorRT provider registered successfully" << std::endl;
   } catch (const std::exception & e) {
     throw std::runtime_error("Failed to configure TensorRT provider: " + std::string(e.what()));
@@ -361,54 +305,5 @@ bool OrtGpuBackendExecutor::verify_gpu_availability() const
 
 void OrtGpuBackendExecutor::set_device() const
 {}
-
-bool OrtGpuBackendExecutor::check_tensorrt_dependencies() const
-{
-  // Since libraries are properly registered with ldconfig, we can rely on system resolution
-  std::cout << "Checking TensorRT dependencies..." << std::endl;
-
-  // Check for core TensorRT library (try exact version first)
-  void * handle = dlopen("libnvinfer.so.10", RTLD_LAZY);
-  if (!handle) {
-    // Try lean version as fallback
-    handle = dlopen("libnvinfer_lean.so.10", RTLD_LAZY);
-    if (handle) {
-      dlclose(handle);
-      std::cout << "Found TensorRT lean library (v10)" << std::endl;
-      // For lean version, plugin library is not required
-      return true;
-    }
-
-    std::cerr << "TensorRT core library not found. Error: " << dlerror() << std::endl;
-    return false;
-  } else {
-    dlclose(handle);
-    std::cout << "Found TensorRT full library (v10)" << std::endl;
-  }
-
-  // For full TensorRT, check plugin library
-  handle = dlopen("libnvinfer_plugin.so.10", RTLD_LAZY);
-  if (!handle) {
-    std::cerr << "Warning: TensorRT plugin library not found. Error: " << dlerror() << std::endl;
-    // Don't fail completely - some models don't need plugins
-  } else {
-    dlclose(handle);
-    std::cout << "Found TensorRT plugin library (v10)" << std::endl;
-  }
-
-  // Check for ONNX parser library (required by ONNXRuntime TensorRT provider)
-  handle = dlopen("libnvonnxparser.so.10", RTLD_LAZY);
-  if (!handle) {
-    std::cerr << "TensorRT ONNX parser library not found. Error: " << dlerror() << std::endl;
-    std::cerr << "Install with: sudo apt install libnvonnxparser10" << std::endl;
-    return false;
-  } else {
-    dlclose(handle);
-    std::cout << "Found TensorRT ONNX parser library (v10)" << std::endl;
-  }
-
-  std::cout << "All TensorRT dependencies satisfied" << std::endl;
-  return true;
-}
 
 }  // namespace deep_ort_gpu_backend

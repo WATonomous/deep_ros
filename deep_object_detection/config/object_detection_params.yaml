@@ -22,8 +22,8 @@ object_detection_node:
     visualization_topic: "/detection_markers"
 
     # Performance settings
-    inference_rate: 33.0  # Hz
-    enable_visualization: true
+    inference_rate: 63.0  # Hz
+    enable_visualization: false
     enable_debug: true
 
     # Model-specific configuration
