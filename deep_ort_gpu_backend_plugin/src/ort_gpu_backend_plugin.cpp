@@ -22,6 +22,7 @@
 #include <pluginlib/class_list_macros.hpp>
 
 #include "deep_ort_gpu_backend_plugin/ort_gpu_backend_executor.hpp"
+#include "deep_ort_gpu_backend_plugin/ort_gpu_memory_allocator.hpp"
 
 namespace deep_ort_gpu_backend
 {
@@ -63,14 +64,25 @@ GpuExecutionProvider OrtGpuBackendPlugin::get_execution_provider() const
 bool OrtGpuBackendPlugin::initialize_gpu_components()
 {
   try {
+    // Initialize allocator first
+    allocator_ = get_ort_gpu_cpu_allocator();
+    if (!allocator_) {
+      std::cerr << "Failed to get GPU backend CPU allocator" << std::endl;
+      return false;
+    }
+
     // Create GPU executor
     executor_ = std::make_shared<OrtGpuBackendExecutor>(device_id_, execution_provider_);
+    if (!executor_) {
+      std::cerr << "Failed to create GPU backend executor" << std::endl;
+      return false;
+    }
 
     return true;
   } catch (const std::exception & e) {
     std::cerr << "Failed to initialize GPU components: " << e.what() << std::endl;
-    allocator_.reset();
     executor_.reset();
+    allocator_.reset();
     return false;
   }
 }

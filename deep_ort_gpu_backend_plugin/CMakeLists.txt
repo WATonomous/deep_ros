@@ -162,6 +162,7 @@ target_link_libraries(${DEEP_ORT_LIB}
     onnxruntime_gpu_vendor::onnxruntime_gpu_lib
 )
 
+
 # CUDA runtime is required since code calls CUDA functions directly
 # Try multiple strategies to find and link CUDA runtime
 set(CUDA_RUNTIME_LINKED FALSE)
@@ -220,15 +221,6 @@ if(NOT CUDA_RUNTIME_LINKED)
   endif()
 endif()
 
-# Strategy 4: Try system-wide search as last resort
-if(NOT CUDA_RUNTIME_LINKED)
-  find_library(SYSTEM_CUDA_RUNTIME_LIBRARY NAMES cudart)
-  if(SYSTEM_CUDA_RUNTIME_LIBRARY)
-    target_link_libraries(${DEEP_ORT_LIB} PRIVATE ${SYSTEM_CUDA_RUNTIME_LIBRARY})
-    message(STATUS "Linking system CUDA runtime: ${SYSTEM_CUDA_RUNTIME_LIBRARY}")
-    set(CUDA_RUNTIME_LINKED TRUE)
-  endif()
-endif()
 
 if(NOT CUDA_RUNTIME_LINKED)
   message(FATAL_ERROR "No CUDA runtime found - required for GPU functionality")
@@ -265,17 +257,17 @@ install(FILES plugins.xml
 # Export plugin description file to ament index
 pluginlib_export_plugin_description_file(deep_core plugins.xml)
 
-# if(BUILD_TESTING)
-#   find_package(deep_test REQUIRED)
+if(BUILD_TESTING)
+  find_package(deep_test REQUIRED)
 
-#   # add_deep_test(test_ort_gpu_backend test/test_ort_gpu_backend.cpp
-#   #   LIBRARIES
-#   #     ${DEEP_ORT_LIB}
-#   #     deep_core::deep_core_lib
-#   #     onnxruntime_gpu_vendor::onnxruntime_gpu_lib
-#   # )
+  add_deep_test(test_ort_gpu_backend test/test_ort_gpu_backend.cpp
+    LIBRARIES
+      ${DEEP_ORT_LIB}
+      deep_core::deep_core_lib
+      onnxruntime_gpu_vendor::onnxruntime_gpu_lib
+  )
 
-# endif()
+endif()
 
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
 ament_export_libraries(${DEEP_ORT_LIB})

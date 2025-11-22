@@ -1,17 +1,16 @@
-# deep_ort_backend_plugin
+# deep_ort_gpu_backend_plugin
 
 ONNX Runtime GPU backend plugin for deep_core.
 
 ## Overview
 
 Provides:
-- GPU inference executor using ONNX Runtime with options for CUDA or TensorRT execution provider
+- GPU inference executor using ONNX Runtime with options for CUDA or TensorRT(untested) execution provider
 - Device context management for multi-GPU systems
-- Zero-copy inference with IO binding
 
 ## Plugin Name
 
-`onnxruntime_cpu`
+`onnxruntime_gpu`
 
 ## Supported Formats
 
@@ -22,7 +21,7 @@ ONNX models (.onnx files)
 Add to your `package.xml`:
 
 ```xml
-<exec_depend>deep_ort_backend_plugin</exec_depend>
+<exec_depend>deep_ort_gpu_backend_plugin</exec_depend>
 ```
 
 Configure your inference nodes to use this plugin:
@@ -37,4 +36,4 @@ inference_node:
 ## Dependencies
 
 - deep_core
-- onnxruntime_vendor
+- onnxruntime_gpu_vendor

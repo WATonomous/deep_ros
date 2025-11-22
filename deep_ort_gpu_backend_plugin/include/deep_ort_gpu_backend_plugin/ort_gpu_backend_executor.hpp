@@ -86,7 +86,7 @@ protected:
   bool load_model_impl(const std::filesystem::path & model_path) override;
 
   /**
-   * @brief Run inference using zero-copy IO binding with GPU acceleration
+   * @brief Run inference with GPU acceleration
    * @param input Input tensor (must be compatible with model input)
    * @return Output tensor with inference results
    * @throws std::runtime_error if inference fails or no model loaded
@@ -107,6 +107,7 @@ private:
   std::unique_ptr<Ort::Session> session_;
   std::unique_ptr<Ort::SessionOptions> session_options_;
   Ort::MemoryInfo memory_info_;
+  std::shared_ptr<deep_ros::BackendMemoryAllocator> custom_allocator_;
 
   /**
    * @brief Initialize session options with GPU execution provider
@@ -155,12 +156,6 @@ private:
    * @brief Set CUDA device context
    */
   void set_device() const;
-
-  /**
-   * @brief Check if all TensorRT dependencies are available
-   * @return true if TensorRT can be used, false otherwise
-   */
-  bool check_tensorrt_dependencies() const;
 };
 
 }  // namespace deep_ort_gpu_backend
