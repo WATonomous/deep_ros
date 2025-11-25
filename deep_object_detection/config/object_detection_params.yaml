@@ -2,7 +2,7 @@
 object_detection_node:
   ros__parameters:
     # Model configuration
-    model_path: "./yolov8m.onnx"
+    model_path: "/workspaces/deep_ros/yolov8m.onnx"
     use_gpu: true
 
     # Input/output configuration
@@ -10,10 +10,12 @@ object_detection_node:
     input_height: 640
     confidence_threshold: 0.2
     nms_threshold: 0.4
-    max_batch_size: 1
+    max_batch_size: 3
 
     # Image topic configuration
-    image_topic: "/CAM_FRONT/image_rect_compressed"
+    # For single camera, use image_topic. For multiple cameras, use camera_topics
+    image_topic: "/CAM_FRONT/image_rect_compressed"  # Legacy single camera support
+    camera_topics: ["/CAM_FRONT/image_rect_compressed", "/CAM_FRONT_LEFT/image_rect_compressed", "/CAM_FRONT_RIGHT/image_rect_compressed"]
     topic_type: "compressed_image"  # Options: "raw_image", "compressed_image", "multi_image", "multi_image_raw"
     queue_size: 10
 

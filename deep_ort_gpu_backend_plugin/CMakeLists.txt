@@ -116,6 +116,10 @@ if(NOT CUDAToolkit_FOUND)
       /local/cuda/lib64
       /local/cuda-12.6/lib64
       /usr/lib/x86_64-linux-gnu
+      /usr/local/cuda/targets/x86_64-linux/lib
+      /usr/local/cuda-12.2/targets/x86_64-linux/lib
+      /usr/local/cuda-12/targets/x86_64-linux/lib
+      /usr/local/cuda-12.6/targets/x86_64-linux/lib
       /usr/local/cuda/lib64
       /usr/local/cuda-12/lib64
       /usr/local/cuda-12.6/lib64
@@ -124,9 +128,13 @@ if(NOT CUDAToolkit_FOUND)
     DOC "CUDA runtime library"
   )
 
-  if(CUDA_INCLUDE_DIR AND CUDA_RUNTIME_LIBRARY)
+  if(CUDA_RUNTIME_LIBRARY)
     message(STATUS "Found CUDA runtime: ${CUDA_RUNTIME_LIBRARY}")
-    message(STATUS "Found CUDA headers: ${CUDA_INCLUDE_DIR}")
+    if(CUDA_INCLUDE_DIR)
+      message(STATUS "Found CUDA headers: ${CUDA_INCLUDE_DIR}")
+    else()
+      message(WARNING "CUDA headers not found, but runtime library found - will use runtime library only")
+    endif()
     set(CUDA_FOUND TRUE)
   else()
     message(WARNING "CUDA runtime not found - skipping tests that require CUDA")
@@ -202,6 +210,10 @@ if(NOT CUDA_RUNTIME_LINKED)
       /local/cuda-12/lib64
       /local/cuda-11/lib64
       /usr/lib/x86_64-linux-gnu
+      /usr/local/cuda/targets/x86_64-linux/lib
+      /usr/local/cuda-12.2/targets/x86_64-linux/lib
+      /usr/local/cuda-12/targets/x86_64-linux/lib
+      /usr/local/cuda-12.6/targets/x86_64-linux/lib
       /usr/local/cuda/lib64
       /usr/local/cuda-12/lib64
       /usr/local/cuda-12.6/lib64
@@ -229,6 +241,27 @@ if(NOT CUDA_RUNTIME_LINKED)
     message(STATUS "Linking system CUDA runtime: ${SYSTEM_CUDA_RUNTIME_LIBRARY}")
     set(CUDA_RUNTIME_LINKED TRUE)
   endif()
+endif()
+
+# Strategy 5: Direct path check as absolute last resort
+if(NOT CUDA_RUNTIME_LINKED)
+  # Check common CUDA installation paths directly
+  set(POSSIBLE_CUDA_PATHS
+    /usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.12
+    /usr/local/cuda-12.2/targets/x86_64-linux/lib/libcudart.so.12
+    /usr/local/cuda-12/targets/x86_64-linux/lib/libcudart.so.12
+    /usr/local/cuda/lib64/libcudart.so.12
+    /usr/local/cuda/lib/libcudart.so.12
+  )
+  
+  foreach(CUDA_PATH ${POSSIBLE_CUDA_PATHS})
+    if(EXISTS ${CUDA_PATH})
+      target_link_libraries(${DEEP_ORT_LIB} PRIVATE ${CUDA_PATH})
+      message(STATUS "Linking CUDA runtime from direct path: ${CUDA_PATH}")
+      set(CUDA_RUNTIME_LINKED TRUE)
+      break()
+    endif()
+  endforeach()
 endif()
 
 if(NOT CUDA_RUNTIME_LINKED)

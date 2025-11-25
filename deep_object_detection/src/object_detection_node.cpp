@@ -66,10 +66,17 @@ void ObjectDetectionNode::initializeParameters()
 
   // Camera parameters
   config_.image_topic = this->declare_parameter<std::string>("image_topic", "/front/image_compressed");
+  config_.camera_topics = this->declare_parameter<std::vector<std::string>>("camera_topics", std::vector<std::string>{});
   std::string topic_type_str = this->declare_parameter<std::string>("topic_type", "compressed_image");
 
   config_.image_topic = this->get_parameter("image_topic").as_string();
+  config_.camera_topics = this->get_parameter("camera_topics").as_string_array();
   topic_type_str = this->get_parameter("topic_type").as_string();
+  
+  // If camera_topics is empty, use single image_topic for backward compatibility
+  if (config_.camera_topics.empty()) {
+    config_.camera_topics = {config_.image_topic};
+  }
 
   // Parse topic type
   if (topic_type_str == "raw_image") {
@@ -132,12 +139,24 @@ void ObjectDetectionNode::initializeParameters()
 
   config_.inference_config.class_names = this->get_parameter("class_names").as_string_array();
 
-  RCLCPP_INFO(
-    this->get_logger(),
-    "Initialized with topic '%s' (type: %s) and %zu classes",
-    config_.image_topic.c_str(),
-    topic_type_str.c_str(),
-    config_.inference_config.class_names.size());
+  if (config_.camera_topics.size() > 1) {
+    RCLCPP_INFO(
+      this->get_logger(),
+      "Initialized with %zu camera topics (type: %s) and %zu classes",
+      config_.camera_topics.size(),
+      topic_type_str.c_str(),
+      config_.inference_config.class_names.size());
+    for (size_t i = 0; i < config_.camera_topics.size(); ++i) {
+      RCLCPP_INFO(this->get_logger(), "  Camera %zu: %s", i, config_.camera_topics[i].c_str());
+    }
+  } else {
+    RCLCPP_INFO(
+      this->get_logger(),
+      "Initialized with topic '%s' (type: %s) and %zu classes",
+      config_.image_topic.c_str(),
+      topic_type_str.c_str(),
+      config_.inference_config.class_names.size());
+  }
 }
 
 void ObjectDetectionNode::initializeInference()
@@ -166,11 +185,28 @@ void ObjectDetectionNode::initializeSubscribers()
       break;
 
     case ImageTopicType::COMPRESSED_IMAGE:
-      image_subscriber_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(
-        config_.image_topic,
-        qos,
-        std::bind(&ObjectDetectionNode::compressedImageCallback, this, std::placeholders::_1));
-      RCLCPP_INFO(this->get_logger(), "Subscribed to compressed image topic: %s", config_.image_topic.c_str());
+      if (config_.camera_topics.size() > 1) {
+        // Multiple camera mode
+        camera_subscribers_.reserve(config_.camera_topics.size());
+        for (size_t i = 0; i < config_.camera_topics.size(); ++i) {
+          auto callback = [this, i](const sensor_msgs::msg::CompressedImage::ConstSharedPtr & msg) {
+            this->multiCameraCompressedCallback(msg, static_cast<int>(i));
+          };
+          camera_subscribers_.push_back(
+            this->create_subscription<sensor_msgs::msg::CompressedImage>(
+              config_.camera_topics[i], qos, callback));
+          RCLCPP_INFO(
+            this->get_logger(), "Subscribed to camera %zu compressed image topic: %s", i,
+            config_.camera_topics[i].c_str());
+        }
+      } else {
+        // Single camera mode (backward compatibility)
+        image_subscriber_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(
+          config_.image_topic,
+          qos,
+          std::bind(&ObjectDetectionNode::compressedImageCallback, this, std::placeholders::_1));
+        RCLCPP_INFO(this->get_logger(), "Subscribed to compressed image topic: %s", config_.image_topic.c_str());
+      }
       break;
 
     case ImageTopicType::MULTI_IMAGE:
@@ -229,16 +265,26 @@ void ObjectDetectionNode::rawImageCallback(const sensor_msgs::msg::Image::ConstS
 
 void ObjectDetectionNode::compressedImageCallback(const sensor_msgs::msg::CompressedImage::ConstSharedPtr & msg)
 {
+  multiCameraCompressedCallback(msg, 0);
+}
+
+void ObjectDetectionNode::multiCameraCompressedCallback(
+  const sensor_msgs::msg::CompressedImage::ConstSharedPtr & msg, int camera_id)
+{
+  RCLCPP_INFO(this->get_logger(), "Received compressed image message from camera %d (size: %zu bytes)", camera_id, msg->data.size());
   try {
     cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
 
     if (cv_ptr && !cv_ptr->image.empty()) {
-      addImageToBatch(cv_ptr->image, msg->header);
+      RCLCPP_INFO(this->get_logger(), "Decoded image from camera %d: %dx%d, adding to batch", camera_id, cv_ptr->image.cols, cv_ptr->image.rows);
+      addImageToBatch(cv_ptr->image, msg->header, camera_id);
     } else {
-      RCLCPP_WARN(this->get_logger(), "Received empty compressed image");
+      RCLCPP_WARN(this->get_logger(), "Received empty compressed image from camera %d", camera_id);
     }
   } catch (cv_bridge::Exception & e) {
-    RCLCPP_ERROR(this->get_logger(), "cv_bridge exception for compressed image: %s", e.what());
+    RCLCPP_ERROR(this->get_logger(), "cv_bridge exception for compressed image from camera %d: %s", camera_id, e.what());
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(this->get_logger(), "Exception in multiCameraCompressedCallback for camera %d: %s", camera_id, e.what());
   }
 }
 
@@ -278,32 +324,50 @@ void ObjectDetectionNode::multiImageRawCallback(const deep_msgs::msg::MultiImage
 
 void ObjectDetectionNode::addImageToBatch(const cv::Mat & image, const std_msgs::msg::Header & header, int camera_id)
 {
-  std::lock_guard<std::mutex> lock(batch_mutex_);
+  ImageBatch batch_to_process;
+  bool should_process = false;
 
-  current_batch_.images.push_back(image);
-  current_batch_.headers.push_back(header);
-  current_batch_.camera_ids.push_back(camera_id);
-  current_batch_.timestamp = std::chrono::steady_clock::now();
+  {
+    std::lock_guard<std::mutex> lock(batch_mutex_);
 
-  if (config_.enable_debug) {
-    RCLCPP_DEBUG(
-      this->get_logger(),
-      "Added image to batch. Current batch size: %zu, Max batch size: %d",
-      current_batch_.images.size(),
-      config_.max_batch_size);
-  }
+    current_batch_.images.push_back(image);
+    current_batch_.headers.push_back(header);
+    current_batch_.camera_ids.push_back(camera_id);
+    current_batch_.timestamp = std::chrono::steady_clock::now();
 
-  // If max_batch_size is 1, process immediately (don't wait for timer)
-  if (config_.max_batch_size == 1 && current_batch_.size() >= 1) {
     if (config_.enable_debug) {
-      RCLCPP_DEBUG(this->get_logger(), "Processing single image immediately");
+      RCLCPP_DEBUG(
+        this->get_logger(),
+        "Added image to batch. Current batch size: %zu, Max batch size: %d",
+        current_batch_.images.size(),
+        config_.max_batch_size);
     }
 
-    ImageBatch batch_to_process = std::move(current_batch_);
-    current_batch_.clear();
+    // If batch is full (reached max_batch_size), process immediately
+    if (current_batch_.size() >= static_cast<size_t>(config_.max_batch_size)) {
+      if (config_.enable_debug) {
+        RCLCPP_DEBUG(this->get_logger(), "Processing batch immediately (batch full: %zu/%d)", 
+                     current_batch_.size(), config_.max_batch_size);
+      }
 
-    // Release lock before processing to avoid blocking other callbacks
-    lock.~lock_guard();
+      batch_to_process = std::move(current_batch_);
+      current_batch_.clear();
+      should_process = true;
+    } else if (config_.max_batch_size == 1 && current_batch_.size() >= 1) {
+      // If max_batch_size is 1, process immediately (don't wait for timer)
+      if (config_.enable_debug) {
+        RCLCPP_DEBUG(this->get_logger(), "Processing single image immediately");
+      }
+
+      batch_to_process = std::move(current_batch_);
+      current_batch_.clear();
+      should_process = true;
+    }
+  }
+
+  // Process outside the lock to avoid blocking other callbacks
+  if (should_process) {
+    RCLCPP_INFO(this->get_logger(), "Processing batch immediately with %zu images", batch_to_process.images.size());
     processBatch(batch_to_process);
   }
 }

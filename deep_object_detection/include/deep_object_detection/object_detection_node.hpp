@@ -60,7 +60,8 @@ private:
   struct NodeConfig
   {
     std::string model_path;
-    std::string image_topic;
+    std::string image_topic;  // Legacy single camera support
+    std::vector<std::string> camera_topics;  // Multiple camera topics
     ImageTopicType topic_type;
     std::string detection_topic;
     std::string visualization_topic;
@@ -82,6 +83,7 @@ private:
   // Callback methods
   void rawImageCallback(const sensor_msgs::msg::Image::ConstSharedPtr & msg);
   void compressedImageCallback(const sensor_msgs::msg::CompressedImage::ConstSharedPtr & msg);
+  void multiCameraCompressedCallback(const sensor_msgs::msg::CompressedImage::ConstSharedPtr & msg, int camera_id);
   void multiImageCallback(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg);
   void multiImageRawCallback(const deep_msgs::msg::MultiImageRaw::ConstSharedPtr & msg);
   void batchInferenceCallback();
@@ -131,6 +133,7 @@ private:
 
   // ROS2 components
   rclcpp::SubscriptionBase::SharedPtr image_subscriber_;
+  std::vector<rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr> camera_subscribers_;
   std::shared_ptr<image_transport::Subscriber> image_transport_subscriber_;
   rclcpp::Publisher<vision_msgs::msg::Detection2DArray>::SharedPtr detection_publisher_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr visualization_publisher_;
