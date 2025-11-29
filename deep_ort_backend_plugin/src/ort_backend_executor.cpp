@@ -80,7 +80,7 @@ deep_ros::Tensor OrtBackendExecutor::run_inference_impl(deep_ros::Tensor & input
 
     // Get our custom allocator for output binding
     auto custom_allocator_shared = get_ort_cpu_allocator();
-    auto * custom_allocator = static_cast<OrtCpuMemoryAllocator *>(custom_allocator_shared.get());
+    // auto * custom_allocator = static_cast<OrtCpuMemoryAllocator *>(custom_allocator_shared.get());
 
     // Create input tensor that wraps existing input memory (zero-copy!)
     size_t input_size_bytes = input.byte_size();
@@ -96,23 +96,24 @@ deep_ros::Tensor OrtBackendExecutor::run_inference_impl(deep_ros::Tensor & input
     Ort::IoBinding binding(*session_);
     binding.BindInput(input_name.get(), ort_input);
 
-    // Bind output to use our custom allocator - ONNX Runtime will allocate using our allocator
-    binding.BindOutput(output_name.get(), custom_allocator->get_ort_memory_info());
+    // Calculate output shape first
+    auto output_shape = get_output_shape(input.shape());
+    std::vector<int64_t> output_shape_int64(output_shape.begin(), output_shape.end());
+
+    // Create owning deep_ros tensor (zero-copy!)
+    // We allocate the memory here, and then let ONNX Runtime write into it
+    deep_ros::Tensor output(output_shape, input.dtype(), custom_allocator_shared);
+
+    // Create output tensor wrapper for ONNX Runtime
+    Ort::Value ort_output = Ort::Value::CreateTensor(
+      memory_info_, output.data(), output.byte_size(), output_shape_int64.data(), output_shape_int64.size(), onnx_type);
+
+    // Bind output
+    binding.BindOutput(output_name.get(), ort_output);
 
     // Run inference with IO binding (zero-copy for both input and output!)
     Ort::RunOptions run_options;
     session_->Run(run_options, binding);
-
-    // Get output values allocated by ONNX Runtime using our custom allocator
-    Ort::AllocatorWithDefaultOptions default_allocator;
-    std::vector<Ort::Value> output_tensors = binding.GetOutputValues(default_allocator);
-
-    // Get output shape and create our tensor wrapping the ONNX-allocated memory
-    auto output_shape = get_output_shape(input.shape());
-    void * output_data = output_tensors[0].GetTensorMutableData<void>();
-
-    // Create deep_ros tensor that wraps the ONNX-allocated memory (zero-copy!)
-    deep_ros::Tensor output(output_data, output_shape, input.dtype());
 
     return output;
   } catch (const std::exception & e) {

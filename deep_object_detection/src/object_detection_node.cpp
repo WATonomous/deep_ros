@@ -374,24 +374,9 @@ void ObjectDetectionNode::addImageToBatch(const cv::Mat & image, const std_msgs:
 
 void ObjectDetectionNode::addImagesToBatch(const std::vector<cv::Mat> & images, const std_msgs::msg::Header & header)
 {
-  // If max_batch_size is 1, process each image individually
-  if (config_.max_batch_size == 1) {
-    for (size_t i = 0; i < images.size(); ++i) {
-      addImageToBatch(images[i], header, static_cast<int>(i));
-      // Each call to addImageToBatch will process immediately due to batch size 1
-    }
-    return;
-  }
-
-  // Normal batching logic for batch size > 1
-  std::lock_guard<std::mutex> lock(batch_mutex_);
-
   for (size_t i = 0; i < images.size(); ++i) {
-    current_batch_.images.push_back(images[i]);
-    current_batch_.headers.push_back(header);
-    current_batch_.camera_ids.push_back(static_cast<int>(i));  // Use index as camera ID
+    addImageToBatch(images[i], header, static_cast<int>(i));
   }
-  current_batch_.timestamp = std::chrono::steady_clock::now();
 }
 
 bool ObjectDetectionNode::shouldProcessBatch() const
@@ -461,7 +446,14 @@ void ObjectDetectionNode::processBatch(const ImageBatch & batch_to_process)
     RCLCPP_ERROR(this->get_logger(), "Inference engine is not initialized");
     return;
   }
-  auto batch_detections = inference_engine_->inferBatch(batch_to_process.images);
+
+  std::vector<std::vector<Detection>> batch_detections;
+  try {
+    batch_detections = inference_engine_->inferBatch(batch_to_process.images);
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(this->get_logger(), "Inference failed: %s", e.what());
+    return;
+  }
 
   auto end_time = std::chrono::steady_clock::now();
   auto inference_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);

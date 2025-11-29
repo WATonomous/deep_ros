@@ -14,6 +14,7 @@
 
 #include "deep_ort_gpu_backend_plugin/ort_gpu_backend_executor.hpp"
 
+#include <cstring>
 #include <dlfcn.h>
 #include <onnxruntime_cxx_api.h>
 
@@ -138,8 +139,9 @@ deep_ros::Tensor OrtGpuBackendExecutor::run_inference_impl(deep_ros::Tensor & in
     // Get output data pointer (this is on CPU after ONNX Runtime handles GPU->CPU transfer)
     const float * output_data = output_tensor.GetTensorData<float>();
 
-    // Create result tensor that wraps the ONNX-allocated memory
-    deep_ros::Tensor result(const_cast<void *>(static_cast<const void *>(output_data)), output_shape, input.dtype());
+    // Create owning result tensor and copy data (deep copy to avoid dangling pointer)
+    deep_ros::Tensor result(output_shape, input.dtype(), custom_allocator_);
+    std::memcpy(result.data(), output_data, result.byte_size());
 
     return result;
   } catch (const std::exception & e) {

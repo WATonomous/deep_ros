@@ -72,6 +72,11 @@ install(
   PATTERN "*.a" EXCLUDE
 )
 
+# Export library paths for runtime
+ament_environment_hooks(
+  "${CMAKE_CURRENT_SOURCE_DIR}/env_hook/onnxruntime_library_path.sh.in"
+)
+
 # Create an interface library for users to link against
 add_library(onnxruntime_gpu_lib INTERFACE)
 target_include_directories(onnxruntime_gpu_lib INTERFACE

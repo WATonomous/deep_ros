@@ -114,7 +114,11 @@ bool OrtBackendInference::initialize()
 
 std::vector<Detection> OrtBackendInference::infer(const cv::Mat & image)
 {
-  return inferBatch({image})[0];
+  auto batch_results = inferBatch({image});
+  if (batch_results.empty()) {
+    return {};
+  }
+  return batch_results[0];
 }
 
 std::vector<std::vector<Detection>> OrtBackendInference::inferBatch(const std::vector<cv::Mat> & images)
@@ -228,6 +232,15 @@ cv::Mat OrtBackendInference::preprocessImage(const cv::Mat & image)
   // Convert BGR to RGB if needed
   if (processed.channels() == 3) {
     cv::cvtColor(processed, processed, cv::COLOR_BGR2RGB);
+  } else if (processed.channels() == 4) {
+    cv::cvtColor(processed, processed, cv::COLOR_BGRA2RGB);
+  } else if (processed.channels() == 1) {
+    cv::cvtColor(processed, processed, cv::COLOR_GRAY2RGB);
+  }
+
+  // Ensure processed image is strictly 3-channel RGB before proceeding
+  if (processed.channels() != 3) {
+    throw std::runtime_error("Processed image must have 3 channels (RGB), but has " + std::to_string(processed.channels()));
   }
 
   // Convert to float and normalize
@@ -276,11 +289,22 @@ deep_ros::Tensor OrtBackendInference::convertImagesToTensor(const std::vector<cv
     }
 
     // Direct copy to tensor memory (HWC -> CHW conversion)
-    for (int c = 0; c < img.channels(); ++c) {
+    if (img.channels() != 3) {
+      throw std::runtime_error("Image must have 3 channels for HWC->CHW conversion");
+    }
+
+    // Get direct access to raw data pointer
+    const float* img_data = reinterpret_cast<const float*>(img.data);
+
+    for (int c = 0; c < 3; ++c) {
       for (int h = 0; h < img.rows; ++h) {
         for (int w = 0; w < img.cols; ++w) {
           size_t tensor_idx = i * image_size + c * img.rows * img.cols + h * img.cols + w;
-          tensor_data[tensor_idx] = img.at<cv::Vec3f>(h, w)[c];
+          // img.at<cv::Vec3f>(h, w)[c] is slow and unsafe if not exactly Vec3f
+          // Using raw pointer arithmetic assuming packed 3-channel float (HWC)
+          // Index in HWC image: (h * cols + w) * channels + c
+          size_t pixel_idx = (h * img.cols + w) * 3 + c;
+          tensor_data[tensor_idx] = img_data[pixel_idx];
         }
       }
     }
@@ -298,6 +322,13 @@ std::vector<std::vector<Detection>> OrtBackendInference::postprocessOutput(
   // Get tensor data and shape
   const float * output_data = static_cast<const float *>(output_tensor.data());
   const std::vector<size_t> & output_shape = output_tensor.shape();
+
+  // Validate output data
+  if (output_data == nullptr) {
+    RCLCPP_ERROR(rclcpp::get_logger("OrtBackendInference"), "Output tensor data is null");
+    return results;
+  }
+
   // Basic sanity check on output shape
   if (output_shape.size() < 2) {
     RCLCPP_ERROR(rclcpp::get_logger("OrtBackendInference"), "Unexpected output tensor shape");
@@ -364,35 +395,78 @@ std::vector<Detection> OrtBackendInference::processDetectionsForImage(
   }
 
   size_t batch_size = output_shape[0];
-  size_t num_values = output_shape[1];  // 84 (4 bbox + 80 classes)
-  size_t num_detections = output_shape[2];  // 8400 anchors
+  
+  // Adaptive shape detection: YOLOv8 usually outputs [batch, 84, 8400]
+  // But some exports or models might use [batch, 8400, 84]
+  // We determine the format based on which dimension is closer to the number of classes + 4
+  size_t dim1 = output_shape[1];
+  size_t dim2 = output_shape[2];
+  
+  bool is_transposed = false; // transposed means [batch, detections, values]
+  size_t num_values = 0;
+  size_t num_detections = 0;
+  
+  // Heuristic: The dimension closer to (4 + 80) is likely the values dimension
+  // This assumes we have roughly 80 classes. If both are large, we default to standard YOLOv8 layout.
+  if (dim1 < dim2 && dim1 < 200) {
+      // Standard YOLOv8: [batch, values, detections]
+      num_values = dim1;
+      num_detections = dim2;
+      is_transposed = false;
+  } else {
+      // Transposed: [batch, detections, values]
+      num_detections = dim1;
+      num_values = dim2;
+      is_transposed = true;
+      RCLCPP_DEBUG(rclcpp::get_logger("OrtBackendInference"), "Detected transposed output format [batch, detections, values]");
+  }
 
   if (image_index >= batch_size) {
     RCLCPP_ERROR(
       rclcpp::get_logger("OrtBackendInference"), "Image index %zu exceeds batch size %zu", image_index, batch_size);
     return detections;
   }
+  
+  // Defensive: ensure we have at least 4 values (bbox)
+  if (num_values < 4) {
+    RCLCPP_ERROR(rclcpp::get_logger("OrtBackendInference"), "Not enough values per detection: %zu", num_values);
+    return detections;
+  }
 
-  // Offset to this image's data in the output tensor
-  size_t image_offset = image_index * num_values * num_detections;
+  // Calculate stride and offset based on layout
+  size_t image_stride = num_values * num_detections;
+  size_t image_offset = image_index * image_stride;
+
+  // Calculate total elements from output shape to ensure we don't read past buffer
+  size_t total_elements = 1;
+  for (size_t dim : output_shape) {
+    total_elements *= dim;
+  }
 
   for (size_t i = 0; i < num_detections; ++i) {
-    // For transposed format [batch, values, detections], each value spans all detections
-    // So detection i has its bbox at: [0][i], [1][i], [2][i], [3][i]
-    // And its classes at: [4][i], [5][i], ..., [83][i]
-
-    // Defensive: ensure we have at least 4 values (bbox)
-    if (num_values < 4) {
-      RCLCPP_ERROR(rclcpp::get_logger("OrtBackendInference"), "Not enough values per detection: %zu", num_values);
-      break;
+    float raw_cx, raw_cy, raw_w, raw_h;
+    
+    // Bounds check for safety (though logic below should be safe if strides are correct)
+    if (image_offset + (is_transposed ? (i * num_values + 3) : (3 * num_detections + i)) >= total_elements) {
+        break; 
     }
 
-    // Read raw values for transposed format [batch, values, detections]
-    // For detection i: bbox coords are at [0][i], [1][i], [2][i], [3][i]
-    float raw_cx = output_data[image_offset + 0 * num_detections + i];
-    float raw_cy = output_data[image_offset + 1 * num_detections + i];
-    float raw_w = output_data[image_offset + 2 * num_detections + i];
-    float raw_h = output_data[image_offset + 3 * num_detections + i];
+    if (!is_transposed) {
+        // Standard [batch, values, detections]
+        // values are rows, detections are columns
+        raw_cx = output_data[image_offset + 0 * num_detections + i];
+        raw_cy = output_data[image_offset + 1 * num_detections + i];
+        raw_w = output_data[image_offset + 2 * num_detections + i];
+        raw_h = output_data[image_offset + 3 * num_detections + i];
+    } else {
+        // Transposed [batch, detections, values]
+        // detections are rows, values are columns
+        size_t det_offset = image_offset + i * num_values;
+        raw_cx = output_data[det_offset + 0];
+        raw_cy = output_data[det_offset + 1];
+        raw_w = output_data[det_offset + 2];
+        raw_h = output_data[det_offset + 3];
+    }
 
     // Determine whether values are normalized (<=1) or in pixels (likely >1).
     // If normalized -> multiply by original size. If >1 but likely in input-pixel space, scale to original.
@@ -417,16 +491,41 @@ std::vector<Detection> OrtBackendInference::processDetectionsForImage(
     // Find class with highest score (YOLOv8 format: no separate objectness score)
     float max_score = 0.0f;
     int best_class_id = -1;
-    for (size_t c = 4; c < num_values; ++c) {  // Skip bbox (4), no objectness in YOLOv8
-      float cls_score = output_data[image_offset + c * num_detections + i];
+    
+    // Check if we have an objectness score (some models like YOLOv5/v7 might have it at index 4)
+    // Heuristic: if num_values == 85 (4 bbox + 1 objectness + 80 classes), index 4 is objectness.
+    // YOLOv8 usually has 84 (4 bbox + 80 classes) and no objectness.
+    bool has_objectness = (num_values == (4 + 1 + 80)); // Assuming 80 classes
+    float objectness = 1.0f;
+    size_t class_start_idx = 4;
+    
+    if (has_objectness) {
+        if (!is_transposed) {
+             objectness = output_data[image_offset + 4 * num_detections + i];
+        } else {
+             objectness = output_data[image_offset + i * num_values + 4];
+        }
+        class_start_idx = 5;
+    }
+    
+    if (objectness < config_.confidence_threshold) continue;
+
+    for (size_t c = class_start_idx; c < num_values; ++c) { 
+      float cls_score;
+      if (!is_transposed) {
+          cls_score = output_data[image_offset + c * num_detections + i];
+      } else {
+          cls_score = output_data[image_offset + i * num_values + c];
+      }
+      
       if (cls_score > max_score) {
         max_score = cls_score;
-        best_class_id = static_cast<int>(c - 4);
+        best_class_id = static_cast<int>(c - class_start_idx);
       }
     }
 
-    // In YOLOv8, confidence is just the class score
-    float confidence = max_score;
+    // In YOLOv8, confidence is usually just the class score. If objectness exists, combine them.
+    float confidence = max_score * objectness;
 
     // Defensive fixes: clamp confidence and validate class id
     if (!std::isfinite(confidence)) {
