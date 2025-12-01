@@ -657,39 +657,129 @@ private:
 
     const auto & shape = output.shape();
     if (shape.size() != 3) {
-      throw std::runtime_error("Unexpected output shape rank; expected [N, num_detections, 6]");
+      throw std::runtime_error("Unexpected output shape rank; expected 3D output tensor");
     }
 
     const size_t batch = shape[0];
-    const size_t num_detections = shape[1];
-    const size_t values = shape[2];
-    if (values < 6) {
-      throw std::runtime_error("Output last dimension must be at least 6");
-    }
+    const size_t dim1 = shape[1];
+    const size_t dim2 = shape[2];
 
     const float * data = output.data_as<float>();
     if (!data) {
       throw std::runtime_error("Output tensor has null data");
     }
 
+    const size_t class_count = class_names_.size();
+
+    // Helper for already-decoded layout: [batch, num_detections, values]
+    auto decode_preboxed = [&](size_t num_detections, size_t values, bool values_first) {
+      if (values < 6) {
+        throw std::runtime_error("Output last dimension must be at least 6");
+      }
+      batch_detections.clear();
+      batch_detections.reserve(std::min(batch, metas.size()));
+      for (size_t b = 0; b < batch && b < metas.size(); ++b) {
+        std::vector<SimpleDetection> dets;
+        dets.reserve(num_detections);
+        for (size_t i = 0; i < num_detections; ++i) {
+          const auto read_val = [&](size_t v_idx) {
+            if (values_first) {
+              return data[(b * values + v_idx) * num_detections + i];
+            }
+            return data[(b * num_detections + i) * values + v_idx];
+          };
+
+          const float obj = read_val(4);
+          if (obj < static_cast<float>(params_.score_threshold)) {
+            continue;
+          }
+
+          SimpleDetection det;
+          det.x = read_val(0);
+          det.y = read_val(1);
+          det.width = read_val(2);
+          det.height = read_val(3);
+          det.score = obj;
+          det.class_id = static_cast<int32_t>(std::round(read_val(5)));
+
+          adjustToOriginal(det, metas[b]);
+          dets.push_back(det);
+        }
+        batch_detections.push_back(applyNms(dets));
+      }
+    };
+
+    // Case 1: standard decoded detections [batch, num_det, 6+]
+    if (dim2 <= 8) {
+      decode_preboxed(dim1, dim2, false);
+      return batch_detections;
+    }
+
+    // Case 2: swapped small-last-dim layout [batch, num_det, >8] is unlikely;
+    // handle [batch, num_det, values] where values is in dim1.
+    if (dim1 <= 8) {
+      decode_preboxed(dim2, dim1, true);
+      return batch_detections;
+    }
+
+    // Case 3: YOLOv8 raw output (channel-first anchors): [batch, channels, anchors] or [batch, anchors, channels]
+    const bool channels_first = dim1 < dim2;
+    const size_t channels = channels_first ? dim1 : dim2;
+    const size_t anchors = channels_first ? dim2 : dim1;
+
+    if (channels < 5) {
+      throw std::runtime_error("Unsupported YOLO output layout; channels dimension too small");
+    }
+
+    // Determine where class scores start.
+    // If we see more channels than classes+4, assume an explicit objectness at index 4.
+    const bool has_objectness = class_count > 0 ? (channels > class_count + 4) : (channels >= 6);
+    const size_t cls_start = has_objectness ? 5 : 4;
+    const size_t available_cls = channels > cls_start ? channels - cls_start : 0;
+    const size_t num_classes = class_count > 0 ? std::min(class_count, available_cls) : available_cls;
+
     batch_detections.reserve(std::min(batch, metas.size()));
     for (size_t b = 0; b < batch && b < metas.size(); ++b) {
       std::vector<SimpleDetection> dets;
-      dets.reserve(num_detections);
-      for (size_t i = 0; i < num_detections; ++i) {
-        const size_t idx = (b * num_detections + i) * values;
-        const float obj = data[idx + 4];
-        if (obj < static_cast<float>(params_.score_threshold)) {
+      dets.reserve(anchors / 4);
+      const size_t batch_offset = b * channels * anchors;
+
+      for (size_t a = 0; a < anchors; ++a) {
+        auto read = [&](size_t c) -> float {
+          if (channels_first) {
+            return data[batch_offset + c * anchors + a];
+          }
+          return data[batch_offset + a * channels + c];
+        };
+
+        const float cx = read(0);
+        const float cy = read(1);
+        const float w = read(2);
+        const float h = read(3);
+        const float obj = has_objectness ? read(4) : 1.0f;
+
+        float best_cls_score = num_classes > 0 ? 0.0f : 1.0f;
+        size_t best_cls = 0;
+        for (size_t cls = 0; cls < num_classes; ++cls) {
+          const float cls_score = read(cls_start + cls);
+          if (cls_score > best_cls_score) {
+            best_cls_score = cls_score;
+            best_cls = cls;
+          }
+        }
+
+        const float score = obj * best_cls_score;
+        if (score < static_cast<float>(params_.score_threshold)) {
           continue;
         }
 
         SimpleDetection det;
-        det.x = data[idx + 0];
-        det.y = data[idx + 1];
-        det.width = data[idx + 2];
-        det.height = data[idx + 3];
-        det.score = obj;
-        det.class_id = static_cast<int32_t>(std::round(data[idx + 5]));
+        det.x = cx;
+        det.y = cy;
+        det.width = w;
+        det.height = h;
+        det.score = score;
+        det.class_id = static_cast<int32_t>(best_cls);
 
         adjustToOriginal(det, metas[b]);
         dets.push_back(det);

@@ -14,9 +14,9 @@
 
 import os
 
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -24,6 +24,11 @@ from launch_ros.actions import Node
 def generate_launch_description():
   package_share = get_package_share_directory('deep_yolo_inference')
   default_config = os.path.join(package_share, 'config', 'yolo_trt.yaml')
+  ort_gpu_lib = os.path.join(get_package_prefix('onnxruntime_gpu_vendor'), 'lib')
+  ld_with_ort = (
+      f"{ort_gpu_lib}:{os.environ.get('LD_LIBRARY_PATH')}"
+      if os.environ.get('LD_LIBRARY_PATH') else ort_gpu_lib
+  )
 
   config_arg = DeclareLaunchArgument(
       'config_file',
@@ -67,5 +72,7 @@ def generate_launch_description():
       input_topic_arg,
       output_topic_arg,
       provider_arg,
+      # Ensure ORT GPU/TensorRT provider libraries are discoverable at runtime.
+      SetEnvironmentVariable('LD_LIBRARY_PATH', ld_with_ort),
       node,
   ])

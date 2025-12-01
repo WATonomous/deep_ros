@@ -19,6 +19,12 @@ ros2 launch deep_yolo_inference yolo_inference.launch.py
 # (`/CAM_FRONT/image_rect_compressed` with `compressed` transport and
 # best-effort QoS), so you can launch against that dataset without overrides.
 
+## TensorRT notes
+- The ORT GPU vendor package always downloads the standard GPU tarball (no separate TensorRT artifact upstream). The TensorRT provider loads from your system CUDA/TensorRT libraries; ensure they are installed and visible via `LD_LIBRARY_PATH`. The launch file prepends the vendor lib dir automatically.
+- TensorRT engine caching is enabled by default in the GPU backend and stored at `/tmp/deep_ros_ort_trt_cache`. First launch will build; subsequent launches reuse cached engines and start much faster. Override by setting `TRT_ENGINE_CACHE_PATH` in the environment if you prefer a different location.
+- The YOLO decoder handles the raw YOLOv8-style output layout (`[N, 84, anchors]` channel-first) and applies objectness * class score with NMS. Use `score_threshold` / `nms_iou_threshold` in the YAML to tune.
+- Batching: `batch_size_limit` sets the max batch, but `max_batch_latency_ms` controls how long the node waits for enough images before flushing. Increase latency (e.g., 150–200 ms for ~10 Hz bags) if you want consistent batch >1. Export your ONNX with dynamic batch if you need batch sizes larger than 1.
+
 ## Switch providers
 - YAML: set `preferred_provider` to `tensorrt` | `cuda` | `cpu` in `config/yolo_trt.yaml`.
 - CLI override example:

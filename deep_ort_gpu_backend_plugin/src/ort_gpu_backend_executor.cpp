@@ -224,40 +224,50 @@ void OrtGpuBackendExecutor::configure_tensorrt_provider()
     setenv("CUDA_MODULE_LOADING", "LAZY", 1);
     setenv("TRT_DISABLE_D3D12", "1", 1);
 
-    std::unordered_map<std::string, std::string> tensorrt_options;
-    tensorrt_options["device_id"] = std::to_string(device_id_);
-    tensorrt_options["trt_max_workspace_size"] = "67108864";  // 64MB
-    tensorrt_options["trt_max_partition_iterations"] = "1";
-    tensorrt_options["trt_min_subgraph_size"] = "1";
-    tensorrt_options["trt_engine_cache_enable"] = "0";
-    tensorrt_options["trt_force_sequential_engine_build"] = "1";
-    tensorrt_options["trt_cuda_graph_enable"] = "0";
-    tensorrt_options["trt_disable_d3d12"] = "1";  // Force disable DirectX
-    tensorrt_options["trt_profiling_verbosity"] = "0";
-
-    // Provider name must match the ONNX Runtime TensorRT EP registration.
-    // This ORT build exposes the TensorRT EP under the NvTensorRtRtx aliases.
-    const std::array<const char *, 2> provider_names = {
-      "NvTensorRtRtx",
-      "NvTensorRTRTXExecutionProvider"
+    // Use the official ORT TensorRT EP API (V2) instead of provider-name aliases.
+    OrtTensorRTProviderOptionsV2 * trt_options = nullptr;
+    auto & api = Ort::GetApi();
+    Ort::ThrowOnError(api.CreateTensorRTProviderOptions(&trt_options));
+    // Configure a minimal, safe set of options.
+    const std::array<const char *, 8> keys = {
+      "device_id",
+      "trt_max_workspace_size",
+      "trt_max_partition_iterations",
+      "trt_min_subgraph_size",
+      "trt_engine_cache_enable",
+      "trt_engine_cache_path",
+      "trt_force_sequential_engine_build",
+      "trt_cuda_graph_enable"
     };
+    const std::string device_id_str = std::to_string(device_id_);
+    static const std::filesystem::path cache_dir("/tmp/deep_ros_ort_trt_cache");
+    std::error_code ec;
+    std::filesystem::create_directories(cache_dir, ec);
+    const auto cache_dir_str = cache_dir.string();
+    const std::array<const char *, 8> values = {
+      device_id_str.c_str(),
+      "67108864",  // 64MB
+      "1",
+      "1",
+      "1",  // enable engine cache to avoid rebuilds on every launch
+      cache_dir_str.c_str(),
+      "1",
+      "0"
+    };
+    Ort::ThrowOnError(api.UpdateTensorRTProviderOptions(
+      trt_options,
+      keys.data(),
+      values.data(),
+      keys.size()));
 
-    bool registered = false;
-    for (const auto * provider_name : provider_names) {
-      try {
-        std::cout << "Attempting TensorRT provider registration with name: '" << provider_name << "'" << std::endl;
-        session_options_->AppendExecutionProvider(provider_name, tensorrt_options);
-        std::cout << "TensorRT provider registered successfully with name: '" << provider_name << "'" << std::endl;
-        registered = true;
-        break;
-      } catch (const std::exception & e) {
-        std::cerr << "TensorRT provider name '" << provider_name << "' failed: " << e.what() << std::endl;
-      }
+    try {
+      session_options_->AppendExecutionProvider_TensorRT_V2(*trt_options);
+      std::cout << "TensorRT provider registered successfully via V2 API" << std::endl;
+    } catch (...) {
+      api.ReleaseTensorRTProviderOptions(trt_options);
+      throw;
     }
-
-    if (!registered) {
-      throw std::runtime_error("TensorRT provider registration failed for all known provider names");
-    }
+    api.ReleaseTensorRTProviderOptions(trt_options);
   } catch (const std::exception & e) {
     throw std::runtime_error("Failed to configure TensorRT provider: " + std::string(e.what()));
   }
