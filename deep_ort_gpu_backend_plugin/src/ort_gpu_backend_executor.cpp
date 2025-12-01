@@ -24,6 +24,7 @@
 #include <iostream>
 #include <memory>
 #include <numeric>
+#include <array>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -101,7 +102,6 @@ deep_ros::Tensor OrtGpuBackendExecutor::run_inference_impl(deep_ros::Tensor & in
   }
 
   try {
-    // Get input/output names (cached for performance)
     static thread_local Ort::AllocatorWithDefaultOptions allocator;
     static thread_local auto input_name = session_->GetInputNameAllocated(0, allocator);
     static thread_local auto output_name = session_->GetOutputNameAllocated(0, allocator);
@@ -112,34 +112,42 @@ deep_ros::Tensor OrtGpuBackendExecutor::run_inference_impl(deep_ros::Tensor & in
     std::vector<int64_t> input_shape_int64(input.shape().begin(), input.shape().end());
     auto cpu_memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
+    size_t input_elements =
+      input.shape().size() > 0
+        ? std::accumulate(input.shape().begin(), input.shape().end(), 1ULL, std::multiplies<size_t>())
+        : 0;
+
     Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
       cpu_memory_info,
       static_cast<float *>(input.data()),
-      input.shape().size() > 0
-        ? std::accumulate(input.shape().begin(), input.shape().end(), 1ULL, std::multiplies<size_t>())
-        : 0,
+      input_elements,
       input_shape_int64.data(),
       input_shape_int64.size());
 
-    // Run inference using simple session Run (ONNX Runtime handles GPU transfers)
-    auto output_tensors = session_->Run(Ort::RunOptions{nullptr}, input_names, &input_tensor, 1, output_names, 1);
+    auto output_tensors = session_->Run(
+      Ort::RunOptions{nullptr},
+      input_names, &input_tensor, 1,
+      output_names, 1);
 
     if (output_tensors.empty()) {
       throw std::runtime_error("ONNX GPU Inference returned no outputs");
     }
 
-    // Get output tensor info
-    auto & output_tensor = output_tensors[0];
+    auto & output_tensor = output_tensors.front();
     auto output_info = output_tensor.GetTensorTypeAndShapeInfo();
     auto output_shape_int64 = output_info.GetShape();
 
-    // Convert output shape to size_t
     std::vector<size_t> output_shape(output_shape_int64.begin(), output_shape_int64.end());
 
-    // Get output data pointer (this is on CPU after ONNX Runtime handles GPU->CPU transfer)
     const float * output_data = output_tensor.GetTensorData<float>();
+    auto mem_info = output_tensor.GetTensorMemoryInfo();
+    const bool on_gpu = mem_info.GetDeviceType() == OrtMemoryInfoDeviceType_GPU ||
+      mem_info.GetAllocatorName() == "Cuda";
 
-    // Create owning result tensor and copy data (deep copy to avoid dangling pointer)
+    if (on_gpu) {
+      throw std::runtime_error("ONNX Runtime returned GPU-resident output unexpectedly");
+    }
+
     deep_ros::Tensor result(output_shape, input.dtype(), custom_allocator_);
     std::memcpy(result.data(), output_data, result.byte_size());
 
@@ -160,6 +168,7 @@ void OrtGpuBackendExecutor::initialize_session_options()
   // Set basic options
   session_options_->SetIntraOpNumThreads(1);
   session_options_->SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+  session_options_->AddConfigEntry("session.force_cpu_output", "1");
 
   // Configure execution provider
   try {
@@ -226,11 +235,29 @@ void OrtGpuBackendExecutor::configure_tensorrt_provider()
     tensorrt_options["trt_disable_d3d12"] = "1";  // Force disable DirectX
     tensorrt_options["trt_profiling_verbosity"] = "0";
 
-    std::string tensorrt_provider_name = "NvTensorRtRtx";
+    // Provider name must match the ONNX Runtime TensorRT EP registration.
+    // This ORT build exposes the TensorRT EP under the NvTensorRtRtx aliases.
+    const std::array<const char *, 2> provider_names = {
+      "NvTensorRtRtx",
+      "NvTensorRTRTXExecutionProvider"
+    };
 
-    std::cout << "Attempting TensorRT provider registration with name: '" << tensorrt_provider_name << "'" << std::endl;
-    session_options_->AppendExecutionProvider(tensorrt_provider_name, tensorrt_options);
-    std::cout << "TensorRT provider registered successfully" << std::endl;
+    bool registered = false;
+    for (const auto * provider_name : provider_names) {
+      try {
+        std::cout << "Attempting TensorRT provider registration with name: '" << provider_name << "'" << std::endl;
+        session_options_->AppendExecutionProvider(provider_name, tensorrt_options);
+        std::cout << "TensorRT provider registered successfully with name: '" << provider_name << "'" << std::endl;
+        registered = true;
+        break;
+      } catch (const std::exception & e) {
+        std::cerr << "TensorRT provider name '" << provider_name << "' failed: " << e.what() << std::endl;
+      }
+    }
+
+    if (!registered) {
+      throw std::runtime_error("TensorRT provider registration failed for all known provider names");
+    }
   } catch (const std::exception & e) {
     throw std::runtime_error("Failed to configure TensorRT provider: " + std::string(e.what()));
   }

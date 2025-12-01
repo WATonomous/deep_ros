@@ -1,0 +1,18 @@
+yolo_inference_node:
+  ros__parameters:
+    # Derived from deep_object_detection/config/object_detection_params.yaml
+    model_path: "/workspaces/deep_ros/yolov8m.onnx"
+    input_image_topic: "/CAM_FRONT/image_rect_compressed"
+    input_transport: "compressed"
+    input_qos_reliability: "best_effort"  # NuScenes rosbag uses sensor-data QoS
+    output_detections_topic: "/detections"
+    input_width: 640
+    input_height: 640
+    use_letterbox: false
+    batch_size_limit: 1    # static-batch export; set >1 only if model is dynamic
+    max_batch_latency_ms: 50
+    score_threshold: 0.20  # from confidence_threshold
+    nms_iou_threshold: 0.40  # from nms_threshold
+    preferred_provider: "tensorrt"   # options: tensorrt, cuda, cpu
+    device_id: 0
+    class_names_path: "/workspaces/deep_ros/deep_yolo_inference/config/coco_classes.txt"  # optional: text file with one class name per line

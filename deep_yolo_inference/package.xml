@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>deep_yolo_inference</name>
+  <version>0.1.0</version>
+  <description>YOLO inference node using ONNX Runtime with CUDA/TensorRT/CPU fallback and dynamic batching.</description>
+
+  <maintainer email="watonomous@example.com">WATonomous</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>sensor_msgs</depend>
+  <depend>image_transport</depend>
+  <depend>cv_bridge</depend>
+  <depend>message_filters</depend>
+  <depend>vision_msgs</depend>
+  <depend>deep_core</depend>
+  <depend>deep_msgs</depend>
+  <depend>deep_ort_backend_plugin</depend>
+  <depend>deep_ort_gpu_backend_plugin</depend>
+  <depend>onnxruntime_vendor</depend>
+  <depend>onnxruntime_gpu_vendor</depend>
+  <depend>yaml-cpp</depend>
+  <depend>opencv2</depend>
+  <depend>rcl_interfaces</depend>
+
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
