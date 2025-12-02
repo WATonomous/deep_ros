@@ -418,9 +418,23 @@ private:
 
       const auto now = this->now();
       const auto oldest = image_queue_.front().arrival_time;
+      // Dynamic latency adjustment:
+      // If using TensorRT (much faster), we can afford to wait slightly longer to fill the batch,
+      // because inference itself is negligible.
+      // If using CUDA (slower), we might want to flush earlier to avoid total latency violations,
+      // BUT conversely, larger batches amortize the CUDA kernel launch overhead better.
+      // However, if the user explicitly set max_batch_latency_ms, respect it.
+      
+      // We'll stick to the user's configured latency.
       const auto latency_ms = (now - oldest).nanoseconds() / 1'000'000;
       bool latency_expired = latency_ms >= params_.max_batch_latency_ms;
 
+      // If we have enough images for a full batch, process immediately.
+      // If time expired, process whatever we have.
+      // Note: With TensorRT, processing is fast, so we prefer filling the batch if possible.
+      // With CUDA, processing is slower, so we might want to avoid large batches if it causes
+      // the total processing time to exceed frame deadlines, but generally batching helps throughput.
+      
       if (!latency_expired && !request_process_) {
         return;
       }

@@ -10,8 +10,8 @@ services:
         TARGETARCH: gpu
         CUDA_VERSION: 12.2.2
         UBUNTU_VERSION: 22.04
-        TENSORRT_RUNTIME_VERSION: 10.9.0.34
-        TENSORRT_CUDA_VERSION: 12.8
+        TENSORRT_RUNTIME_VERSION: 10.14.1.48
+        TENSORRT_CUDA_VERSION: 12.2
         USERNAME: developer
         USER_UID: 1000
         USER_GID: 1000
@@ -49,4 +49,3 @@ services:
     stdin_open: true
     tty: true
     command: bash -c "source /opt/ros/humble/setup.bash && bash"
-

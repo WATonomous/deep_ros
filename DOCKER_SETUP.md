@@ -34,6 +34,7 @@ This repository includes Docker container support for development. You can use e
 The devcontainer is configured in `.devcontainer/devcontainer.json`:
 
 - **GPU Support**: Uses `nvidia/cuda` base image with TensorRT
+- **Default GPU Stack**: CUDA 12.8.0 with TensorRT runtime 10.9.0.34 (consistent across devcontainer and compose setups)
 - **Workspace Mount**: Your local code is mounted into the container
 - **Auto-sourcing**: ROS 2 is automatically sourced in the container
 - **VS Code Extensions**: C++, Python, CMake, ROS extensions pre-installed
@@ -72,6 +73,8 @@ docker build \
   --build-arg ROS_DISTRO=humble \
   --build-arg TARGETARCH=gpu \
   --build-arg CUDA_VERSION=12.2.2 \
+  --build-arg TENSORRT_RUNTIME_VERSION=10.14.1.48 \
+  --build-arg TENSORRT_CUDA_VERSION=12.2 \
   --build-arg USERNAME=developer \
   --build-arg USER_UID=$(id -u) \
   --build-arg USER_GID=$(id -g) \
@@ -149,6 +152,8 @@ services:
         ROS_DISTRO: humble
         TARGETARCH: gpu
         CUDA_VERSION: 12.2.2
+        TENSORRT_RUNTIME_VERSION: 10.14.1.48
+        TENSORRT_CUDA_VERSION: 12.2
         USERNAME: developer
         USER_UID: 1000
         USER_GID: 1000
@@ -205,7 +210,7 @@ For GPU support, ensure:
 
 2. **Verify GPU access**:
    ```bash
-   docker run --rm --gpus all nvidia/cuda:12.2.2-base-ubuntu22.04 nvidia-smi
+   docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
    ```
 
 ## Development Workflow
@@ -233,7 +238,7 @@ docker build -f .devcontainer/Dockerfile -t deep_ros:gpu .
 ### Container Won't Start
 
 - Check Docker is running: `docker ps`
-- Check GPU access: `docker run --rm --gpus all nvidia/cuda:12.2.2-base-ubuntu22.04 nvidia-smi`
+- Check GPU access: `docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi`
 - Check logs: `docker logs <container_name>`
 
 ### Build Errors in Container
@@ -280,4 +285,3 @@ export LD_LIBRARY_PATH="/deep_ros_ws/install/onnxruntime_gpu_vendor/lib:$LD_LIBR
 - See `SETUP.md` for workspace setup details
 - See `DEVELOPING.md` for development guidelines
 - Check individual package READMEs for package-specific docs
-

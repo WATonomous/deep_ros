@@ -98,14 +98,20 @@ if(NOT CUDAToolkit_FOUND)
     NAMES cuda_runtime.h
     PATHS
       /local/cuda/include
+      /local/cuda-12.8/include
       /local/cuda-12.6/include
+      /local/cuda-12.4/include
+      /usr/local/cuda-12.8/targets/x86_64-linux/include
       /usr/local/cuda-12.6/targets/x86_64-linux/include
+      /usr/local/cuda-12.4/targets/x86_64-linux/include
       /usr/local/cuda/targets/x86_64-linux/include
       /usr/include
       /usr/include/cuda
       /usr/local/cuda/include
       /usr/local/cuda-12/include
+      /usr/local/cuda-12.8/include
       /usr/local/cuda-12.6/include
+      /usr/local/cuda-12.4/include
       /opt/cuda/include
     DOC "CUDA include directory"
   )
@@ -114,15 +120,21 @@ if(NOT CUDAToolkit_FOUND)
     NAMES cudart
     PATHS
       /local/cuda/lib64
+      /local/cuda-12.8/lib64
       /local/cuda-12.6/lib64
+      /local/cuda-12.4/lib64
       /usr/lib/x86_64-linux-gnu
       /usr/local/cuda/targets/x86_64-linux/lib
-      /usr/local/cuda-12.2/targets/x86_64-linux/lib
+      /usr/local/cuda-12.8/targets/x86_64-linux/lib
+      /usr/local/cuda-12.4/targets/x86_64-linux/lib
       /usr/local/cuda-12/targets/x86_64-linux/lib
       /usr/local/cuda-12.6/targets/x86_64-linux/lib
+      /usr/local/cuda-12.2/targets/x86_64-linux/lib
       /usr/local/cuda/lib64
       /usr/local/cuda-12/lib64
+      /usr/local/cuda-12.8/lib64
       /usr/local/cuda-12.6/lib64
+      /usr/local/cuda-12.4/lib64
       /usr/local/cuda/lib
       /opt/cuda/lib64
     DOC "CUDA runtime library"
@@ -206,17 +218,24 @@ if(NOT CUDA_RUNTIME_LINKED)
     NAMES cudart libcudart cudart.so cudart.so.12 cudart.so.11 cudart.so.10
     PATHS
       /local/cuda/lib64
+      /local/cuda-12.8/lib64
       /local/cuda-12.6/lib64
+      /local/cuda-12.4/lib64
       /local/cuda-12/lib64
       /local/cuda-11/lib64
       /usr/lib/x86_64-linux-gnu
       /usr/local/cuda/targets/x86_64-linux/lib
+      /usr/local/cuda-12.8/targets/x86_64-linux/lib
+      /usr/local/cuda-12.4/targets/x86_64-linux/lib
       /usr/local/cuda-12.2/targets/x86_64-linux/lib
       /usr/local/cuda-12/targets/x86_64-linux/lib
       /usr/local/cuda-12.6/targets/x86_64-linux/lib
+      /usr/local/cuda-12.4/targets/x86_64-linux/lib
       /usr/local/cuda/lib64
       /usr/local/cuda-12/lib64
+      /usr/local/cuda-12.8/lib64
       /usr/local/cuda-12.6/lib64
+      /usr/local/cuda-12.4/lib64
       /usr/local/cuda-11/lib64
       /usr/local/cuda/lib
       /opt/cuda/lib64
@@ -248,6 +267,8 @@ if(NOT CUDA_RUNTIME_LINKED)
   # Check common CUDA installation paths directly
   set(POSSIBLE_CUDA_PATHS
     /usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.12
+    /usr/local/cuda-12.8/targets/x86_64-linux/lib/libcudart.so.12
+    /usr/local/cuda-12.4/targets/x86_64-linux/lib/libcudart.so.12
     /usr/local/cuda-12.2/targets/x86_64-linux/lib/libcudart.so.12
     /usr/local/cuda-12/targets/x86_64-linux/lib/libcudart.so.12
     /usr/local/cuda/lib64/libcudart.so.12

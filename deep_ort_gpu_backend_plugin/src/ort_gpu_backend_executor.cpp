@@ -246,10 +246,10 @@ void OrtGpuBackendExecutor::configure_tensorrt_provider()
     const auto cache_dir_str = cache_dir.string();
     const std::array<const char *, 8> values = {
       device_id_str.c_str(),
-      "67108864",  // 64MB
+      "4294967296",  // 4GB workspace
+      "1000",        // Max partition iterations
       "1",
-      "1",
-      "1",  // enable engine cache to avoid rebuilds on every launch
+      "1",           // trt_engine_cache_enable
       cache_dir_str.c_str(),
       "1",
       "0"
