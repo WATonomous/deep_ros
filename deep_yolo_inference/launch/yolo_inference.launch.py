@@ -23,7 +23,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
   package_share = get_package_share_directory('deep_yolo_inference')
-  default_config = os.path.join(package_share, 'config', 'yolo_trt.yaml')
+  default_config = os.path.join(package_share, 'config', 'object_detection_params.yaml')
   ort_gpu_lib = os.path.join(get_package_prefix('onnxruntime_gpu_vendor'), 'lib')
   ld_with_ort = (
       f"{ort_gpu_lib}:{os.environ.get('LD_LIBRARY_PATH')}"

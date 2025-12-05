@@ -1,41 +1,23 @@
----
-object_detection_node:
+yolo_inference_node:
   ros__parameters:
-    # Model configuration
     model_path: "/workspaces/deep_ros/yolov8m.onnx"
-    use_gpu: true
-
-    # Input/output configuration
+    input_image_topic: "/CAM_FRONT/image_rect_compressed"
+    camera_topics: ["/CAM_FRONT/image_rect_compressed", "/CAM_FRONT_LEFT/image_rect_compressed", "/CAM_FRONT_RIGHT/image_rect_compressed"]
+    topic_type: "compressed_image"
+    queue_size: 10
+    input_transport: "compressed"
+    input_qos_reliability: "best_effort"
+    output_detections_topic: "/detections"
     input_width: 640
     input_height: 640
-    confidence_threshold: 0.2
-    nms_threshold: 0.4
-    max_batch_size: 3
-
-    # Image topic configuration
-    # For single camera, use image_topic. For multiple cameras, use camera_topics
-    image_topic: "/CAM_FRONT/image_rect_compressed"  # Legacy single camera support
-    camera_topics: ["/CAM_FRONT/image_rect_compressed", "/CAM_FRONT_LEFT/image_rect_compressed", "/CAM_FRONT_RIGHT/image_rect_compressed"]
-    topic_type: "compressed_image"  # Options: "raw_image", "compressed_image", "multi_image", "multi_image_raw"
-    queue_size: 10
-
-    # Output topics
-    detection_topic: "/detections"
-    visualization_topic: "/detection_markers"
-
-    # Performance settings
-    inference_rate: 63.0  # Hz
-    enable_visualization: false
-    enable_debug: true
-
-    # Model-specific configuration
-    input_blob_name: "images"
-    output_blob_name: "output0"
-
-    # Inference backend selection
-    inference_backend: "ort_backend"  # Options: "auto", "ort_backend", "onnx_runtime"
-
-    # Class names (COCO dataset example)
+    use_letterbox: false
+    batch_size_limit: 3
+    max_batch_latency_ms: 50
+    score_threshold: 0.20
+    nms_iou_threshold: 0.40
+    preferred_provider: "tensorrt"
+    device_id: 0
+    class_names_path: "/workspaces/deep_ros/deep_yolo_inference/config/coco_classes.txt"
     class_names: [
       "person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck",
       "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench",

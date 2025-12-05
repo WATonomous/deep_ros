@@ -111,11 +111,13 @@ public:
     loadClassNames();
     detection_pub_ = this->create_publisher<Detection2DArrayMsg>(params_.output_detections_topic, rclcpp::SystemDefaultsQoS{});
 
+    multi_camera_mode_ = !params_.camera_topics.empty();
     auto transport = params_.input_transport;
     std::transform(
       transport.begin(), transport.end(), transport.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
     rmw_qos_profile_t qos = rmw_qos_profile_sensor_data;
+    qos.depth = static_cast<size_t>(params_.queue_size);
     qos.reliability = params_.input_qos_reliability == "reliable" ?
       RMW_QOS_POLICY_RELIABILITY_RELIABLE : RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT;
 
@@ -128,39 +130,44 @@ public:
         qos);
     };
 
-    const bool topic_already_compressed = isCompressedTopic(params_.input_image_topic);
-    if (params_.input_transport == "compressed" && topic_already_compressed) {
-      auto qos_profile = rclcpp::SensorDataQoS();
-      if (params_.input_qos_reliability == "reliable") {
-        qos_profile.reliable();
-      } else {
-        qos_profile.best_effort();
-      }
-
-      compressed_image_sub_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(
-        params_.input_image_topic,
-        qos_profile,
-        std::bind(&YoloInferenceNode::onCompressedImage, this, std::placeholders::_1));
-      active_input_transport_ = "compressed_direct";
-      RCLCPP_INFO(
-        this->get_logger(),
-        "Subscribing directly to compressed image topic: %s",
-        params_.input_image_topic.c_str());
+    if (multi_camera_mode_) {
+      setupMultiCameraSubscriptions();
     } else {
-      try {
-        image_sub_ = subscribe_with_transport(transport);
-        active_input_transport_ = transport;
-      } catch (const std::exception & e) {
-        if (transport != "raw") {
-          RCLCPP_WARN(
-            this->get_logger(),
-            "Failed to create '%s' image transport subscription (%s); falling back to 'raw'",
-            transport.c_str(),
-            e.what());
-          image_sub_ = subscribe_with_transport("raw");
-          active_input_transport_ = "raw";
+      const bool topic_already_compressed = isCompressedTopic(params_.input_image_topic);
+      if (params_.input_transport == "compressed" && topic_already_compressed) {
+        auto qos_profile = rclcpp::SensorDataQoS();
+        qos_profile.keep_last(params_.queue_size);
+        if (params_.input_qos_reliability == "reliable") {
+          qos_profile.reliable();
         } else {
-          throw;
+          qos_profile.best_effort();
+        }
+
+        compressed_image_sub_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(
+          params_.input_image_topic,
+          qos_profile,
+          std::bind(&YoloInferenceNode::onCompressedImage, this, std::placeholders::_1));
+        active_input_transport_ = "compressed_direct";
+        RCLCPP_INFO(
+          this->get_logger(),
+          "Subscribing directly to compressed image topic: %s",
+          params_.input_image_topic.c_str());
+      } else {
+        try {
+          image_sub_ = subscribe_with_transport(transport);
+          active_input_transport_ = transport;
+        } catch (const std::exception & e) {
+          if (transport != "raw") {
+            RCLCPP_WARN(
+              this->get_logger(),
+              "Failed to create '%s' image transport subscription (%s); falling back to 'raw'",
+              transport.c_str(),
+              e.what());
+            image_sub_ = subscribe_with_transport("raw");
+            active_input_transport_ = "raw";
+          } else {
+            throw;
+          }
         }
       }
     }
@@ -190,6 +197,8 @@ private:
   {
     std::string model_path;
     std::string input_image_topic{"/camera/image_raw"};
+    std::vector<std::string> camera_topics;
+    std::string topic_type{"compressed_image"};
     std::string input_transport{"raw"};
     std::string input_qos_reliability{"best_effort"};
     std::string output_detections_topic{"/detections"};
@@ -199,6 +208,7 @@ private:
     bool use_letterbox{false};
     int batch_size_limit{3};
     int max_batch_latency_ms{50};
+    int queue_size{10};
     double score_threshold{0.25};
     double nms_iou_threshold{0.45};
     std::string preferred_provider{"tensorrt"};
@@ -209,6 +219,8 @@ private:
   {
     params_.model_path = this->declare_parameter<std::string>("model_path", "");
     params_.input_image_topic = this->declare_parameter<std::string>("input_image_topic", params_.input_image_topic);
+    params_.camera_topics = this->declare_parameter<std::vector<std::string>>("camera_topics", params_.camera_topics);
+    params_.topic_type = this->declare_parameter<std::string>("topic_type", params_.topic_type);
     params_.input_transport = this->declare_parameter<std::string>("input_transport", params_.input_transport);
     params_.input_qos_reliability =
       this->declare_parameter<std::string>("input_qos_reliability", params_.input_qos_reliability);
@@ -224,6 +236,7 @@ private:
     params_.preferred_provider = this->declare_parameter<std::string>("preferred_provider", params_.preferred_provider);
     params_.device_id = this->declare_parameter<int>("device_id", params_.device_id);
     params_.class_names_path = this->declare_parameter<std::string>("class_names_path", params_.class_names_path);
+    params_.queue_size = this->declare_parameter<int>("queue_size", params_.queue_size);
   }
 
   void validateParameters()
@@ -242,6 +255,15 @@ private:
       fail("input_transport must be either 'raw' or 'compressed'.");
     }
     params_.input_transport = normalize_transport;
+
+    auto topic_type = params_.topic_type;
+    std::transform(topic_type.begin(), topic_type.end(), topic_type.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
+    if (topic_type != "raw_image" && topic_type != "compressed_image") {
+      fail("topic_type must be either 'raw_image' or 'compressed_image'.");
+    }
+    params_.topic_type = topic_type;
 
     auto reliability = params_.input_qos_reliability;
     std::transform(
@@ -277,6 +299,15 @@ private:
     }
     if (params_.max_batch_latency_ms < 0) {
       fail("max_batch_latency_ms must be non-negative.");
+    }
+    if (params_.queue_size < 1) {
+      fail("queue_size must be at least 1.");
+    }
+
+    if (!params_.camera_topics.empty()) {
+      if (params_.topic_type != "compressed_image") {
+        fail("camera_topics currently requires topic_type 'compressed_image'.");
+      }
     }
 
     auto normalize_pref = params_.preferred_provider;
@@ -316,6 +347,42 @@ private:
 
   void onCompressedImage(const sensor_msgs::msg::CompressedImage::ConstSharedPtr & msg)
   {
+    handleCompressedImage(msg, -1);
+  }
+
+  void setupMultiCameraSubscriptions()
+  {
+    multi_camera_subscriptions_.clear();
+    multi_camera_subscriptions_.reserve(params_.camera_topics.size());
+    auto qos_depth = static_cast<size_t>(params_.queue_size);
+    auto qos_profile = rclcpp::QoS(rclcpp::KeepLast(qos_depth));
+    if (params_.input_qos_reliability == "reliable") {
+      qos_profile.reliable();
+    } else {
+      qos_profile.best_effort();
+    }
+    for (size_t i = 0; i < params_.camera_topics.size(); ++i) {
+      const auto & topic = params_.camera_topics[i];
+      auto sub = this->create_subscription<sensor_msgs::msg::CompressedImage>(
+        topic,
+        qos_profile,
+        [this, i](const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg) {
+          this->handleCompressedImage(msg, static_cast<int>(i));
+        });
+      multi_camera_subscriptions_.push_back(sub);
+      RCLCPP_INFO(
+        this->get_logger(),
+        "Subscribed to compressed image topic %s (camera %zu)",
+        topic.c_str(),
+        i);
+    }
+    active_input_transport_ = "compressed_multi";
+  }
+
+  void handleCompressedImage(
+    const sensor_msgs::msg::CompressedImage::ConstSharedPtr & msg,
+    int camera_id)
+  {
     try {
       const auto now = this->now();
       cv::Mat compressed_mat(
@@ -333,6 +400,13 @@ private:
       auto image_msg = cv_image.toImageMsg();
       sensor_msgs::msg::Image::ConstSharedPtr image_const(image_msg);
       enqueueImageWithTimestamp(image_const, now);
+      if (camera_id >= 0) {
+        RCLCPP_DEBUG(
+          this->get_logger(),
+          "Enqueued frame from camera %d (topic %s)",
+          camera_id,
+          msg->header.frame_id.c_str());
+      }
     } catch (const std::exception & e) {
       RCLCPP_WARN(this->get_logger(), "Skipping compressed image due to error: %s", e.what());
     }
@@ -344,6 +418,16 @@ private:
   {
     std::lock_guard<std::mutex> lock(queue_mutex_);
     image_queue_.push_back({msg, arrival});
+    const auto limit = queueLimit();
+    if (limit > 0 && image_queue_.size() > limit) {
+      image_queue_.pop_front();
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(),
+        *this->get_clock(),
+        5000,
+        "Image queue exceeded limit (%zu); dropping oldest frame",
+        limit);
+    }
     RCLCPP_DEBUG(
       this->get_logger(),
       "Image received. Queue size: %zu, Stamp: %.6f",
@@ -353,6 +437,11 @@ private:
     if (image_queue_.size() >= static_cast<size_t>(params_.batch_size_limit)) {
       request_process_ = true;
     }
+  }
+
+  size_t queueLimit() const
+  {
+    return params_.queue_size > 0 ? static_cast<size_t>(params_.queue_size) : 0;
   }
 
   bool isCompressedTopic(const std::string & topic) const
@@ -1130,6 +1219,8 @@ private:
 
   image_transport::Subscriber image_sub_;
   rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_image_sub_;
+  std::vector<rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr> multi_camera_subscriptions_;
+  bool multi_camera_mode_{false};
   rclcpp::Publisher<Detection2DArrayMsg>::SharedPtr detection_pub_;
   rclcpp::TimerBase::SharedPtr batch_timer_;
 
