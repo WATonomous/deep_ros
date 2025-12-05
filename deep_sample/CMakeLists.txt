@@ -78,7 +78,9 @@ install(DIRECTORY config launch models
 
 if(BUILD_TESTING)
   find_package(deep_test REQUIRED)
+  find_package(launch_testing_ament_cmake REQUIRED)
 
+  # Unit tests
   add_deep_test(test_sample_node test/test_sample_node.cpp
     LIBRARIES
       sample_inference_component
@@ -90,6 +92,22 @@ if(BUILD_TESTING)
   target_compile_definitions(test_sample_node PRIVATE
     TEST_MODEL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/models/tiny_model.onnx"
   )
+
+  # Launch tests - CPU backend (always run)
+  add_deep_launch_test(test/launch_tests/test_sample_cpu_backend.py
+    TIMEOUT 60
+  )
+
+  # Launch tests - GPU backend (skip in CI, run locally with GPU)
+  # Set IS_CI=1 in CI workflows to skip GPU tests
+  if(NOT DEFINED ENV{IS_CI} OR NOT "$ENV{IS_CI}" STREQUAL "1")
+    message(STATUS "GPU tests enabled - will run test_sample_gpu_backend.py")
+    add_deep_launch_test(test/launch_tests/test_sample_gpu_backend.py
+      TIMEOUT 60
+    )
+  else()
+    message(STATUS "CI environment detected (IS_CI=1) - skipping GPU tests")
+  endif()
 endif()
 
 ament_package()
