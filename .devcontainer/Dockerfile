@@ -1,7 +1,6 @@
 # Multi-stage ROS2 development container (CPU/GPU compatible)
 ARG ROS_DISTRO=humble
-ARG CUDA_VERSION=12.4.0
-ARG UBUNTU_VERSION=22.04
+ARG NVIDIA_CONTAINER_TAG=12.4.1-cudnn-runtime-ubuntu22.04
 
 # ===============================================
 # CPU Base - Standard ROS2 image
@@ -11,7 +10,7 @@ FROM ros:${ROS_DISTRO}-ros-base AS cpu-base
 # ===============================================
 # GPU Base - CUDA with manual ROS2 install
 # ===============================================
-FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} AS gpu-base
+FROM nvidia/cuda:${NVIDIA_CONTAINER_TAG} AS gpu-base
 ARG ROS_DISTRO
 ARG TENSORRT_RUNTIME_VERSION
 ARG TENSORRT_CUDA_VERSION
@@ -39,16 +38,19 @@ ENV DEBIAN_FRONTEND=interactive
 RUN curl -fsSL -o cuda-keyring_1.1-1_all.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb \
     && dpkg -i cuda-keyring_1.1-1_all.deb \
     && apt-get update && apt-get install -y --no-install-recommends \
-    libnvinfer-lean10=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
+    libnvinfer10=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
+    libnvinfer-plugin10=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
+    libnvonnxparsers10=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
     && rm cuda-keyring_1.1-1_all.deb
 
 # ===============================================
-# Install Common Development Tools from Either Base
+# Install Common Development Tools in Either Base
 # ===============================================
 FROM ${TARGETARCH:-cpu}-base AS dev-tools
 
 # Install development tools not in base image
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     python3-pip \
     python3-colcon-common-extensions \
     python3-rosdep \
@@ -70,7 +72,9 @@ FROM dev-tools AS source
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN --mount=type=bind,source=.,target=/tmp/src \
-    apt-get -qq update && rosdep update && \
+    apt-get -qq update && \
+    rosdep init || true && \
+    rosdep update && \
     rosdep install --from-paths /tmp/src --ignore-src -r -s \
         | (grep 'apt-get install' || true) \
         | awk '{print $3}' \

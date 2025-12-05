@@ -21,56 +21,73 @@
 #include <deep_core/plugin_interfaces/backend_memory_allocator.hpp>
 #include <deep_core/plugin_interfaces/deep_backend_plugin.hpp>
 
-namespace deep_ort_backend
+#include "deep_ort_gpu_backend_plugin/ort_gpu_backend_executor.hpp"
+
+namespace deep_ort_gpu_backend
 {
 
 /**
- * @brief ONNX Runtime backend plugin
+ * @brief ONNX Runtime GPU backend plugin
  *
- * Combines ORT CPU memory allocator and inference executor into a single
- * backend plugin for use with pluginlib.
+ * Combines ORT GPU memory allocator and inference executor into a single
+ * backend plugin for use with pluginlib. Supports CUDA
+ * execution provider and possible more in the future.
  */
-class OrtBackendPlugin : public deep_ros::DeepBackendPlugin
+class OrtGpuBackendPlugin : public deep_ros::DeepBackendPlugin
 {
 public:
   /**
-   * @brief Constructor - initializes ORT allocator and executor
+   * @brief Default constructor - required by pluginlib
    */
-  OrtBackendPlugin();
+  OrtGpuBackendPlugin();
 
   /**
    * @brief Destructor
    */
-  ~OrtBackendPlugin() override = default;
+  ~OrtGpuBackendPlugin() override = default;
 
   /**
-   * @brief Initialize plugin with node instance (no-op for CPU backend)
-   * @param node Lifecycle node instance
+   * @brief Initialize plugin with node instance and load parameters
+   * @param node Lifecycle node instance to read parameters from
    */
   void initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node) override;
 
   /**
    * @brief Get backend name
-   * @return "onnxruntime"
+   * @return "onnxruntime_gpu"
    */
   std::string backend_name() const override;
 
   /**
-   * @brief Get the ORT CPU memory allocator
-   * @return Shared pointer to ORT memory allocator
+   * @brief Get the ORT GPU memory allocator
+   * @return Shared pointer to ORT GPU memory allocator
    */
   std::shared_ptr<deep_ros::BackendMemoryAllocator> get_allocator() const override;
 
   /**
-   * @brief Get the ORT inference executor
-   * @return Shared pointer to ORT inference executor
+   * @brief Get the ORT GPU inference executor
+   * @return Shared pointer to ORT GPU inference executor
    */
   std::shared_ptr<deep_ros::BackendInferenceExecutor> get_inference_executor() const override;
 
+  /**
+   * @brief Get CUDA device ID
+   * @return CUDA device ID
+   */
+  int get_device_id() const;
+
 private:
   rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
+  int device_id_;
+  std::string execution_provider_;
   std::shared_ptr<deep_ros::BackendMemoryAllocator> allocator_;
   std::shared_ptr<deep_ros::BackendInferenceExecutor> executor_;
+
+  /**
+   * @brief Initialize GPU components with configured parameters
+   * @return true if successful, false otherwise
+   */
+  bool initialize_gpu_components();
 };
 
-}  // namespace deep_ort_backend
+}  // namespace deep_ort_gpu_backend

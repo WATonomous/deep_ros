@@ -1,0 +1,38 @@
+# Copyright (c) 2025-present WATonomous. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+launch:
+  - arg:
+      name: "config_file"
+      default: "$(find-pkg-share deep_sample)/config/sample_node_gpu_config.yaml"
+      description: "Path to the node configuration file (GPU backend)"
+
+  # Main inference node with GPU backend
+  - node:
+      pkg: "deep_sample"
+      exec: "sample_inference_node"
+      name: "sample_inference_node"
+      param:
+        - from: "$(var config_file)"
+
+  # Nav2 lifecycle manager for automatic transitions
+  - node:
+      pkg: "nav2_lifecycle_manager"
+      exec: "lifecycle_manager"
+      name: "lifecycle_manager"
+      param:
+        - name: "node_names"
+          value: ["sample_inference_node"]
+        - name: "autostart"
+          value: true

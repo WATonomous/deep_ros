@@ -177,6 +177,11 @@ public:
     executor_ = std::make_shared<MockInferenceExecutor>();
   }
 
+  void initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node) override
+  {
+    node_ = node;
+  }
+
   std::string backend_name() const override
   {
     return "mock_backend";
@@ -193,6 +198,7 @@ public:
   }
 
 private:
+  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
   std::shared_ptr<MockMemoryAllocator> allocator_;
   std::shared_ptr<MockInferenceExecutor> executor_;
 };

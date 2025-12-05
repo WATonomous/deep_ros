@@ -47,7 +47,7 @@ OrtBackendExecutor::OrtBackendExecutor()
 bool OrtBackendExecutor::load_model_impl(const std::filesystem::path & model_path)
 {
   if (!std::filesystem::exists(model_path)) {
-    return false;
+    throw std::runtime_error("Model file not found: " + model_path.string());
   }
 
   try {
@@ -63,7 +63,7 @@ bool OrtBackendExecutor::load_model_impl(const std::filesystem::path & model_pat
     model_path_ = model_path;
     return true;
   } catch (const std::exception & e) {
-    return false;
+    throw std::runtime_error("Failed to load ONNX model: " + std::string(e.what()));
   }
 }
 

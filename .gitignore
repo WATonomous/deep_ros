@@ -7,6 +7,9 @@ log/
 .devcontainer/devcontainer.json
 .devcontainer/.env
 
+# Launch test cache
+__pycache__/
+
 # Claude helpers
 .claude/
 CLAUDE.md
