@@ -93,15 +93,14 @@ if(BUILD_TESTING)
     TEST_MODEL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/models/tiny_model.onnx"
   )
 
-  # Launch tests - CPU backend (always run)
-  add_deep_launch_test(test/launch_tests/test_sample_cpu_backend.py
-    TIMEOUT 60
-  )
-
-  # Launch tests - GPU backend (skip in CI, run locally with GPU)
+  # Launch tests - (skip in CI, run locally with GPU)
   # Set IS_CI=1 in CI workflows to skip GPU tests
   if(NOT DEFINED ENV{IS_CI} OR NOT "$ENV{IS_CI}" STREQUAL "1")
     message(STATUS "GPU tests enabled - will run test_sample_gpu_backend.py")
+
+    add_deep_launch_test(test/launch_tests/test_sample_cpu_backend.py
+      TIMEOUT 60
+    )
     add_deep_launch_test(test/launch_tests/test_sample_gpu_backend.py
       TIMEOUT 60
     )
