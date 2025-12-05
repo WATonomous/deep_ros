@@ -97,48 +97,48 @@ deep_ros::Tensor OrtGpuBackendExecutor::run_inference_impl(deep_ros::Tensor & in
   }
 
   try {
-    // Get input/output names (cached for performance)
-    static thread_local Ort::AllocatorWithDefaultOptions allocator;
-    static thread_local auto input_name = session_->GetInputNameAllocated(0, allocator);
-    static thread_local auto output_name = session_->GetOutputNameAllocated(0, allocator);
-    static thread_local const char * input_names[] = {input_name.get()};
-    static thread_local const char * output_names[] = {output_name.get()};
-
-    // Create input tensor using CPU memory (input data is on CPU)
+    // Convert deep_ros::DataType to ONNX tensor element type
+    ONNXTensorElementDataType onnx_type = convert_to_onnx_type(input.dtype());
     std::vector<int64_t> input_shape_int64(input.shape().begin(), input.shape().end());
+
+    // Get our custom allocator for output binding
+    auto custom_allocator_shared = get_ort_gpu_cpu_allocator();
+    auto * custom_allocator = static_cast<OrtGpuCpuMemoryAllocator *>(custom_allocator_shared.get());
+
+    // Create input tensor wrapping existing input memory
+    size_t input_size_bytes = input.byte_size();
     auto cpu_memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    Ort::Value ort_input = Ort::Value::CreateTensor(
+      cpu_memory_info, input.data(), input_size_bytes, input_shape_int64.data(), input_shape_int64.size(), onnx_type);
 
-    Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
-      cpu_memory_info,
-      static_cast<float *>(input.data()),
-      input.shape().size() > 0
-        ? std::accumulate(input.shape().begin(), input.shape().end(), 1ULL, std::multiplies<size_t>())
-        : 0,
-      input_shape_int64.data(),
-      input_shape_int64.size());
+    // Get input/output names
+    Ort::AllocatorWithDefaultOptions allocator;
+    auto input_name = session_->GetInputNameAllocated(0, allocator);
+    auto output_name = session_->GetOutputNameAllocated(0, allocator);
 
-    // Run inference using simple session Run (ONNX Runtime handles GPU transfers)
-    auto output_tensors = session_->Run(Ort::RunOptions{nullptr}, input_names, &input_tensor, 1, output_names, 1);
+    // Create IO binding for inference
+    Ort::IoBinding binding(*session_);
+    binding.BindInput(input_name.get(), ort_input);
 
-    if (output_tensors.empty()) {
-      throw std::runtime_error("ONNX GPU Inference returned no outputs");
-    }
+    // Bind output to use our custom allocator
+    binding.BindOutput(output_name.get(), custom_allocator->get_ort_memory_info());
 
-    // Get output tensor info
-    auto & output_tensor = output_tensors[0];
-    auto output_info = output_tensor.GetTensorTypeAndShapeInfo();
-    auto output_shape_int64 = output_info.GetShape();
+    // Run inference with IO binding
+    Ort::RunOptions run_options;
+    session_->Run(run_options, binding);
 
-    // Convert output shape to size_t
-    std::vector<size_t> output_shape(output_shape_int64.begin(), output_shape_int64.end());
+    // Get output values allocated by ONNX Runtime
+    Ort::AllocatorWithDefaultOptions default_allocator;
+    std::vector<Ort::Value> output_tensors = binding.GetOutputValues(default_allocator);
 
-    // Get output data pointer (this is on CPU after ONNX Runtime handles GPU->CPU transfer)
-    const float * output_data = output_tensor.GetTensorData<float>();
+    // Get output shape and data
+    auto output_shape = get_output_shape(input.shape());
+    void * output_data = output_tensors[0].GetTensorMutableData<void>();
 
-    // Create result tensor that wraps the ONNX-allocated memory
-    deep_ros::Tensor result(const_cast<void *>(static_cast<const void *>(output_data)), output_shape, input.dtype());
+    // Create deep_ros tensor wrapping the ONNX-allocated memory
+    deep_ros::Tensor output(output_data, output_shape, input.dtype());
 
-    return result;
+    return output;
   } catch (const std::exception & e) {
     throw std::runtime_error("GPU inference failed: " + std::string(e.what()));
   }
@@ -286,13 +286,5 @@ size_t OrtGpuBackendExecutor::get_element_size(deep_ros::DataType dtype) const
       throw std::runtime_error("Unsupported data type");
   }
 }
-
-bool OrtGpuBackendExecutor::verify_gpu_availability() const
-{
-  return true;
-}
-
-void OrtGpuBackendExecutor::set_device() const
-{}
 
 }  // namespace deep_ort_gpu_backend

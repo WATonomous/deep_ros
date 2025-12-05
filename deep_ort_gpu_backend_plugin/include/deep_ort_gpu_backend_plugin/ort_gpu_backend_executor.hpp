@@ -88,7 +88,6 @@ private:
   int device_id_;
   std::string execution_provider_;
   rclcpp::Logger logger_;
-  void * persistent_cuda_ptr_ = nullptr;
   std::unique_ptr<Ort::Env> env_;
   std::unique_ptr<Ort::Session> session_;
   std::unique_ptr<Ort::SessionOptions> session_options_;
@@ -131,17 +130,6 @@ private:
    * @return Size in bytes per element
    */
   size_t get_element_size(deep_ros::DataType dtype) const;
-
-  /**
-   * @brief Verify GPU availability and compatibility
-   * @return true if GPU is available and compatible
-   */
-  bool verify_gpu_availability() const;
-
-  /**
-   * @brief Set CUDA device context
-   */
-  void set_device() const;
 };
 
 }  // namespace deep_ort_gpu_backend
