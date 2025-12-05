@@ -28,15 +28,6 @@ namespace deep_ort_gpu_backend
 {
 
 /**
- * @brief Execution provider type for GPU inference
- */
-enum class GpuExecutionProvider
-{
-  CUDA,  ///< NVIDIA CUDA execution provider
-  TENSORRT  ///< NVIDIA TensorRT execution provider
-};
-
-/**
  * @brief ONNX Runtime GPU backend inference executor
  *
  * Provides inference execution using ONNX Runtime with GPU optimization
@@ -48,11 +39,11 @@ class OrtGpuBackendExecutor : public deep_ros::BackendInferenceExecutor
 public:
   /**
    * @brief Constructor - initializes ONNX Runtime environment with GPU support
-   * @param device_id CUDA device ID (default: 0)
-   * @param execution_provider GPU execution provider (default: CUDA)
+   * @param device_id CUDA device ID
+   * @param execution_provider GPU execution provider: "cuda" or "tensorrt"
+   * @param logger ROS logger for diagnostic messages
    */
-  explicit OrtGpuBackendExecutor(
-    int device_id = 0, GpuExecutionProvider execution_provider = GpuExecutionProvider::CUDA);
+  explicit OrtGpuBackendExecutor(int device_id, const std::string & execution_provider, const rclcpp::Logger & logger);
 
   /**
    * @brief Destructor
@@ -70,12 +61,6 @@ public:
    * @return CUDA device ID
    */
   int get_device_id() const;
-
-  /**
-   * @brief Get current execution provider
-   * @return Current GPU execution provider
-   */
-  GpuExecutionProvider get_execution_provider() const;
 
 protected:
   /**
@@ -101,7 +86,8 @@ protected:
 private:
   std::filesystem::path model_path_;
   int device_id_;
-  GpuExecutionProvider execution_provider_;
+  std::string execution_provider_;
+  rclcpp::Logger logger_;
   void * persistent_cuda_ptr_ = nullptr;
   std::unique_ptr<Ort::Env> env_;
   std::unique_ptr<Ort::Session> session_;

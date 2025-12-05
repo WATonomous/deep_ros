@@ -18,6 +18,8 @@
 #include <string>
 #include <vector>
 
+#include <rclcpp/rclcpp.hpp>
+
 namespace deep_ros
 {
 

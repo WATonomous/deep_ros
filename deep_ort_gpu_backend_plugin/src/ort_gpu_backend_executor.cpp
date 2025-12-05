@@ -17,10 +17,10 @@
 #include <dlfcn.h>
 #include <onnxruntime_cxx_api.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
-#include <iostream>
 #include <memory>
 #include <numeric>
 #include <stdexcept>
@@ -38,9 +38,11 @@ namespace deep_ort_gpu_backend
 // Forward declaration for cast
 class OrtGpuCpuMemoryAllocator;
 
-OrtGpuBackendExecutor::OrtGpuBackendExecutor(int device_id, GpuExecutionProvider execution_provider)
+OrtGpuBackendExecutor::OrtGpuBackendExecutor(
+  int device_id, const std::string & execution_provider, const rclcpp::Logger & logger)
 : device_id_(device_id)
 , execution_provider_(execution_provider)
+, logger_(logger)
 , memory_info_(nullptr)
 {
   // Initialize ORT environment with minimal logging
@@ -72,11 +74,6 @@ int OrtGpuBackendExecutor::get_device_id() const
   return device_id_;
 }
 
-GpuExecutionProvider OrtGpuBackendExecutor::get_execution_provider() const
-{
-  return execution_provider_;
-}
-
 bool OrtGpuBackendExecutor::load_model_impl(const std::filesystem::path & model_path)
 {
   try {
@@ -87,7 +84,7 @@ bool OrtGpuBackendExecutor::load_model_impl(const std::filesystem::path & model_
 
     return true;
   } catch (const std::exception & e) {
-    std::cerr << "Failed to load model: " << e.what() << std::endl;
+    RCLCPP_ERROR(logger_, "Failed to load model: %s", e.what());
     session_.reset();
     return false;
   }
@@ -159,24 +156,17 @@ void OrtGpuBackendExecutor::initialize_session_options()
   session_options_->SetIntraOpNumThreads(1);
   session_options_->SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
 
-  // Configure execution provider
-  try {
-    switch (execution_provider_) {
-      case GpuExecutionProvider::CUDA:
-        configure_cuda_provider();
-        break;
-      case GpuExecutionProvider::TENSORRT:
-        try {
-          configure_tensorrt_provider();
-        } catch (const std::exception & tensorrt_e) {
-          std::cerr << "TensorRT failed during configuration, falling back to CUDA: " << tensorrt_e.what() << std::endl;
-          execution_provider_ = GpuExecutionProvider::CUDA;
-          configure_cuda_provider();
-        }
-        break;
-    }
-  } catch (const std::exception & e) {
-    throw std::runtime_error("Failed to configure any GPU execution provider: " + std::string(e.what()));
+  // Configure execution provider based on string
+  std::string provider_lower = execution_provider_;
+  std::transform(provider_lower.begin(), provider_lower.end(), provider_lower.begin(), ::tolower);
+
+  if (provider_lower == "cuda") {
+    configure_cuda_provider();
+  } else if (provider_lower == "tensorrt") {
+    configure_tensorrt_provider();
+  } else {
+    throw std::runtime_error(
+      "Unknown execution provider: " + execution_provider_ + ". Valid options: 'cuda', 'tensorrt'");
   }
 }
 
@@ -225,9 +215,9 @@ void OrtGpuBackendExecutor::configure_tensorrt_provider()
 
     std::string tensorrt_provider_name = "NvTensorRtRtx";
 
-    std::cout << "Attempting TensorRT provider registration with name: '" << tensorrt_provider_name << "'" << std::endl;
+    RCLCPP_INFO(logger_, "Attempting TensorRT provider registration with name: '%s'", tensorrt_provider_name.c_str());
     session_options_->AppendExecutionProvider(tensorrt_provider_name, tensorrt_options);
-    std::cout << "TensorRT provider registered successfully" << std::endl;
+    RCLCPP_INFO(logger_, "TensorRT provider registered successfully");
   } catch (const std::exception & e) {
     throw std::runtime_error("Failed to configure TensorRT provider: " + std::string(e.what()));
   }

@@ -30,6 +30,11 @@ OrtBackendPlugin::OrtBackendPlugin()
 , executor_(std::make_shared<OrtBackendExecutor>())
 {}
 
+void OrtBackendPlugin::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node)
+{
+  node_ = node;
+}
+
 std::string OrtBackendPlugin::backend_name() const
 {
   return "onnxruntime_cpu";

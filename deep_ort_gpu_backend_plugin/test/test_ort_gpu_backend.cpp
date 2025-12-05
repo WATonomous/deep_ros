@@ -15,6 +15,7 @@
 #include <chrono>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -23,18 +24,37 @@
 #include <deep_ort_gpu_backend_plugin/ort_gpu_backend_executor.hpp>
 #include <deep_ort_gpu_backend_plugin/ort_gpu_backend_plugin.hpp>
 #include <deep_ort_gpu_backend_plugin/ort_gpu_memory_allocator.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
 
 namespace deep_ort_gpu_backend
 {
 namespace test
 {
 
+// Helper function to create a dummy lifecycle node for testing
+rclcpp_lifecycle::LifecycleNode::SharedPtr create_dummy_node()
+{
+  static bool initialized = false;
+  if (!initialized) {
+    rclcpp::init(0, nullptr);
+    initialized = true;
+  }
+
+  // Create unique node name to avoid parameter conflicts
+  static int node_counter = 0;
+  std::string node_name = "test_node_" + std::to_string(node_counter++);
+  auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>(node_name);
+  return node;
+}
+
 // Helper function to check if CUDA is available
 bool is_cuda_available()
 {
   try {
     // Try creating a simple CUDA execution provider to verify CUDA availability
-    OrtGpuBackendExecutor test_executor(0, GpuExecutionProvider::CUDA);
+    auto logger = rclcpp::get_logger("test_cuda_availability");
+    OrtGpuBackendExecutor test_executor(0, "cuda", logger);
     return true;
   } catch (...) {
     return false;
@@ -101,7 +121,8 @@ TEST_CASE("OrtGpuBackendExecutor basic functionality", "[executor]")
     return;  // Skip if CUDA not available
   }
 
-  OrtGpuBackendExecutor executor(0, GpuExecutionProvider::CUDA);
+  auto logger = rclcpp::get_logger("test_executor");
+  OrtGpuBackendExecutor executor(0, "cuda", logger);
   auto allocator = get_ort_gpu_cpu_allocator();
 
   // Test supported formats
@@ -111,7 +132,6 @@ TEST_CASE("OrtGpuBackendExecutor basic functionality", "[executor]")
 
   // Test device properties
   REQUIRE(executor.get_device_id() == 0);
-  REQUIRE(executor.get_execution_provider() == GpuExecutionProvider::CUDA);
 
   // Test model loading failure
   bool result = executor.load_model("/nonexistent/model.onnx");
@@ -129,12 +149,15 @@ TEST_CASE("OrtGpuBackendPlugin interface", "[plugin]")
     return;  // Skip if CUDA not available
   }
 
-  OrtGpuBackendPlugin plugin(0, GpuExecutionProvider::CUDA);
+  OrtGpuBackendPlugin plugin;
+  auto node = create_dummy_node();
+
+  // Plugin will declare parameters in initialize()
+  plugin.initialize(node);
 
   // Test basic properties
   REQUIRE(plugin.backend_name() == "onnxruntime_gpu");
   REQUIRE(plugin.get_device_id() == 0);
-  REQUIRE(plugin.get_execution_provider() == GpuExecutionProvider::CUDA);
 
   // Test allocator - check if it's initialized properly
   auto allocator = plugin.get_allocator();

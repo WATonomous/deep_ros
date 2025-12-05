@@ -47,9 +47,9 @@ target_include_directories(${DEEP_CORE_LIB} PUBLIC
 target_link_libraries(${DEEP_CORE_LIB}
   PUBLIC
     pluginlib::pluginlib
-  PRIVATE
     rclcpp::rclcpp
     rclcpp_lifecycle::rclcpp_lifecycle
+  PRIVATE
     bondcpp::bondcpp
 )
 

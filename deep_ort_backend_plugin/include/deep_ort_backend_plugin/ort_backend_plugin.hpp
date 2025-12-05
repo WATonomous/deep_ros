@@ -44,6 +44,12 @@ public:
   ~OrtBackendPlugin() override = default;
 
   /**
+   * @brief Initialize plugin with node instance (no-op for CPU backend)
+   * @param node Lifecycle node instance
+   */
+  void initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node) override;
+
+  /**
    * @brief Get backend name
    * @return "onnxruntime"
    */
@@ -62,6 +68,7 @@ public:
   std::shared_ptr<deep_ros::BackendInferenceExecutor> get_inference_executor() const override;
 
 private:
+  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
   std::shared_ptr<deep_ros::BackendMemoryAllocator> allocator_;
   std::shared_ptr<deep_ros::BackendInferenceExecutor> executor_;
 };
