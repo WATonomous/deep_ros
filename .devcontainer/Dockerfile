@@ -35,24 +35,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 ENV DEBIAN_FRONTEND=interactive
 
-# Install CUDA 12.2 runtime pieces plus full TensorRT 10.14 stack (runtime + dev) so
+# Install CUDA 12.2 runtime pieces plus TensorRT 10.14 runtime (no dev headers) so
 # ONNX Runtime's TensorRT execution provider can resolve unversioned SONAMEs.
 RUN curl -fsSL -o cuda-keyring_1.1-1_all.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb \
     && dpkg -i cuda-keyring_1.1-1_all.deb \
-    && apt-get update && apt-get install -y --no-install-recommends \
+    && apt-get update && apt-get install -y --no-install-recommends --allow-change-held-packages \
     cuda-cudart-12-2 \
     cuda-libraries-12-2 \
-    libnvinfer-lean10=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
-    libnvinfer10=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
-    libnvinfer-plugin10=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
-    libnvonnxparsers10=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
-    libnvinfer-dev=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
-    libnvinfer-plugin-dev=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
-    libnvinfer-headers-dev=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
-    libnvinfer-headers-plugin-dev=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
-    libnvonnxparsers-dev=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
-    libcudnn9-cuda-12=${CUDNN_VERSION} \
-    libcudnn9-dev-cuda-12=${CUDNN_VERSION} \
+    libnvinfer10 \
+    libnvinfer-plugin10 \
+    libnvonnxparsers10 \
+    # libcudnn9-cuda-12 \
     && rm cuda-keyring_1.1-1_all.deb \
     && rm -rf /var/lib/apt/lists/*
 
