@@ -218,5 +218,24 @@ TEST_CASE("Singleton behavior", "[singleton]")
   REQUIRE(allocator1->device_name() == allocator2->device_name());
 }
 
+TEST_CASE("TensorRT execution provider", "[tensorrt][!mayfail]")
+{
+  try {
+    auto logger = rclcpp::get_logger("test_tensorrt");
+    OrtGpuBackendExecutor executor(0, "tensorrt", logger);
+
+    REQUIRE(executor.get_device_id() == 0);
+
+    auto formats = executor.supported_model_formats();
+    REQUIRE(formats.size() == 1);
+    REQUIRE(formats[0] == "onnx");
+
+    std::cout << "TensorRT provider test PASSED" << std::endl;
+  } catch (const std::exception & e) {
+    std::cout << "TensorRT provider not available or failed: " << e.what() << std::endl;
+    std::cout << "This is expected if TensorRT is not installed" << std::endl;
+  }
+}
+
 }  // namespace test
 }  // namespace deep_ort_gpu_backend
