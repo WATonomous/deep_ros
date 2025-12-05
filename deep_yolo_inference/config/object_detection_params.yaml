@@ -17,6 +17,7 @@ yolo_inference_node:
     nms_iou_threshold: 0.40
     preferred_provider: "tensorrt"
     device_id: 0
+    warmup_tensor_shapes: true
     class_names_path: "/workspaces/deep_ros/deep_yolo_inference/config/coco_classes.txt"
     class_names: [
       "person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck",

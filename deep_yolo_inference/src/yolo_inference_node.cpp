@@ -213,6 +213,7 @@ private:
     double nms_iou_threshold{0.45};
     std::string preferred_provider{"tensorrt"};
     int device_id{0};
+    bool warmup_tensor_shapes{true};
   };
 
   void declareAndReadParameters()
@@ -237,6 +238,8 @@ private:
     params_.device_id = this->declare_parameter<int>("device_id", params_.device_id);
     params_.class_names_path = this->declare_parameter<std::string>("class_names_path", params_.class_names_path);
     params_.queue_size = this->declare_parameter<int>("queue_size", params_.queue_size);
+    params_.warmup_tensor_shapes =
+      this->declare_parameter<bool>("warmup_tensor_shapes", params_.warmup_tensor_shapes);
   }
 
   void validateParameters()
@@ -1050,6 +1053,54 @@ private:
     return std::to_string(class_id);
   }
 
+  void warmupTensorShapeCache(Provider provider)
+  {
+    if (!params_.warmup_tensor_shapes) {
+      return;
+    }
+    if (provider == Provider::CPU) {
+      return;
+    }
+    if (!executor_ || !allocator_) {
+      return;
+    }
+    if (params_.batch_size_limit < 1) {
+      return;
+    }
+
+    const size_t channels = 3;
+    const size_t height = static_cast<size_t>(params_.input_height);
+    const size_t width = static_cast<size_t>(params_.input_width);
+    const size_t per_image = channels * height * width;
+
+    RCLCPP_INFO(
+      this->get_logger(),
+      "Priming %s backend tensor shapes for batch sizes up to %d",
+      providerToString(provider).c_str(),
+      params_.batch_size_limit);
+
+    for (int batch = 1; batch <= params_.batch_size_limit; ++batch) {
+      PackedInput dummy;
+      dummy.shape = {static_cast<size_t>(batch), channels, height, width};
+      dummy.data.assign(static_cast<size_t>(batch) * per_image, 0.0f);
+
+      auto input_tensor = buildInputTensor(dummy);
+      try {
+        (void)executor_->run_inference(input_tensor);
+        RCLCPP_DEBUG(
+          this->get_logger(),
+          "Cached tensor shape for batch size %d", batch);
+      } catch (const std::exception & e) {
+        RCLCPP_WARN(
+          this->get_logger(),
+          "Warmup inference for batch size %d failed: %s. Continuing without caching remaining shapes.",
+          batch,
+          e.what());
+        break;
+      }
+    }
+  }
+
   bool initializeBackend(size_t start_index = 0)
   {
     for (size_t idx = start_index; idx < provider_order_.size(); ++idx) {
@@ -1117,6 +1168,7 @@ private:
 
         active_provider_ = providerToString(actual_provider);
         declareActiveProviderParameter(active_provider_);
+        warmupTensorShapeCache(actual_provider);
 
         RCLCPP_INFO(
           this->get_logger(),
