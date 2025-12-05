@@ -90,10 +90,8 @@ if(CUDAToolkit_FOUND)
   endif()
 endif()
 
-# Fallback: Try to find CUDA manually if CUDAToolkit fails or is incomplete
+# Fallback: Try to find CUDA runtime manually if CUDAToolkit fails or is incomplete
 if(NOT CUDAToolkit_FOUND)
-  # Find CUDA runtime libraries (without requiring nvcc/development toolkit)
-  # Try multiple possible locations for CUDA headers and libraries
   find_path(CUDA_INCLUDE_DIR
     NAMES cuda_runtime.h
     PATHS
@@ -182,7 +180,6 @@ target_link_libraries(${DEEP_ORT_LIB}
     onnxruntime_gpu_vendor::onnxruntime_gpu_lib
 )
 
-
 # CUDA runtime is required since code calls CUDA functions directly
 # Try multiple strategies to find and link CUDA runtime
 set(CUDA_RUNTIME_LINKED FALSE)
@@ -196,13 +193,11 @@ endif()
 
 # Strategy 2: Use CUDAToolkit's cudart target
 if(NOT CUDA_RUNTIME_LINKED AND CUDAToolkit_FOUND)
-  # Override the dummy target with the real one if available
   if(TARGET CUDA::cudart_static)
     target_link_libraries(${DEEP_ORT_LIB} PRIVATE CUDA::cudart_static)
     message(STATUS "Linking CUDAToolkit cudart_static")
     set(CUDA_RUNTIME_LINKED TRUE)
   elseif(TARGET CUDA::cudart)
-    # Check if it's not just our dummy target
     get_target_property(CUDART_TYPE CUDA::cudart TYPE)
     if(NOT CUDART_TYPE STREQUAL "INTERFACE_LIBRARY")
       target_link_libraries(${DEEP_ORT_LIB} PRIVATE CUDA::cudart)
@@ -264,7 +259,6 @@ endif()
 
 # Strategy 5: Direct path check as absolute last resort
 if(NOT CUDA_RUNTIME_LINKED)
-  # Check common CUDA installation paths directly
   set(POSSIBLE_CUDA_PATHS
     /usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.12
     /usr/local/cuda-12.8/targets/x86_64-linux/lib/libcudart.so.12
@@ -274,7 +268,7 @@ if(NOT CUDA_RUNTIME_LINKED)
     /usr/local/cuda/lib64/libcudart.so.12
     /usr/local/cuda/lib/libcudart.so.12
   )
-  
+
   foreach(CUDA_PATH ${POSSIBLE_CUDA_PATHS})
     if(EXISTS ${CUDA_PATH})
       target_link_libraries(${DEEP_ORT_LIB} PRIVATE ${CUDA_PATH})
@@ -320,17 +314,16 @@ install(FILES plugins.xml
 # Export plugin description file to ament index
 pluginlib_export_plugin_description_file(deep_core plugins.xml)
 
-# if(BUILD_TESTING)
-#   find_package(deep_test REQUIRED)
+if(BUILD_TESTING)
+  find_package(deep_test REQUIRED)
 
-#   # add_deep_test(test_ort_gpu_backend test/test_ort_gpu_backend.cpp
-#   #   LIBRARIES
-#   #     ${DEEP_ORT_LIB}
-#   #     deep_core::deep_core_lib
-#   #     onnxruntime_gpu_vendor::onnxruntime_gpu_lib
-#   # )
-
-# endif()
+  add_deep_test(test_ort_gpu_backend test/test_ort_gpu_backend.cpp
+    LIBRARIES
+      ${DEEP_ORT_LIB}
+      deep_core::deep_core_lib
+      onnxruntime_gpu_vendor::onnxruntime_gpu_lib
+  )
+endif()
 
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
 ament_export_libraries(${DEEP_ORT_LIB})

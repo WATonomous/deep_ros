@@ -15,14 +15,13 @@
 # limitations under the License.
 # generate_devcontainer.sh
 # Usage:
-#   ./generate_devcontainer.sh <ros_distro> <container_type> [cuda_version] [ubuntu_version]
+#   ./generate_devcontainer.sh <ros_distro> <container_type> [nvidia_container_tag]
 
 set -e
 
 ROS_DISTRO=${1:-humble}
 CONTAINER_TYPE=${2:-cpu}
-CUDA_VERSION=${3:-12.2.2}
-UBUNTU_VERSION=${4:-22.04}
+NVIDIA_CONTAINER_TAG=${3:-12.4.1-cudnn-runtime-ubuntu22.04}
 USERNAME=${USER:-vscode}
 
 # TensorRT configuration
@@ -35,8 +34,7 @@ echo "ROS Distribution: $ROS_DISTRO"
 echo "Container Type: $CONTAINER_TYPE"
 
 if [ "$CONTAINER_TYPE" = "gpu" ]; then
-    echo "CUDA Version: $CUDA_VERSION"
-    echo "Ubuntu Version: $UBUNTU_VERSION"
+    echo "NVIDIA Container Tag: $NVIDIA_CONTAINER_TAG"
     echo "TensorRT Runtime Version: $TENSORRT_RUNTIME_VERSION"
     echo "TensorRT CUDA Version: $TENSORRT_CUDA_VERSION"
 fi
@@ -47,8 +45,7 @@ if [ "$CONTAINER_TYPE" = "gpu" ]; then
     BUILD_ARGS='"ROS_DISTRO": "'$ROS_DISTRO'",
       "USERNAME": "'$USERNAME'",
       "TARGETARCH": "gpu",
-      "CUDA_VERSION": "'$CUDA_VERSION'",
-      "UBUNTU_VERSION": "'$UBUNTU_VERSION'",
+      "NVIDIA_CONTAINER_TAG": "'$NVIDIA_CONTAINER_TAG'",
       "TENSORRT_RUNTIME_VERSION": "'$TENSORRT_RUNTIME_VERSION'",
       "TENSORRT_CUDA_VERSION": "'$TENSORRT_CUDA_VERSION'",
       "USER_UID": "'$(id -u)'",

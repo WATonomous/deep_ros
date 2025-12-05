@@ -1,10 +1,6 @@
 # Multi-stage ROS2 development container (CPU/GPU compatible)
 ARG ROS_DISTRO=humble
-ARG CUDA_VERSION=12.2.2
-ARG UBUNTU_VERSION=22.04
-ARG TENSORRT_RUNTIME_VERSION=10.14.1.48
-ARG TENSORRT_CUDA_VERSION=12.2
-ARG CUDNN_VERSION=9.16.0.29-1
+ARG NVIDIA_CONTAINER_TAG=12.4.1-cudnn-runtime-ubuntu22.04
 
 # ===============================================
 # CPU Base - Standard ROS2 image
@@ -14,7 +10,7 @@ FROM ros:${ROS_DISTRO}-ros-base AS cpu-base
 # ===============================================
 # GPU Base - CUDA with manual ROS2 install
 # ===============================================
-FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} AS gpu-base
+FROM nvidia/cuda:${NVIDIA_CONTAINER_TAG} AS gpu-base
 ARG ROS_DISTRO
 ARG TENSORRT_RUNTIME_VERSION
 ARG TENSORRT_CUDA_VERSION
@@ -112,7 +108,7 @@ PY
 ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/targets/x86_64-linux/lib:${LD_LIBRARY_PATH}
 
 # ===============================================
-# Install Common Development Tools from Either Base
+# Install Common Development Tools in Either Base
 # ===============================================
 FROM ${TARGETARCH:-cpu}-base AS dev-tools
 
@@ -125,6 +121,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
     git \
     curl \
+    ros-${ROS_DISTRO}-vision-msgs \
     && rm -rf /var/lib/apt/lists/*
 
 # Install pre-commit

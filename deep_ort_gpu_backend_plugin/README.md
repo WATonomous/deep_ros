@@ -1,17 +1,16 @@
-# deep_ort_backend_plugin
+# deep_ort_gpu_backend_plugin
 
 ONNX Runtime GPU backend plugin for deep_core.
 
 ## Overview
 
 Provides:
-- GPU inference executor using ONNX Runtime with options for CUDA or TensorRT execution provider
+- GPU inference executor using ONNX Runtime with options for CUDA or TensorRT(untested) execution provider
 - Device context management for multi-GPU systems
-- Zero-copy inference with IO binding
 
 ## Plugin Name
 
-`onnxruntime_cpu`
+`onnxruntime_gpu`
 
 ## Supported Formats
 
@@ -22,7 +21,7 @@ ONNX models (.onnx files)
 Add to your `package.xml`:
 
 ```xml
-<exec_depend>deep_ort_backend_plugin</exec_depend>
+<exec_depend>deep_ort_gpu_backend_plugin</exec_depend>
 ```
 
 Configure your inference nodes to use this plugin:
@@ -37,4 +36,12 @@ inference_node:
 ## Dependencies
 
 - deep_core
-- onnxruntime_vendor
+- onnxruntime_gpu_vendor
+
+## Current problems
+
+  1. No proper IO binding - Despite documentation claiming "zero-copy," the code doesn't use Ort::IoBinding. The CPU backend does this correctly but GPU backend doesn't.
+  2. Thread-local caching bug (ort_gpu_backend_executor.cpp:104-108) - Input/output names are cached as static thread_local, which will break if models are reloaded or multiple instances exist.
+  3. Hardcoded float types (ort_gpu_backend_executor.cpp:114,139) - Input/output tensors are hardcoded to <float>, ignoring the actual data type, which will fail for non-float models.
+  4. Stub implementations - Methods like verify_gpu_availability() and set_device() are empty/always return true.
+  5. Unused member - persistent_cuda_ptr_ is declared but never used, suggesting incomplete GPU memory management.
