@@ -27,8 +27,7 @@
       "args": [
         "${input:rosDistro}",
         "gpu",
-        "${input:cudaVersion}",
-        "${input:ubuntuVersion}"
+        "${input:nvidiaContainer}"
       ],
       "problemMatcher": [],
       "group": "build",
@@ -72,41 +71,32 @@
       "default": "cpu"
     },
     {
-      "id": "cudaVersion",
+      "id": "nvidiaContainer",
       "type": "pickString",
-      "description": "Select CUDA version",
+      "description": "Select NVIDIA CUDA container (runtime + cuDNN, Ubuntu 20/22/24)",
       "options": [
-        "12.8.0",
-        "12.6.2",
-        "12.5.1",
-        "12.4.1",
-        "12.4.0",
-        "12.3.2",
-        "12.2.2",
-        "12.1.1",
-        "12.0.1"
+        "12.8.0-cudnn-runtime-ubuntu24.04",
+        "12.8.0-cudnn-runtime-ubuntu22.04",
+        "12.8.0-cudnn-runtime-ubuntu20.04",
+        "12.6.2-cudnn-runtime-ubuntu24.04",
+        "12.6.2-cudnn-runtime-ubuntu22.04",
+        "12.6.2-cudnn-runtime-ubuntu20.04",
+        "12.5.1-cudnn-runtime-ubuntu24.04",
+        "12.5.1-cudnn-runtime-ubuntu22.04",
+        "12.5.1-cudnn-runtime-ubuntu20.04",
+        "12.4.1-cudnn-runtime-ubuntu24.04",
+        "12.4.1-cudnn-runtime-ubuntu22.04",
+        "12.4.1-cudnn-runtime-ubuntu20.04",
+        "12.3.2-cudnn-runtime-ubuntu22.04",
+        "12.3.2-cudnn-runtime-ubuntu20.04",
+        "12.2.2-cudnn8-runtime-ubuntu22.04",
+        "12.2.2-cudnn8-runtime-ubuntu20.04",
+        "12.1.1-cudnn8-runtime-ubuntu22.04",
+        "12.1.1-cudnn8-runtime-ubuntu20.04",
+        "12.0.1-cudnn8-runtime-ubuntu22.04",
+        "12.0.1-cudnn8-runtime-ubuntu20.04"
       ],
-      "default": "12.4.0"
-    },
-    {
-      "id": "ubuntuVersion",
-      "type": "pickString",
-      "description": "Select Ubuntu version",
-      "options": [
-        {
-          "label": "Ubuntu 24.04 (Noble)",
-          "value": "24.04"
-        },
-        {
-          "label": "Ubuntu 22.04 (Jammy)",
-          "value": "22.04"
-        },
-        {
-          "label": "Ubuntu 20.04 (Focal)",
-          "value": "20.04"
-        }
-      ],
-      "default": "22.04"
+      "default": "12.4.1-cudnn-runtime-ubuntu22.04"
     }
   ]
 }

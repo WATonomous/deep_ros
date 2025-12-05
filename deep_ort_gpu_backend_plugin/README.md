@@ -37,3 +37,11 @@ inference_node:
 
 - deep_core
 - onnxruntime_gpu_vendor
+
+## Current problems
+
+  1. No proper IO binding - Despite documentation claiming "zero-copy," the code doesn't use Ort::IoBinding. The CPU backend does this correctly but GPU backend doesn't.
+  2. Thread-local caching bug (ort_gpu_backend_executor.cpp:104-108) - Input/output names are cached as static thread_local, which will break if models are reloaded or multiple instances exist.
+  3. Hardcoded float types (ort_gpu_backend_executor.cpp:114,139) - Input/output tensors are hardcoded to <float>, ignoring the actual data type, which will fail for non-float models.
+  4. Stub implementations - Methods like verify_gpu_availability() and set_device() are empty/always return true.
+  5. Unused member - persistent_cuda_ptr_ is declared but never used, suggesting incomplete GPU memory management.
