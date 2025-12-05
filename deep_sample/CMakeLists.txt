@@ -96,12 +96,15 @@ if(BUILD_TESTING)
   # Launch tests - (skip in CI, run locally with GPU)
   # Set IS_CI=1 in CI workflows to skip GPU tests
   if(NOT DEFINED ENV{IS_CI} OR NOT "$ENV{IS_CI}" STREQUAL "1")
-    message(STATUS "GPU tests enabled - will run test_sample_gpu_backend.py")
+    message(STATUS "GPU tests enabled - will run test_sample_gpu_backend.py and test_sample_tensorrt_backend.py")
 
     add_deep_launch_test(test/launch_tests/test_sample_cpu_backend.py
       TIMEOUT 60
     )
     add_deep_launch_test(test/launch_tests/test_sample_gpu_backend.py
+      TIMEOUT 60
+    )
+    add_deep_launch_test(test/launch_tests/test_sample_tensorrt_backend.py
       TIMEOUT 60
     )
   else()

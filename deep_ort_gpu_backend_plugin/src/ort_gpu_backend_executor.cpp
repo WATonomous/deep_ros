@@ -200,23 +200,21 @@ void OrtGpuBackendExecutor::configure_tensorrt_provider()
 {
   try {
     setenv("CUDA_MODULE_LOADING", "LAZY", 1);
-    setenv("TRT_DISABLE_D3D12", "1", 1);
 
-    std::unordered_map<std::string, std::string> tensorrt_options;
-    tensorrt_options["device_id"] = std::to_string(device_id_);
-    tensorrt_options["trt_max_workspace_size"] = "67108864";  // 64MB
-    tensorrt_options["trt_max_partition_iterations"] = "1";
-    tensorrt_options["trt_min_subgraph_size"] = "1";
-    tensorrt_options["trt_engine_cache_enable"] = "0";
-    tensorrt_options["trt_force_sequential_engine_build"] = "1";
-    tensorrt_options["trt_cuda_graph_enable"] = "0";
-    tensorrt_options["trt_disable_d3d12"] = "1";  // Force disable DirectX
-    tensorrt_options["trt_profiling_verbosity"] = "0";
+    OrtTensorRTProviderOptions tensorrt_options{};
+    tensorrt_options.device_id = device_id_;
+    tensorrt_options.trt_max_workspace_size = 67108864;  // 64MB
+    tensorrt_options.trt_max_partition_iterations = 1;
+    tensorrt_options.trt_min_subgraph_size = 1;
+    tensorrt_options.trt_engine_cache_enable = 0;
+    tensorrt_options.trt_force_sequential_engine_build = 1;
+    tensorrt_options.trt_fp16_enable = 0;
+    tensorrt_options.trt_int8_enable = 0;
+    tensorrt_options.has_user_compute_stream = 0;
+    tensorrt_options.user_compute_stream = nullptr;
 
-    std::string tensorrt_provider_name = "NvTensorRtRtx";
-
-    RCLCPP_INFO(logger_, "Attempting TensorRT provider registration with name: '%s'", tensorrt_provider_name.c_str());
-    session_options_->AppendExecutionProvider(tensorrt_provider_name, tensorrt_options);
+    RCLCPP_INFO(logger_, "Configuring TensorRT execution provider on device %d", device_id_);
+    session_options_->AppendExecutionProvider_TensorRT(tensorrt_options);
     RCLCPP_INFO(logger_, "TensorRT provider registered successfully");
   } catch (const std::exception & e) {
     throw std::runtime_error("Failed to configure TensorRT provider: " + std::string(e.what()));
