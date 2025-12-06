@@ -8,6 +8,7 @@ ROS 2 node for YOLO inference using ONNX Runtime with TensorRT / CUDA / CPU fall
 - **Multi-camera ingest**: list `camera_topics` to feed synchronized compressed topics; otherwise subscribe to a single raw/compressed stream with image_transport.
 - **Automatic message aliasing**: publishes `deep_msgs::Detection2D(Array)` when the package is present; otherwise uses the upstream `vision_msgs` API. No code changes required on downstream consumers beyond selecting the right dependency.
 - **Warmup cache**: optional tensor-shape warmup primes TensorRT/CUDA kernels for each batch size before real traffic arrives.
+- **Configurable TensorRT caching**: toggle `enable_trt_engine_cache` to persist ORT-generated TensorRT engines between runs.
 
 ## Build
 ```bash
@@ -34,6 +35,7 @@ so the YOLO node processes a batch containing all three frames.
 | `model_path` | Absolute path to the exported YOLO ONNX file (required).
 | `preferred_provider` | `tensorrt`, `cuda`, or `cpu`. The node auto-falls back if init fails.
 | `device_id` | GPU ID to pass to the deep ORT GPU backend.
+| `enable_trt_engine_cache` / `trt_engine_cache_path` | Set to `true` to reuse TensorRT engines across launches; optionally point the cache at a persistent directory.
 | `camera_topics` | Optional list of compressed topics for multi-camera batching. Leave empty for single input.
 | `input_image_topic` / `input_transport` | Single stream input topic + desired image_transport.
 | `batch_size_limit` | Fixed at 3. Any other value is ignored to keep TensorRT engine usage predictable.
@@ -44,8 +46,8 @@ See `config/object_detection_params.yaml` for additional QoS and preprocessing k
 
 ## TensorRT notes
 - The ORT GPU vendor package always downloads the standard GPU tarball (no separate TensorRT artifact upstream). The TensorRT provider loads from your system CUDA/TensorRT libraries; ensure they are installed and visible via `LD_LIBRARY_PATH`. The launch file prepends the vendor lib dir automatically.
-- The deep ORT GPU backend logs when a TensorRT engine build starts and finishes (per batch size). Expect a one-time build per unique batch dimension; subsequent runs reuse the cached engine.
-- Default engine cache lives under `/tmp/deep_ros_ort_trt_cache`. Override by exporting `TRT_ENGINE_CACHE_PATH` before launching if you want a persistent location.
+- The deep ORT GPU backend logs when a TensorRT engine build starts and finishes (per batch size). Enable caching via `enable_trt_engine_cache:=true` to reuse engines between launches.
+- The cache directory defaults to `/tmp/deep_ros_ort_trt_cache` but can be changed with `trt_engine_cache_path`.
 - The YOLO decoder handles the raw YOLOv8-style output layout (`[N, channels, anchors]` channel-first) and applies objectness * class score with NMS. Use `score_threshold` / `nms_iou_threshold` to tune.
 - Batching reminders: The node requires exactly three queued frames before issuing inference. Ensure your camera topics publish in sync; otherwise frames will queue until the trio is available.
 

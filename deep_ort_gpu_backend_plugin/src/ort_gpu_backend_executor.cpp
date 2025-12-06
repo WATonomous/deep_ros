@@ -39,10 +39,16 @@ namespace deep_ort_gpu_backend
 class OrtGpuCpuMemoryAllocator;
 
 OrtGpuBackendExecutor::OrtGpuBackendExecutor(
-  int device_id, const std::string & execution_provider, const rclcpp::Logger & logger)
+  int device_id,
+  const std::string & execution_provider,
+  const rclcpp::Logger & logger,
+  bool enable_trt_engine_cache,
+  std::string trt_engine_cache_path)
 : device_id_(device_id)
 , execution_provider_(execution_provider)
 , logger_(logger)
+, enable_trt_engine_cache_(enable_trt_engine_cache)
+, trt_engine_cache_path_(std::move(trt_engine_cache_path))
 , memory_info_(nullptr)
 {
   // Initialize ORT environment with minimal logging
@@ -241,12 +247,26 @@ void OrtGpuBackendExecutor::configure_tensorrt_provider()
     tensorrt_options.trt_max_workspace_size = 67108864;  // 64MB
     tensorrt_options.trt_max_partition_iterations = 1;
     tensorrt_options.trt_min_subgraph_size = 1;
-    tensorrt_options.trt_engine_cache_enable = 0;
+    tensorrt_options.trt_engine_cache_enable = enable_trt_engine_cache_ ? 1 : 0;
     tensorrt_options.trt_force_sequential_engine_build = 1;
     tensorrt_options.trt_fp16_enable = 0;
     tensorrt_options.trt_int8_enable = 0;
     tensorrt_options.has_user_compute_stream = 0;
     tensorrt_options.user_compute_stream = nullptr;
+
+    std::string cache_path = trt_engine_cache_path_;
+    if (enable_trt_engine_cache_) {
+      if (cache_path.empty()) {
+        cache_path = "/tmp/deep_ros_ort_trt_cache";
+      }
+      std::error_code ec;
+      std::filesystem::create_directories(cache_path, ec);
+      if (ec) {
+        RCLCPP_WARN(logger_, "Failed to create TensorRT cache directory %s: %s", cache_path.c_str(), ec.message().c_str());
+      }
+      trt_engine_cache_path_ = cache_path;
+      tensorrt_options.trt_engine_cache_path = trt_engine_cache_path_.c_str();
+    }
 
     RCLCPP_INFO(logger_, "Configuring TensorRT execution provider on device %d", device_id_);
     session_options_->AppendExecutionProvider_TensorRT(tensorrt_options);

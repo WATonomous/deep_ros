@@ -29,6 +29,8 @@ namespace deep_ort_gpu_backend
 OrtGpuBackendPlugin::OrtGpuBackendPlugin()
 : device_id_(0)
 , execution_provider_("cuda")
+, enable_trt_engine_cache_(false)
+, trt_engine_cache_path_("/tmp/deep_ros_ort_trt_cache")
 {
   // GPU components will be initialized in initialize() after parameters are loaded
 }
@@ -40,10 +42,14 @@ void OrtGpuBackendPlugin::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr 
   // Declare parameters with defaults
   node_->declare_parameter("Backend.device_id", 0);
   node_->declare_parameter("Backend.execution_provider", "cuda");
+  node_->declare_parameter("Backend.trt_engine_cache_enable", false);
+  node_->declare_parameter("Backend.trt_engine_cache_path", std::string("/tmp/deep_ros_ort_trt_cache"));
 
   // Read parameters
   device_id_ = node_->get_parameter("Backend.device_id").as_int();
   execution_provider_ = node_->get_parameter("Backend.execution_provider").as_string();
+  enable_trt_engine_cache_ = node_->get_parameter("Backend.trt_engine_cache_enable").as_bool();
+  trt_engine_cache_path_ = node_->get_parameter("Backend.trt_engine_cache_path").as_string();
 
   RCLCPP_INFO(
     node_->get_logger(),
@@ -88,7 +94,8 @@ bool OrtGpuBackendPlugin::initialize_gpu_components()
     }
 
     // Create GPU executor
-    executor_ = std::make_shared<OrtGpuBackendExecutor>(device_id_, execution_provider_, node_->get_logger());
+    executor_ = std::make_shared<OrtGpuBackendExecutor>(
+      device_id_, execution_provider_, node_->get_logger(), enable_trt_engine_cache_, trt_engine_cache_path_);
     if (!executor_) {
       RCLCPP_ERROR(node_->get_logger(), "Failed to create GPU backend executor");
       return false;

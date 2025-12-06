@@ -80,6 +80,8 @@ private:
   rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
   int device_id_;
   std::string execution_provider_;
+  bool enable_trt_engine_cache_;
+  std::string trt_engine_cache_path_;
   std::shared_ptr<deep_ros::BackendMemoryAllocator> allocator_;
   std::shared_ptr<deep_ros::BackendInferenceExecutor> executor_;
 

@@ -213,6 +213,8 @@ private:
     std::string preferred_provider{"tensorrt"};
     int device_id{0};
     bool warmup_tensor_shapes{true};
+    bool enable_trt_engine_cache{false};
+    std::string trt_engine_cache_path{"/tmp/deep_ros_ort_trt_cache"};
   };
 
   void declareAndReadParameters()
@@ -238,6 +240,10 @@ private:
     params_.queue_size = this->declare_parameter<int>("queue_size", params_.queue_size);
     params_.warmup_tensor_shapes =
       this->declare_parameter<bool>("warmup_tensor_shapes", params_.warmup_tensor_shapes);
+    params_.enable_trt_engine_cache =
+      this->declare_parameter<bool>("enable_trt_engine_cache", params_.enable_trt_engine_cache);
+    params_.trt_engine_cache_path =
+      this->declare_parameter<std::string>("trt_engine_cache_path", params_.trt_engine_cache_path);
   }
 
   void validateParameters()
@@ -1089,7 +1095,9 @@ private:
             const auto provider_name = providerToString(provider);
             auto overrides = std::vector<rclcpp::Parameter>{
               rclcpp::Parameter("Backend.device_id", params_.device_id),
-              rclcpp::Parameter("Backend.execution_provider", provider_name)
+              rclcpp::Parameter("Backend.execution_provider", provider_name),
+              rclcpp::Parameter("Backend.trt_engine_cache_enable", params_.enable_trt_engine_cache),
+              rclcpp::Parameter("Backend.trt_engine_cache_path", params_.trt_engine_cache_path)
             };
             auto backend_node = createBackendConfigNode(provider_name, std::move(overrides));
             auto plugin = std::make_shared<deep_ort_gpu_backend::OrtGpuBackendPlugin>();
