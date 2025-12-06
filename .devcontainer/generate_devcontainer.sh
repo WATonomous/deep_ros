@@ -25,9 +25,9 @@ NVIDIA_CONTAINER_TAG=${3:-12.4.1-cudnn-runtime-ubuntu22.04}
 USERNAME=${USER:-vscode}
 
 # TensorRT configuration
-TENSORRT_RUNTIME_VERSION="10.14.1.48"
-# Truncate CUDA version to major.minor for TensorRT (fallbacks to .0 if minor missing)
-TENSORRT_CUDA_VERSION=$(echo "$CUDA_VERSION" | awk -F. '{print $1 "." ($2 ? $2 : "0")}')
+TENSORRT_RUNTIME_VERSION="10.9.0.34"
+# Truncate CUDA version to major.minor for TensorRT
+TENSORRT_CUDA_VERSION="12.8"
 
 echo "Generating devcontainer configuration..."
 echo "ROS Distribution: $ROS_DISTRO"

@@ -14,7 +14,6 @@ FROM nvidia/cuda:${NVIDIA_CONTAINER_TAG} AS gpu-base
 ARG ROS_DISTRO
 ARG TENSORRT_RUNTIME_VERSION
 ARG TENSORRT_CUDA_VERSION
-ARG CUDNN_VERSION
 
 # Install ROS2 manually since we're not using the ros: base image
 # Set non-interactive to avoid geographic area prompts
@@ -35,8 +34,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 ENV DEBIAN_FRONTEND=interactive
 
-# Install CUDA 12.2 runtime pieces plus TensorRT 10.14 runtime (no dev headers) so
-# ONNX Runtime's TensorRT execution provider can resolve unversioned SONAMEs.
 RUN curl -fsSL -o cuda-keyring_1.1-1_all.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb \
     && dpkg -i cuda-keyring_1.1-1_all.deb \
     && apt-get update && apt-get install -y --no-install-recommends \
@@ -59,11 +56,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
     git \
     curl \
-    ros-${ROS_DISTRO}-vision-msgs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pre-commit
-RUN python3 -m pip install --no-cache-dir pre-commit==3.8.0
+# Install pre-commit (Ubuntu 24.04 ships PEP 668 managed Python, so allow system install)
+# RUN python3 -m pip install --no-cache-dir --break-system-packages pre-commit==3.8.0
 
 # Set working dir (matches VSCode workspace)
 WORKDIR /deep_ros_ws
@@ -82,6 +78,7 @@ RUN --mount=type=bind,source=.,target=/tmp/src \
         | (grep 'apt-get install' || true) \
         | awk '{print $3}' \
         | sort  > /tmp/colcon_install_list
+
 # ===============================================
 # Install Dependencies
 # ===============================================
@@ -125,6 +122,3 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 
 # Source ROS in user's bashrc
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/$USERNAME/.bashrc
-
-# Ensure LD_LIBRARY_PATH includes CUDA/TensorRT for the user at runtime
-RUN echo 'export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/targets/x86_64-linux/lib:${LD_LIBRARY_PATH}' >> /home/$USERNAME/.bashrc
