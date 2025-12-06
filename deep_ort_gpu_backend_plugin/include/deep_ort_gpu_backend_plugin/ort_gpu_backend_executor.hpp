@@ -16,6 +16,7 @@
 
 #include <onnxruntime_cxx_api.h>
 
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -122,14 +123,19 @@ private:
    * @return Expected output tensor shape
    * @throws std::runtime_error if model not loaded or shape inference fails
    */
-  std::vector<size_t> get_output_shape(const std::vector<size_t> & input_shape) const;
-
   /**
    * @brief Get element size in bytes for a data type
    * @param dtype Data type
    * @return Size in bytes per element
    */
   size_t get_element_size(deep_ros::DataType dtype) const;
+
+  bool is_tensorrt_provider() const;
+
+  std::string normalized_provider_;
+  bool tensorrt_engine_ready_{false};
+  bool tensorrt_engine_build_in_progress_{false};
+  std::chrono::steady_clock::time_point tensorrt_engine_build_start_;
 };
 
 }  // namespace deep_ort_gpu_backend

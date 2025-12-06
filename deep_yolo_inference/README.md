@@ -1,6 +1,13 @@
 # deep_yolo_inference
 
-ROS 2 node for YOLO inference using ONNX Runtime with TensorRT / CUDA / CPU fallback and dynamic batching. The node subscribes to images, batches up to a configurable limit, preprocesses to the YOLO input size, runs inference via the deep_ort plugins, and publishes detections.
+ROS 2 node for YOLO inference using ONNX Runtime with TensorRT / CUDA / CPU fallback and dynamic batching. The node subscribes to one or more camera topics, batches up to a configurable limit, preprocesses to the YOLO input size, runs inference via the deep_ort plugins, and publishes detections as either `deep_msgs` or `vision_msgs` messages depending on what is available in the workspace.
+
+## Features
+- **Execution providers**: prefers TensorRT (engine caching + automatic build logging), falls back to CUDA then CPU if necessary.
+- **Dynamic batching**: configurable `batch_size_limit` and `max_batch_latency_ms` control how many frames are grouped together before inference.
+- **Multi-camera ingest**: list `camera_topics` to feed synchronized compressed topics; otherwise subscribe to a single raw/compressed stream with image_transport.
+- **Automatic message aliasing**: publishes `deep_msgs::Detection2D(Array)` when the package is present; otherwise uses the upstream `vision_msgs` API. No code changes required on downstream consumers beyond selecting the right dependency.
+- **Warmup cache**: optional tensor-shape warmup primes TensorRT/CUDA kernels for each batch size before real traffic arrives.
 
 ## Build
 ```bash
@@ -11,22 +18,39 @@ source install/setup.bash
 ## Run (example)
 ```bash
 source install/setup.bash
-ros2 launch deep_yolo_inference yolo_inference.launch.py
+ros2 launch deep_yolo_inference yolo_inference.launch.py \
+  config_file:=install/deep_yolo_inference/share/deep_yolo_inference/config/object_detection_params.yaml
 ```
-# The launch file defaults to `config/yolo_trt.yaml`, which is derived from
-# `deep_object_detection/config/object_detection_params.yaml` (model path, batch
-# size, thresholds, etc.). The default config now targets the NuScenes bag topics
-# (`/CAM_FRONT/image_rect_compressed` with `compressed` transport and
-# best-effort QoS), so you can launch against that dataset without overrides.
+
+The sample `object_detection_params.yaml` configures both `object_detection_node`
+and `yolo_inference_node`. Edit camera topics, batching, providers, and scores in
+one place, re-launch, and both pipelines stay in sync. By default the YAML lists
+the NuScenes front/left/right compressed topics and sets `batch_size_limit: 3`
+so the YOLO node processes a batch containing all three frames.
+
+## Key parameters (see YAML for defaults)
+| Parameter | Description |
+| --- | --- |
+| `model_path` | Absolute path to the exported YOLO ONNX file (required).
+| `preferred_provider` | `tensorrt`, `cuda`, or `cpu`. The node auto-falls back if init fails.
+| `device_id` | GPU ID to pass to the deep ORT GPU backend.
+| `camera_topics` | Optional list of compressed topics for multi-camera batching. Leave empty for single input.
+| `input_image_topic` / `input_transport` | Single stream input topic + desired image_transport.
+| `batch_size_limit` / `max_batch_latency_ms` | Controls batch fullness vs latency trade-offs.
+| `score_threshold` / `nms_iou_threshold` | Detection filtering parameters.
+| `warmup_tensor_shapes` | When true, runs dummy inferences for batch sizes 1..N to build TensorRT engines up front.
+
+See `config/object_detection_params.yaml` for additional QoS and preprocessing knobs.
 
 ## TensorRT notes
 - The ORT GPU vendor package always downloads the standard GPU tarball (no separate TensorRT artifact upstream). The TensorRT provider loads from your system CUDA/TensorRT libraries; ensure they are installed and visible via `LD_LIBRARY_PATH`. The launch file prepends the vendor lib dir automatically.
-- TensorRT engine caching is enabled by default in the GPU backend and stored at `/tmp/deep_ros_ort_trt_cache`. First launch will build; subsequent launches reuse cached engines and start much faster. Override by setting `TRT_ENGINE_CACHE_PATH` in the environment if you prefer a different location.
-- The YOLO decoder handles the raw YOLOv8-style output layout (`[N, 84, anchors]` channel-first) and applies objectness * class score with NMS. Use `score_threshold` / `nms_iou_threshold` in the YAML to tune.
-- Batching: `batch_size_limit` sets the max batch, but `max_batch_latency_ms` controls how long the node waits for enough images before flushing. Increase latency (e.g., 150–200 ms for ~10 Hz bags) if you want consistent batch >1. Export your ONNX with dynamic batch if you need batch sizes larger than 1.
+- The deep ORT GPU backend logs when a TensorRT engine build starts and finishes (per batch size). Expect a one-time build per unique batch dimension; subsequent runs reuse the cached engine.
+- Default engine cache lives under `/tmp/deep_ros_ort_trt_cache`. Override by exporting `TRT_ENGINE_CACHE_PATH` before launching if you want a persistent location.
+- The YOLO decoder handles the raw YOLOv8-style output layout (`[N, channels, anchors]` channel-first) and applies objectness * class score with NMS. Use `score_threshold` / `nms_iou_threshold` to tune.
+- Batching reminders: `batch_size_limit` sets the cap, `max_batch_latency_ms` determines how long the node waits to fill a batch, and `warmup_tensor_shapes` primes TensorRT for each size so runtime latency stays low.
 
 ## Switch providers
-- YAML: set `preferred_provider` to `tensorrt` | `cuda` | `cpu` in `config/yolo_trt.yaml`.
+- YAML: set `preferred_provider` to `tensorrt` | `cuda` | `cpu` in `config/object_detection_params.yaml`.
 - CLI override example:
   ```bash
   ros2 run deep_yolo_inference yolo_inference_node \
@@ -41,5 +65,8 @@ colcon test-result --verbose
 ```
 
 ## Topics
-- Input: `/camera/image_raw` (`sensor_msgs::msg::Image`)
-- Output: `/detections` (`deep_msgs::msg::Detection2DArray`)
+- Input: `/camera/image_raw` (`sensor_msgs::msg::Image`) or the list in `camera_topics`
+- Output: `/detections` (`deep_msgs::msg::Detection2DArray` if available, otherwise `vision_msgs::msg::Detection2DArray`)
+
+Downstream packages that expect one specific message type should add either
+`deep_msgs` or `vision_msgs` to their manifest accordingly.

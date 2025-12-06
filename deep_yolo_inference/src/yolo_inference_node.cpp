@@ -40,12 +40,12 @@
 #include <rcl_interfaces/msg/parameter_descriptor.hpp>
 #include <rmw/qos_profiles.h>
 #include <rclcpp_components/register_node_macro.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
 
 #include <deep_core/types/tensor.hpp>
 #include <deep_core/plugin_interfaces/deep_backend_plugin.hpp>
 #include <deep_ort_backend_plugin/ort_backend_plugin.hpp>
 #include <deep_ort_gpu_backend_plugin/ort_gpu_backend_plugin.hpp>
-#include <deep_ort_gpu_backend_plugin/ort_gpu_backend_executor.hpp>
 
 #include "deep_yolo_inference/detection_msg_alias.hpp"
 #include "deep_yolo_inference/yolo_inference_node.hpp"
@@ -1117,26 +1117,25 @@ private:
 
       try {
         switch (provider) {
-          case Provider::TENSORRT: {
-            auto plugin = std::make_shared<deep_ort_gpu_backend::OrtGpuBackendPlugin>(
-              params_.device_id,
-              deep_ort_gpu_backend::GpuExecutionProvider::TENSORRT);
-            allocator_ = plugin->get_allocator();
-            executor_ = plugin->get_inference_executor();
-            plugin_holder_ = plugin;
-            break;
-          }
+          case Provider::TENSORRT:
           case Provider::CUDA: {
-            auto plugin = std::make_shared<deep_ort_gpu_backend::OrtGpuBackendPlugin>(
-              params_.device_id,
-              deep_ort_gpu_backend::GpuExecutionProvider::CUDA);
+            const auto provider_name = providerToString(provider);
+            auto overrides = std::vector<rclcpp::Parameter>{
+              rclcpp::Parameter("Backend.device_id", params_.device_id),
+              rclcpp::Parameter("Backend.execution_provider", provider_name)
+            };
+            auto backend_node = createBackendConfigNode(provider_name, std::move(overrides));
+            auto plugin = std::make_shared<deep_ort_gpu_backend::OrtGpuBackendPlugin>();
+            plugin->initialize(backend_node);
             allocator_ = plugin->get_allocator();
             executor_ = plugin->get_inference_executor();
             plugin_holder_ = plugin;
             break;
           }
           case Provider::CPU: {
+            auto backend_node = createBackendConfigNode("cpu");
             auto plugin = std::make_shared<deep_ort_backend::OrtBackendPlugin>();
+            plugin->initialize(backend_node);
             allocator_ = plugin->get_allocator();
             executor_ = plugin->get_inference_executor();
             plugin_holder_ = plugin;
@@ -1156,19 +1155,9 @@ private:
           throw std::runtime_error("Failed to load model: " + params_.model_path);
         }
 
-        // Report the actual execution provider in use (TensorRT may fall back to CUDA internally).
-        Provider actual_provider = provider;
-        if (provider != Provider::CPU) {
-          if (auto gpu_plugin = std::dynamic_pointer_cast<deep_ort_gpu_backend::OrtGpuBackendPlugin>(plugin_holder_)) {
-            const auto exec_provider = gpu_plugin->get_execution_provider();
-            actual_provider =
-              exec_provider == deep_ort_gpu_backend::GpuExecutionProvider::CUDA ? Provider::CUDA : Provider::TENSORRT;
-          }
-        }
-
-        active_provider_ = providerToString(actual_provider);
+        active_provider_ = providerToString(provider);
         declareActiveProviderParameter(active_provider_);
-        warmupTensorShapeCache(actual_provider);
+        warmupTensorShapeCache(provider);
 
         RCLCPP_INFO(
           this->get_logger(),
@@ -1221,6 +1210,23 @@ private:
       default:
         return "unknown";
     }
+  }
+
+  rclcpp_lifecycle::LifecycleNode::SharedPtr createBackendConfigNode(
+    const std::string & suffix,
+    std::vector<rclcpp::Parameter> overrides = {}) const
+  {
+    static std::atomic<uint64_t> backend_node_counter{0};
+    rclcpp::NodeOptions options;
+    if (!overrides.empty()) {
+      options.parameter_overrides(overrides);
+    }
+    options.start_parameter_services(false);
+    options.start_parameter_event_publisher(false);
+
+    const auto node_id = backend_node_counter.fetch_add(1, std::memory_order_relaxed);
+    auto node_name = "yolo_backend_" + suffix + "_" + std::to_string(node_id);
+    return std::make_shared<rclcpp_lifecycle::LifecycleNode>(node_name, options);
   }
 
   void declareActiveProviderParameter(const std::string & value)

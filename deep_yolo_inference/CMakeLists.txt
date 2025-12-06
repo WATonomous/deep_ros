@@ -26,6 +26,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
+find_package(rclcpp_lifecycle REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(cv_bridge REQUIRED)
@@ -57,6 +58,7 @@ target_include_directories(yolo_inference_lib PUBLIC
 ament_target_dependencies(yolo_inference_lib
   rclcpp
   rclcpp_components
+  rclcpp_lifecycle
   sensor_msgs
   image_transport
   cv_bridge
@@ -115,8 +117,8 @@ install(DIRECTORY config launch
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_parameters.cpp)
-    ament_add_gtest(test_parameters test/test_parameters.cpp)
-    target_link_libraries(test_parameters
+  ament_add_gtest(test_parameters test/test_parameters.cpp)
+  target_link_libraries(test_parameters
       yolo_inference_lib
       deep_core::deep_core_lib
       deep_ort_backend_plugin::deep_ort_backend_plugin_lib
@@ -126,6 +128,7 @@ if(BUILD_TESTING)
     target_include_directories(test_parameters PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     ament_target_dependencies(test_parameters
       rclcpp
+      rclcpp_lifecycle
       sensor_msgs
       image_transport
       cv_bridge
@@ -156,6 +159,7 @@ if(BUILD_TESTING)
     target_include_directories(test_fallback_selection PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     ament_target_dependencies(test_fallback_selection
       rclcpp
+      rclcpp_lifecycle
       sensor_msgs
       image_transport
       cv_bridge

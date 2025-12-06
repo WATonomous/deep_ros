@@ -95,8 +95,19 @@ deep_ros::Tensor OrtGpuBackendExecutor::run_inference_impl(deep_ros::Tensor & in
   if (!session_) {
     throw std::runtime_error("No ONNX session available");
   }
-
+  // for logging
   try {
+    const bool using_tensorrt = is_tensorrt_provider();
+    if (using_tensorrt && !tensorrt_engine_ready_ && !tensorrt_engine_build_in_progress_) {
+      tensorrt_engine_build_in_progress_ = true;
+      tensorrt_engine_build_start_ = std::chrono::steady_clock::now();
+      RCLCPP_INFO(
+        logger_,
+        "TensorRT engine build started (model=%s, batch_size=%zu)",
+        model_path_.filename().c_str(),
+        input.shape().empty() ? 0U : input.shape().front());
+    }
+
     // Convert deep_ros::DataType to ONNX tensor element type
     ONNXTensorElementDataType onnx_type = convert_to_onnx_type(input.dtype());
     std::vector<int64_t> input_shape_int64(input.shape().begin(), input.shape().end());
@@ -131,15 +142,39 @@ deep_ros::Tensor OrtGpuBackendExecutor::run_inference_impl(deep_ros::Tensor & in
     Ort::AllocatorWithDefaultOptions default_allocator;
     std::vector<Ort::Value> output_tensors = binding.GetOutputValues(default_allocator);
 
-    // Get output shape and data
-    auto output_shape = get_output_shape(input.shape());
-    void * output_data = output_tensors[0].GetTensorMutableData<void>();
+    if (output_tensors.empty()) {
+      throw std::runtime_error("TensorRT inference returned no outputs");
+    }
+
+    auto & output_tensor = output_tensors.front();
+    auto output_info = output_tensor.GetTensorTypeAndShapeInfo();
+    auto output_shape_int64 = output_info.GetShape();
+
+    std::vector<size_t> output_shape;
+    output_shape.reserve(output_shape_int64.size());
+    for (int64_t dim : output_shape_int64) {
+      if (dim <= 0) {
+        throw std::runtime_error("Invalid runtime output dimension: " + std::to_string(dim));
+      }
+      output_shape.push_back(static_cast<size_t>(dim));
+    }
+
+    void * output_data = output_tensor.GetTensorMutableData<void>();
 
     // Create deep_ros tensor wrapping the ONNX-allocated memory
     deep_ros::Tensor output(output_data, output_shape, input.dtype());
 
+    if (tensorrt_engine_build_in_progress_) {
+      const auto elapsed = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - tensorrt_engine_build_start_);
+      RCLCPP_INFO(logger_, "TensorRT engine build completed in %.2f seconds", elapsed.count());
+      tensorrt_engine_build_in_progress_ = false;
+      tensorrt_engine_ready_ = true;
+    }
+
     return output;
   } catch (const std::exception & e) {
+    tensorrt_engine_build_in_progress_ = false;
     throw std::runtime_error("GPU inference failed: " + std::string(e.what()));
   }
 }
@@ -157,12 +192,12 @@ void OrtGpuBackendExecutor::initialize_session_options()
   session_options_->SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
 
   // Configure execution provider based on string
-  std::string provider_lower = execution_provider_;
-  std::transform(provider_lower.begin(), provider_lower.end(), provider_lower.begin(), ::tolower);
+  normalized_provider_ = execution_provider_;
+  std::transform(normalized_provider_.begin(), normalized_provider_.end(), normalized_provider_.begin(), ::tolower);
 
-  if (provider_lower == "cuda") {
+  if (normalized_provider_ == "cuda") {
     configure_cuda_provider();
-  } else if (provider_lower == "tensorrt") {
+  } else if (normalized_provider_ == "tensorrt") {
     configure_tensorrt_provider();
   } else {
     throw std::runtime_error(
@@ -239,34 +274,6 @@ ONNXTensorElementDataType OrtGpuBackendExecutor::convert_to_onnx_type(deep_ros::
   }
 }
 
-std::vector<size_t> OrtGpuBackendExecutor::get_output_shape(const std::vector<size_t> & input_shape) const
-{
-  if (!session_) {
-    throw std::runtime_error("No model loaded");
-  }
-
-  try {
-    // Get output tensor info from the session
-    auto output_type_info = session_->GetOutputTypeInfo(0);
-    auto tensor_info = output_type_info.GetTensorTypeAndShapeInfo();
-    auto shape = tensor_info.GetShape();
-
-    std::vector<size_t> output_shape;
-    for (int64_t dim : shape) {
-      if (dim == -1) {
-        // Dynamic dimension - use corresponding input dimension
-        output_shape.push_back(input_shape[output_shape.size()]);
-      } else {
-        output_shape.push_back(static_cast<size_t>(dim));
-      }
-    }
-
-    return output_shape;
-  } catch (const std::exception & e) {
-    throw std::runtime_error("Failed to get output shape: " + std::string(e.what()));
-  }
-}
-
 size_t OrtGpuBackendExecutor::get_element_size(deep_ros::DataType dtype) const
 {
   switch (dtype) {
@@ -283,6 +290,11 @@ size_t OrtGpuBackendExecutor::get_element_size(deep_ros::DataType dtype) const
     default:
       throw std::runtime_error("Unsupported data type");
   }
+}
+
+bool OrtGpuBackendExecutor::is_tensorrt_provider() const
+{
+  return normalized_provider_ == "tensorrt";
 }
 
 }  // namespace deep_ort_gpu_backend
