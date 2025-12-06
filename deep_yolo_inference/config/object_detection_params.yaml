@@ -13,6 +13,7 @@ yolo_inference_node:
     batch_size_limit: 3
     score_threshold: 0.20
     nms_iou_threshold: 0.40
+    preboxed_format: "cxcywh"
     preferred_provider: "tensorrt"
     device_id: 0
     warmup_tensor_shapes: true

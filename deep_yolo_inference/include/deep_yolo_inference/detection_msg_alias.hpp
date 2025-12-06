@@ -21,20 +21,22 @@
 #if __has_include(<deep_msgs/msg/detection2_d_array.hpp>)
   #include <deep_msgs/msg/detection2_d.hpp>
   #include <deep_msgs/msg/detection2_d_array.hpp>
-  namespace deep_yolo_inference
-  {
-  using Detection2DMsg = deep_msgs::msg::Detection2D;
-  using Detection2DArrayMsg = deep_msgs::msg::Detection2DArray;
-  }
+
+namespace deep_yolo_inference
+{
+using Detection2DMsg = deep_msgs::msg::Detection2D;
+using Detection2DArrayMsg = deep_msgs::msg::Detection2DArray;
+}  // namespace deep_yolo_inference
 #else
   #include <vision_msgs/msg/detection2_d.hpp>
   #include <vision_msgs/msg/detection2_d_array.hpp>
   #include <vision_msgs/msg/object_hypothesis_with_pose.hpp>
-  namespace deep_yolo_inference
-  {
-  using Detection2DMsg = vision_msgs::msg::Detection2D;
-  using Detection2DArrayMsg = vision_msgs::msg::Detection2DArray;
-  }
+
+namespace deep_yolo_inference
+{
+using Detection2DMsg = vision_msgs::msg::Detection2D;
+using Detection2DArrayMsg = vision_msgs::msg::Detection2DArray;
+}  // namespace deep_yolo_inference
 #endif
 
 namespace deep_yolo_inference

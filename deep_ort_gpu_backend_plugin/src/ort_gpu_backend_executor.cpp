@@ -171,8 +171,8 @@ deep_ros::Tensor OrtGpuBackendExecutor::run_inference_impl(deep_ros::Tensor & in
     deep_ros::Tensor output(output_data, output_shape, input.dtype());
 
     if (tensorrt_engine_build_in_progress_) {
-      const auto elapsed = std::chrono::duration<double>(
-        std::chrono::steady_clock::now() - tensorrt_engine_build_start_);
+      const auto elapsed =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - tensorrt_engine_build_start_);
       RCLCPP_INFO(logger_, "TensorRT engine build completed in %.2f seconds", elapsed.count());
       tensorrt_engine_build_in_progress_ = false;
       tensorrt_engine_ready_ = true;
@@ -262,7 +262,8 @@ void OrtGpuBackendExecutor::configure_tensorrt_provider()
       std::error_code ec;
       std::filesystem::create_directories(cache_path, ec);
       if (ec) {
-        RCLCPP_WARN(logger_, "Failed to create TensorRT cache directory %s: %s", cache_path.c_str(), ec.message().c_str());
+        RCLCPP_WARN(
+          logger_, "Failed to create TensorRT cache directory %s: %s", cache_path.c_str(), ec.message().c_str());
       }
       trt_engine_cache_path_ = cache_path;
       tensorrt_options.trt_engine_cache_path = trt_engine_cache_path_.c_str();

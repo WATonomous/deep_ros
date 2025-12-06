@@ -26,51 +26,6 @@ This project includes VS Code dev container configurations for easy ROS2 develop
 - **Build tools**: Includes `colcon` and `rosdep` for ROS development
 - **Extensions**: C++, CMake, Python, and XML support pre-installed
 
-## System Dependencies
-
-If you encounter build errors related to missing build tools (e.g., `CMAKE_MAKE_PROGRAM is not set`, `CMAKE_C_COMPILER not set`), you may need to install the following system dependencies:
-
-### Required Build Tools
-
-Install the essential build tools package:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y build-essential
-```
-
-The `build-essential` package includes:
-- `gcc` - GNU C compiler
-- `g++` - GNU C++ compiler
-- `make` - Build automation tool
-- `libc6-dev` - C library development files
-- Other essential build tools
-
-### Verifying Installation
-
-After installation, verify the build tools are available:
-
-```bash
-which make && which gcc && which g++
-```
-
-You should see paths to all three tools. If any are missing, the `build-essential` package may not have installed correctly.
-
-### Building the Project
-
-Once build tools are installed, ensure ROS 2 is sourced and build the project:
-
-```bash
-source /opt/ros/humble/setup.bash  # or your ROS 2 distribution
-colcon build --packages-up-to <package_name>
-```
-
-Or build all packages:
-
-```bash
-colcon build
-```
-
 ### Stopping Containers
 
 After using "Rebuild and Reopen in Container", you can stop containers using:
@@ -87,6 +42,7 @@ After using "Rebuild and Reopen in Container", you can stop containers using:
 
 **Method 3: Using Docker Commands**
 From a terminal (outside the container):
+
 ```bash
 # List running containers
 docker ps
@@ -122,6 +78,7 @@ After stopping a container, you can restart it using:
 
 **Method 3: Using Docker Commands**
 From a terminal (outside the container):
+
 ```bash
 # List all containers (including stopped)
 docker ps -a

@@ -11,12 +11,14 @@ ROS 2 node for YOLO inference using ONNX Runtime with TensorRT / CUDA / CPU fall
 - **Configurable TensorRT caching**: toggle `enable_trt_engine_cache` to persist ORT-generated TensorRT engines between runs.
 
 ## Build
+
 ```bash
 colcon build --packages-select deep_yolo_inference
 source install/setup.bash
 ```
 
 ## Run (example)
+
 ```bash
 source install/setup.bash
 ros2 launch deep_yolo_inference yolo_inference.launch.py \
@@ -54,13 +56,15 @@ See `config/object_detection_params.yaml` for additional QoS and preprocessing k
 ## Switch providers
 - YAML: set `preferred_provider` to `tensorrt` | `cuda` | `cpu` in `config/object_detection_params.yaml`.
 - CLI override example:
-  ```bash
+
+```bash
   ros2 run deep_yolo_inference yolo_inference_node \
     --ros-args --params-file config/yolo_trt.yaml \
     -p preferred_provider:=cuda
   ```
 
 ## Tests
+
 ```bash
 colcon test --packages-select deep_yolo_inference
 colcon test-result --verbose

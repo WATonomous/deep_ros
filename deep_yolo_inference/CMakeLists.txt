@@ -47,6 +47,8 @@ add_executable(yolo_inference_node
 )
 
 add_library(yolo_inference_lib SHARED
+  src/backend_manager.cpp
+  src/processing.cpp
   src/yolo_inference_node.cpp
 )
 
@@ -96,14 +98,14 @@ target_include_directories(yolo_inference_node PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
-install(TARGETS yolo_inference_node
-  RUNTIME DESTINATION lib/${PROJECT_NAME}
-)
-
 install(TARGETS yolo_inference_lib
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
+)
+
+install(TARGETS yolo_inference_node
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
 install(DIRECTORY include/

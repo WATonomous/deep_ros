@@ -92,10 +92,7 @@ deep_ros::Tensor OrtBackendExecutor::run_inference_impl(deep_ros::Tensor & input
     const char * input_names[] = {input_name.get()};
     const char * output_names[] = {output_name.get()};
 
-    auto output_tensors = session_->Run(
-      Ort::RunOptions{nullptr},
-      input_names, &ort_input, 1,
-      output_names, 1);
+    auto output_tensors = session_->Run(Ort::RunOptions{nullptr}, input_names, &ort_input, 1, output_names, 1);
 
     if (output_tensors.empty()) {
       throw std::runtime_error("ONNX Runtime inference returned no outputs");
