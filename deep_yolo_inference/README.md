@@ -4,7 +4,7 @@ ROS 2 node for YOLO inference using ONNX Runtime with TensorRT / CUDA / CPU fall
 
 ## Features
 - **Execution providers**: prefers TensorRT (engine caching + automatic build logging), falls back to CUDA then CPU if necessary.
-- **Fixed batching**: always processes batches of 3 images (matching the three NuScenes front cameras) for consistent TensorRT performance.
+- **Batched inference**: collects up to `batch_size_limit` frames (default 3) before running inference to match multi-camera setups.
 - **Multi-camera ingest**: list `camera_topics` to feed synchronized compressed topics; otherwise subscribe to a single raw/compressed stream with image_transport.
 - **Automatic message aliasing**: publishes `deep_msgs::Detection2D(Array)` when the package is present; otherwise uses the upstream `vision_msgs` API. No code changes required on downstream consumers beyond selecting the right dependency.
 - **Warmup cache**: optional tensor-shape warmup primes TensorRT/CUDA kernels for each batch size before real traffic arrives.
@@ -24,7 +24,7 @@ ros2 launch deep_yolo_inference yolo_inference.launch.py \
 ```
 
 The sample `object_detection_params.yaml` configures both `object_detection_node`
-and `yolo_inference_node`. Edit camera topics, batching, providers, and scores in
+and `yolo_inference_node`. Edit camera topics, providers, batching, and scores in
 one place, re-launch, and both pipelines stay in sync. By default the YAML lists
 the NuScenes front/left/right compressed topics and sets `batch_size_limit: 3`
 so the YOLO node processes a batch containing all three frames.
@@ -38,9 +38,9 @@ so the YOLO node processes a batch containing all three frames.
 | `enable_trt_engine_cache` / `trt_engine_cache_path` | Set to `true` to reuse TensorRT engines across launches; optionally point the cache at a persistent directory.
 | `camera_topics` | Optional list of compressed topics for multi-camera batching. Leave empty for single input.
 | `input_image_topic` / `input_transport` | Single stream input topic + desired image_transport.
-| `batch_size_limit` | Fixed at 3. Any other value is ignored to keep TensorRT engine usage predictable.
+| `batch_size_limit` | Maximum number of frames per inference batch (default 3). Set to 1 for per-frame latency.
 | `score_threshold` / `nms_iou_threshold` | Detection filtering parameters.
-| `warmup_tensor_shapes` | When true, runs dummy inferences for batch sizes 1..N to build TensorRT engines up front.
+| `warmup_tensor_shapes` | When true, runs a dummy inference at startup to prime TensorRT/CUDA for the configured batch size.
 
 See `config/object_detection_params.yaml` for additional QoS and preprocessing knobs.
 

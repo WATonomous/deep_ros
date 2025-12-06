@@ -13,10 +13,12 @@
 // limitations under the License.
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cctype>
 #include <cmath>
+#include <cstring>
 #include <deque>
 #include <dlfcn.h>
 #include <functional>
@@ -74,8 +76,8 @@ struct ImageMeta
 
 struct QueuedImage
 {
-  sensor_msgs::msg::Image::ConstSharedPtr msg;
-  rclcpp::Time arrival_time;
+  cv::Mat bgr;
+  std_msgs::msg::Header header;
 };
 
 struct PackedInput
@@ -109,7 +111,7 @@ public:
     validateParameters();
 
     loadClassNames();
-    detection_pub_ = this->create_publisher<Detection2DArrayMsg>(params_.output_detections_topic, rclcpp::SystemDefaultsQoS{});
+    detection_pub_ = this->create_publisher<Detection2DArrayMsg>(params_.output_detections_topic, rclcpp::SensorDataQoS{});
 
     multi_camera_mode_ = !params_.camera_topics.empty();
     auto transport = params_.input_transport;
@@ -147,7 +149,6 @@ public:
           params_.input_image_topic,
           qos_profile,
           std::bind(&YoloInferenceNode::onCompressedImage, this, std::placeholders::_1));
-        active_input_transport_ = "compressed_direct";
         RCLCPP_INFO(
           this->get_logger(),
           "Subscribing directly to compressed image topic: %s",
@@ -155,7 +156,6 @@ public:
       } else {
         try {
           image_sub_ = subscribe_with_transport(transport);
-          active_input_transport_ = transport;
         } catch (const std::exception & e) {
           if (transport != "raw") {
             RCLCPP_WARN(
@@ -164,7 +164,6 @@ public:
               transport.c_str(),
               e.what());
             image_sub_ = subscribe_with_transport("raw");
-            active_input_transport_ = "raw";
           } else {
             throw;
           }
@@ -176,9 +175,7 @@ public:
       chrono::milliseconds(5), std::bind(&YoloInferenceNode::onBatchTimer, this));
 
     buildProviderOrder();
-    if (params_.model_path.empty()) {
-      RCLCPP_WARN(this->get_logger(), "model_path is empty; backend initialization skipped.");
-    } else if (!initializeBackend()) {
+    if (!initializeBackend()) {
       throw std::runtime_error("Failed to initialize any execution provider");
     }
 
@@ -198,7 +195,6 @@ private:
     std::string model_path;
     std::string input_image_topic{"/camera/image_raw"};
     std::vector<std::string> camera_topics;
-    std::string topic_type{"compressed_image"};
     std::string input_transport{"raw"};
     std::string input_qos_reliability{"best_effort"};
     std::string output_detections_topic{"/detections"};
@@ -210,6 +206,7 @@ private:
     int queue_size{10};
     double score_threshold{0.25};
     double nms_iou_threshold{0.45};
+    std::string preboxed_format{"cxcywh"};
     std::string preferred_provider{"tensorrt"};
     int device_id{0};
     bool warmup_tensor_shapes{true};
@@ -222,7 +219,6 @@ private:
     params_.model_path = this->declare_parameter<std::string>("model_path", "");
     params_.input_image_topic = this->declare_parameter<std::string>("input_image_topic", params_.input_image_topic);
     params_.camera_topics = this->declare_parameter<std::vector<std::string>>("camera_topics", params_.camera_topics);
-    params_.topic_type = this->declare_parameter<std::string>("topic_type", params_.topic_type);
     params_.input_transport = this->declare_parameter<std::string>("input_transport", params_.input_transport);
     params_.input_qos_reliability =
       this->declare_parameter<std::string>("input_qos_reliability", params_.input_qos_reliability);
@@ -244,6 +240,7 @@ private:
       this->declare_parameter<bool>("enable_trt_engine_cache", params_.enable_trt_engine_cache);
     params_.trt_engine_cache_path =
       this->declare_parameter<std::string>("trt_engine_cache_path", params_.trt_engine_cache_path);
+    params_.preboxed_format = this->declare_parameter<std::string>("preboxed_format", params_.preboxed_format);
   }
 
   void validateParameters()
@@ -263,15 +260,6 @@ private:
     }
     params_.input_transport = normalize_transport;
 
-    auto topic_type = params_.topic_type;
-    std::transform(topic_type.begin(), topic_type.end(), topic_type.begin(), [](unsigned char c) {
-      return static_cast<char>(std::tolower(c));
-    });
-    if (topic_type != "raw_image" && topic_type != "compressed_image") {
-      fail("topic_type must be either 'raw_image' or 'compressed_image'.");
-    }
-    params_.topic_type = topic_type;
-
     auto reliability = params_.input_qos_reliability;
     std::transform(
       reliability.begin(), reliability.end(), reliability.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -289,21 +277,14 @@ private:
       }
     }
 
-    if (params_.batch_size_limit < 1 || params_.batch_size_limit > 6) {
-      fail("batch_size_limit must be between 1 and 6.");
-    }
-    if (params_.batch_size_limit != 3) {
-      RCLCPP_WARN(
-        this->get_logger(),
-        "batch_size_limit is fixed at 3; overriding requested value %d",
-        params_.batch_size_limit);
-      params_.batch_size_limit = 3;
-    }
     if (params_.input_width <= 0 || params_.input_height <= 0) {
       fail("input_width and input_height must be positive.");
     }
     if (params_.device_id < 0) {
       fail("device_id must be non-negative.");
+    }
+    if (params_.batch_size_limit < 1 || params_.batch_size_limit > 6) {
+      fail("batch_size_limit must be between 1 and 6.");
     }
     if (params_.score_threshold <= 0.0 || params_.score_threshold > 1.0) {
       fail("score_threshold must be in (0.0, 1.0].");
@@ -316,8 +297,11 @@ private:
     }
 
     if (!params_.camera_topics.empty()) {
-      if (params_.topic_type != "compressed_image") {
-        fail("camera_topics currently requires topic_type 'compressed_image'.");
+      bool all_compressed = std::all_of(
+        params_.camera_topics.begin(), params_.camera_topics.end(),
+        [this](const std::string & topic) { return isCompressedTopic(topic); });
+      if (!all_compressed) {
+        fail("camera_topics currently requires compressed image topics (suffix '/compressed' or '_compressed').");
       }
     }
 
@@ -328,6 +312,15 @@ private:
     if (normalize_pref != "tensorrt" && normalize_pref != "cuda" && normalize_pref != "cpu") {
       fail("preferred_provider must be one of: tensorrt, cuda, cpu.");
     }
+
+    auto normalize_preboxed = params_.preboxed_format;
+    std::transform(normalize_preboxed.begin(), normalize_preboxed.end(), normalize_preboxed.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
+    if (normalize_preboxed != "cxcywh" && normalize_preboxed != "xyxy") {
+      fail("preboxed_format must be either 'cxcywh' or 'xyxy'.");
+    }
+    params_.preboxed_format = normalize_preboxed;
   }
 
   void buildProviderOrder()
@@ -353,7 +346,12 @@ private:
 
   void onImage(const sensor_msgs::msg::Image::ConstSharedPtr & msg)
   {
-    enqueueImageWithTimestamp(msg, this->now());
+    try {
+      auto converted = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+      enqueueImage(std::move(converted->image), msg->header);
+    } catch (const std::exception & e) {
+      RCLCPP_WARN(this->get_logger(), "Failed to convert raw image: %s", e.what());
+    }
   }
 
   void onCompressedImage(const sensor_msgs::msg::CompressedImage::ConstSharedPtr & msg)
@@ -387,7 +385,6 @@ private:
         topic.c_str(),
         i);
     }
-    active_input_transport_ = "compressed_multi";
   }
 
   void handleCompressedImage(
@@ -395,7 +392,6 @@ private:
     int camera_id)
   {
     try {
-      const auto now = this->now();
       cv::Mat compressed_mat(
         1,
         static_cast<int>(msg->data.size()),
@@ -407,10 +403,7 @@ private:
         return;
       }
 
-      cv_bridge::CvImage cv_image(msg->header, sensor_msgs::image_encodings::BGR8, decoded);
-      auto image_msg = cv_image.toImageMsg();
-      sensor_msgs::msg::Image::ConstSharedPtr image_const(image_msg);
-      enqueueImageWithTimestamp(image_const, now);
+      enqueueImage(std::move(decoded), msg->header);
       if (camera_id >= 0) {
         RCLCPP_DEBUG(
           this->get_logger(),
@@ -423,12 +416,10 @@ private:
     }
   }
 
-  void enqueueImageWithTimestamp(
-    const sensor_msgs::msg::Image::ConstSharedPtr & msg,
-    const rclcpp::Time & arrival)
+  void enqueueImage(cv::Mat image, const std_msgs::msg::Header & header)
   {
     std::lock_guard<std::mutex> lock(queue_mutex_);
-    image_queue_.push_back({msg, arrival});
+    image_queue_.push_back({std::move(image), header});
     const auto limit = queueLimit();
     if (limit > 0 && image_queue_.size() > limit) {
       image_queue_.pop_front();
@@ -443,13 +434,13 @@ private:
       this->get_logger(),
       "Image received. Queue size: %zu, Stamp: %.6f",
       image_queue_.size(),
-      rclcpp::Time(msg->header.stamp).seconds());
+      rclcpp::Time(header.stamp).seconds());
     RCLCPP_INFO_ONCE(this->get_logger(), "Received first image on %s", params_.input_image_topic.c_str());
   }
 
   size_t queueLimit() const
   {
-    return params_.queue_size > 0 ? static_cast<size_t>(params_.queue_size) : 0;
+    return static_cast<size_t>(params_.queue_size);
   }
 
   bool isCompressedTopic(const std::string & topic) const
@@ -542,12 +533,11 @@ private:
 
       for (const auto & item : batch) {
         try {
-          auto converted = cv_bridge::toCvCopy(item.msg, sensor_msgs::image_encodings::BGR8);
           ImageMeta meta;
-          cv::Mat preprocessed = preprocessImage(converted->image, meta);
+          cv::Mat preprocessed = preprocessImage(item.bgr, meta);
           processed.push_back(std::move(preprocessed));
           metas.push_back(meta);
-          headers.push_back(item.msg->header);
+          headers.push_back(item.header);
           RCLCPP_DEBUG(
             this->get_logger(),
             "Preprocessed image size: %dx%d (orig %dx%d)",
@@ -568,7 +558,7 @@ private:
         return;
       }
 
-      auto packed_input = packInput(processed);
+      const auto & packed_input = packInput(processed);
       if (packed_input.data.empty()) {
         RCLCPP_WARN(this->get_logger(), "Packed input is empty; skipping inference");
         return;
@@ -679,18 +669,17 @@ private:
       meta.pad_x = meta.pad_y = 0.0f;
     }
 
-    cv::Mat rgb;
-    cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
-
     cv::Mat float_image;
-    rgb.convertTo(float_image, CV_32F, 1.0 / 255.0);
-
+    resized.convertTo(float_image, CV_32F, 1.0 / 255.0);
+    cv::cvtColor(float_image, float_image, cv::COLOR_BGR2RGB);
     return float_image;
   }
 
-  PackedInput packInput(const std::vector<cv::Mat> & images) const
+  const PackedInput & packInput(const std::vector<cv::Mat> & images) const
   {
-    PackedInput packed;
+    auto & packed = packed_input_cache_;
+    packed.data.clear();
+    packed.shape.clear();
     if (images.empty()) {
       return packed;
     }
@@ -700,25 +689,30 @@ private:
     const size_t height = images[0].rows;
     const size_t width = images[0].cols;
     const size_t image_size = channels * height * width;
+    const size_t required = batch * image_size;
 
     packed.shape = {batch, channels, height, width};
-    packed.data.resize(batch * image_size);
+    packed.data.resize(required);
+
+    std::array<cv::Mat, 3> channel_planes;
+    const size_t plane_elements = height * width;
+    const size_t plane_bytes = plane_elements * sizeof(float);
+    for (auto & plane : channel_planes) {
+      plane.create(static_cast<int>(height), static_cast<int>(width), CV_32F);
+    }
 
     for (size_t b = 0; b < batch; ++b) {
       const cv::Mat & img = images[b];
       if (img.channels() != 3 || img.type() != CV_32FC3) {
         throw std::runtime_error("Preprocessed image must be CV_32FC3");
       }
-      const float * src = reinterpret_cast<const float *>(img.data);
 
-      for (size_t h = 0; h < height; ++h) {
-        for (size_t w = 0; w < width; ++w) {
-          const size_t src_idx = (h * width + w) * channels;
-          const size_t dst_base = b * image_size + h * width + w;
-          packed.data[dst_base + 0 * height * width] = src[src_idx + 0];
-          packed.data[dst_base + 1 * height * width] = src[src_idx + 1];
-          packed.data[dst_base + 2 * height * width] = src[src_idx + 2];
-        }
+      cv::split(img, channel_planes.data());
+      float * batch_base = packed.data.data() + b * image_size;
+      for (size_t c = 0; c < channels; ++c) {
+        const float * src_ptr = channel_planes[c].ptr<float>();
+        float * dst_ptr = batch_base + c * plane_elements;
+        std::memcpy(dst_ptr, src_ptr, plane_bytes);
       }
     }
 
@@ -778,10 +772,21 @@ private:
           }
 
           SimpleDetection det;
-          det.x = read_val(0);
-          det.y = read_val(1);
-          det.width = read_val(2);
-          det.height = read_val(3);
+          if (params_.preboxed_format == "xyxy") {
+            const float x1 = read_val(0);
+            const float y1 = read_val(1);
+            const float x2 = read_val(2);
+            const float y2 = read_val(3);
+            det.x = (x1 + x2) * 0.5f;
+            det.y = (y1 + y2) * 0.5f;
+            det.width = x2 - x1;
+            det.height = y2 - y1;
+          } else {
+            det.x = read_val(0);
+            det.y = read_val(1);
+            det.width = read_val(2);
+            det.height = read_val(3);
+          }
           det.score = obj;
           det.class_id = static_cast<int32_t>(std::round(read_val(5)));
 
@@ -998,8 +1003,7 @@ private:
       d.height = det.height;
       d.score = det.score;
       d.class_id = det.class_id;
-      const auto label = classLabel(det.class_id);
-      (void)label;
+      d.label = classLabel(det.class_id);
       out_msg.detections.push_back(d);
     }
 #else
@@ -1041,10 +1045,6 @@ private:
     if (!executor_ || !allocator_) {
       return;
     }
-    if (params_.batch_size_limit < 1) {
-      return;
-    }
-
     const size_t channels = 3;
     const size_t height = static_cast<size_t>(params_.input_height);
     const size_t width = static_cast<size_t>(params_.input_width);
@@ -1053,7 +1053,7 @@ private:
     const int batch = params_.batch_size_limit;
     RCLCPP_INFO(
       this->get_logger(),
-      "Priming %s backend tensor shapes for fixed batch size %d",
+      "Priming %s backend tensor shapes for batch size %d",
       providerToString(provider).c_str(),
       batch);
 
@@ -1260,8 +1260,6 @@ private:
   std::deque<QueuedImage> image_queue_;
   std::mutex queue_mutex_;
   std::atomic<bool> processing_{false};
-  std::string active_input_transport_{"raw"};
-
   std::shared_ptr<deep_ros::BackendInferenceExecutor> executor_;
   std::shared_ptr<deep_ros::BackendMemoryAllocator> allocator_;
   std::shared_ptr<deep_ros::DeepBackendPlugin> plugin_holder_;
@@ -1270,6 +1268,7 @@ private:
   size_t active_provider_index_{0};
   std::string active_provider_{"unknown"};
   std::vector<std::string> class_names_;
+  mutable PackedInput packed_input_cache_;
 };
 
 std::shared_ptr<rclcpp::Node> createYoloInferenceNode(const rclcpp::NodeOptions & options)

@@ -3,7 +3,6 @@ yolo_inference_node:
     model_path: "/workspaces/deep_ros/yolov8m.onnx"
     input_image_topic: "/CAM_FRONT/image_rect_compressed"
     camera_topics: ["/CAM_FRONT/image_rect_compressed", "/CAM_FRONT_LEFT/image_rect_compressed", "/CAM_FRONT_RIGHT/image_rect_compressed"]
-    topic_type: "compressed_image"
     queue_size: 10
     input_transport: "compressed"
     input_qos_reliability: "best_effort"
