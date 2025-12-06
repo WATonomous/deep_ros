@@ -29,13 +29,13 @@ runs:
       shell: bash
       run: |
         source /opt/ros/${{ inputs.ros-distro }}/setup.bash
-        colcon build --merge-install
+        IS_CI=1 colcon build --merge-install
 
     - name: ✅ Run tests
       shell: bash
       run: |
         source /opt/ros/${{ inputs.ros-distro }}/setup.bash
-        colcon test --merge-install --event-handlers console_cohesion+
+        IS_CI=1 colcon test --merge-install --event-handlers console_cohesion+
         colcon test-result --verbose
 
     - name: 🗃️ Upload test logs as artifacts

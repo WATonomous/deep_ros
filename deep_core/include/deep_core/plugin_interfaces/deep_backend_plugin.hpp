@@ -17,6 +17,9 @@
 #include <memory>
 #include <string>
 
+#include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
+
 #include "deep_core/plugin_interfaces/backend_inference_executor.hpp"
 #include "deep_core/plugin_interfaces/backend_memory_allocator.hpp"
 
@@ -33,6 +36,12 @@ class DeepBackendPlugin
 {
 public:
   virtual ~DeepBackendPlugin() = default;
+
+  /**
+   * @brief Initialize plugin with node instance to enable parameter loading
+   * @param node Shared pointer to the lifecycle node instance
+   */
+  virtual void initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node) = 0;
 
   /**
    * @brief Get the backend name

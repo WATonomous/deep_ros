@@ -20,8 +20,10 @@
   <depend>deep_conversions</depend>
 
   <exec_depend>nav2_lifecycle_manager</exec_depend>
+  <exec_depend>deep_ort_backend_plugin</exec_depend>
+  <exec_depend>deep_ort_gpu_backend_plugin</exec_depend>
+
   <test_depend>deep_test</test_depend>
-  <test_depend>deep_ort_backend_plugin</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

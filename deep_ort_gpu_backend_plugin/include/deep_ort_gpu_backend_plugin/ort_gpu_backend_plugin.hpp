@@ -26,9 +26,6 @@
 namespace deep_ort_gpu_backend
 {
 
-// Forward declarations
-enum class GpuExecutionProvider;
-
 /**
  * @brief ONNX Runtime GPU backend plugin
  *
@@ -40,16 +37,20 @@ class OrtGpuBackendPlugin : public deep_ros::DeepBackendPlugin
 {
 public:
   /**
-   * @brief Constructor - initializes ORT GPU allocator and executor
-   * @param device_id CUDA device ID (default: 0)
-   * @param execution_provider GPU execution provider (default: CUDA)
+   * @brief Default constructor - required by pluginlib
    */
-  explicit OrtGpuBackendPlugin(int device_id = 0, GpuExecutionProvider execution_provider = GpuExecutionProvider::CUDA);
+  OrtGpuBackendPlugin();
 
   /**
    * @brief Destructor
    */
   ~OrtGpuBackendPlugin() override = default;
+
+  /**
+   * @brief Initialize plugin with node instance and load parameters
+   * @param node Lifecycle node instance to read parameters from
+   */
+  void initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node) override;
 
   /**
    * @brief Get backend name
@@ -75,20 +76,15 @@ public:
    */
   int get_device_id() const;
 
-  /**
-   * @brief Get current execution provider
-   * @return Current GPU execution provider
-   */
-  GpuExecutionProvider get_execution_provider() const;
-
 private:
+  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
   int device_id_;
-  GpuExecutionProvider execution_provider_;
+  std::string execution_provider_;
   std::shared_ptr<deep_ros::BackendMemoryAllocator> allocator_;
   std::shared_ptr<deep_ros::BackendInferenceExecutor> executor_;
 
   /**
-   * @brief Initialize GPU components
+   * @brief Initialize GPU components with configured parameters
    * @return true if successful, false otherwise
    */
   bool initialize_gpu_components();

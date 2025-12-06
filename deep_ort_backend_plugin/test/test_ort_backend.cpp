@@ -109,10 +109,9 @@ TEST_CASE("OrtBackendExecutor basic functionality", "[executor]")
     REQUIRE(formats[0] == "onnx");
   }
 
-  SECTION("Load nonexistent model fails")
+  SECTION("Load nonexistent model throws")
   {
-    bool result = executor.load_model("/nonexistent/model.onnx");
-    REQUIRE_FALSE(result);
+    REQUIRE_THROWS_AS(executor.load_model("/nonexistent/model.onnx"), std::runtime_error);
   }
 
   SECTION("Inference without model throws")

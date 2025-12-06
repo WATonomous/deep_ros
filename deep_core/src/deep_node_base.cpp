@@ -141,6 +141,8 @@ bool DeepNodeBase::load_plugin(const std::string & plugin_name)
   try {
     RCLCPP_INFO(get_logger(), "Loading plugin: %s", plugin_name.c_str());
     plugin_ = plugin_loader_->createUniqueInstance(plugin_name);
+    plugin_->initialize(shared_from_this());
+
     current_plugin_name_ = plugin_name;
     RCLCPP_INFO(get_logger(), "Successfully loaded plugin: %s", plugin_name.c_str());
     return true;

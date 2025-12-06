@@ -14,17 +14,15 @@
 
 #include "deep_ort_gpu_backend_plugin/ort_gpu_backend_executor.hpp"
 
-#include <cstring>
 #include <dlfcn.h>
 #include <onnxruntime_cxx_api.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
-#include <iostream>
 #include <memory>
 #include <numeric>
-#include <array>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -40,9 +38,11 @@ namespace deep_ort_gpu_backend
 // Forward declaration for cast
 class OrtGpuCpuMemoryAllocator;
 
-OrtGpuBackendExecutor::OrtGpuBackendExecutor(int device_id, GpuExecutionProvider execution_provider)
+OrtGpuBackendExecutor::OrtGpuBackendExecutor(
+  int device_id, const std::string & execution_provider, const rclcpp::Logger & logger)
 : device_id_(device_id)
 , execution_provider_(execution_provider)
+, logger_(logger)
 , memory_info_(nullptr)
 {
   // Initialize ORT environment with minimal logging
@@ -56,7 +56,7 @@ OrtGpuBackendExecutor::OrtGpuBackendExecutor(int device_id, GpuExecutionProvider
   memory_info_ =
     Ort::MemoryInfo("Cuda", OrtAllocatorType::OrtArenaAllocator, device_id_, OrtMemType::OrtMemTypeDefault);
 
-  // Register our custom CPU allocator for output tensors (similar to CPU backend)
+  // Register our custom CPU allocator for output tensors
   auto custom_allocator_shared = get_ort_gpu_cpu_allocator();
   custom_allocator_ = custom_allocator_shared;
 }
@@ -74,11 +74,6 @@ int OrtGpuBackendExecutor::get_device_id() const
   return device_id_;
 }
 
-GpuExecutionProvider OrtGpuBackendExecutor::get_execution_provider() const
-{
-  return execution_provider_;
-}
-
 bool OrtGpuBackendExecutor::load_model_impl(const std::filesystem::path & model_path)
 {
   try {
@@ -89,7 +84,7 @@ bool OrtGpuBackendExecutor::load_model_impl(const std::filesystem::path & model_
 
     return true;
   } catch (const std::exception & e) {
-    std::cerr << "Failed to load model: " << e.what() << std::endl;
+    RCLCPP_ERROR(logger_, "Failed to load model: %s", e.what());
     session_.reset();
     return false;
   }
@@ -102,56 +97,48 @@ deep_ros::Tensor OrtGpuBackendExecutor::run_inference_impl(deep_ros::Tensor & in
   }
 
   try {
-    static thread_local Ort::AllocatorWithDefaultOptions allocator;
-    static thread_local auto input_name = session_->GetInputNameAllocated(0, allocator);
-    static thread_local auto output_name = session_->GetOutputNameAllocated(0, allocator);
-    static thread_local const char * input_names[] = {input_name.get()};
-    static thread_local const char * output_names[] = {output_name.get()};
-
-    // Create input tensor using CPU memory (input data is on CPU)
+    // Convert deep_ros::DataType to ONNX tensor element type
+    ONNXTensorElementDataType onnx_type = convert_to_onnx_type(input.dtype());
     std::vector<int64_t> input_shape_int64(input.shape().begin(), input.shape().end());
+
+    // Get our custom allocator for output binding
+    auto custom_allocator_shared = get_ort_gpu_cpu_allocator();
+    auto * custom_allocator = static_cast<OrtGpuCpuMemoryAllocator *>(custom_allocator_shared.get());
+
+    // Create input tensor wrapping existing input memory
+    size_t input_size_bytes = input.byte_size();
     auto cpu_memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    Ort::Value ort_input = Ort::Value::CreateTensor(
+      cpu_memory_info, input.data(), input_size_bytes, input_shape_int64.data(), input_shape_int64.size(), onnx_type);
 
-    size_t input_elements =
-      input.shape().size() > 0
-        ? std::accumulate(input.shape().begin(), input.shape().end(), 1ULL, std::multiplies<size_t>())
-        : 0;
+    // Get input/output names
+    Ort::AllocatorWithDefaultOptions allocator;
+    auto input_name = session_->GetInputNameAllocated(0, allocator);
+    auto output_name = session_->GetOutputNameAllocated(0, allocator);
 
-    Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
-      cpu_memory_info,
-      static_cast<float *>(input.data()),
-      input_elements,
-      input_shape_int64.data(),
-      input_shape_int64.size());
+    // Create IO binding for inference
+    Ort::IoBinding binding(*session_);
+    binding.BindInput(input_name.get(), ort_input);
 
-    auto output_tensors = session_->Run(
-      Ort::RunOptions{nullptr},
-      input_names, &input_tensor, 1,
-      output_names, 1);
+    // Bind output to use our custom allocator
+    binding.BindOutput(output_name.get(), custom_allocator->get_ort_memory_info());
 
-    if (output_tensors.empty()) {
-      throw std::runtime_error("ONNX GPU Inference returned no outputs");
-    }
+    // Run inference with IO binding
+    Ort::RunOptions run_options;
+    session_->Run(run_options, binding);
 
-    auto & output_tensor = output_tensors.front();
-    auto output_info = output_tensor.GetTensorTypeAndShapeInfo();
-    auto output_shape_int64 = output_info.GetShape();
+    // Get output values allocated by ONNX Runtime
+    Ort::AllocatorWithDefaultOptions default_allocator;
+    std::vector<Ort::Value> output_tensors = binding.GetOutputValues(default_allocator);
 
-    std::vector<size_t> output_shape(output_shape_int64.begin(), output_shape_int64.end());
+    // Get output shape and data
+    auto output_shape = get_output_shape(input.shape());
+    void * output_data = output_tensors[0].GetTensorMutableData<void>();
 
-    const float * output_data = output_tensor.GetTensorData<float>();
-    auto mem_info = output_tensor.GetTensorMemoryInfo();
-    const bool on_gpu = mem_info.GetDeviceType() == OrtMemoryInfoDeviceType_GPU ||
-      mem_info.GetAllocatorName() == "Cuda";
+    // Create deep_ros tensor wrapping the ONNX-allocated memory
+    deep_ros::Tensor output(output_data, output_shape, input.dtype());
 
-    if (on_gpu) {
-      throw std::runtime_error("ONNX Runtime returned GPU-resident output unexpectedly");
-    }
-
-    deep_ros::Tensor result(output_shape, input.dtype(), custom_allocator_);
-    std::memcpy(result.data(), output_data, result.byte_size());
-
-    return result;
+    return output;
   } catch (const std::exception & e) {
     throw std::runtime_error("GPU inference failed: " + std::string(e.what()));
   }
@@ -168,26 +155,18 @@ void OrtGpuBackendExecutor::initialize_session_options()
   // Set basic options
   session_options_->SetIntraOpNumThreads(1);
   session_options_->SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-  session_options_->AddConfigEntry("session.force_cpu_output", "1");
 
-  // Configure execution provider
-  try {
-    switch (execution_provider_) {
-      case GpuExecutionProvider::CUDA:
-        configure_cuda_provider();
-        break;
-      case GpuExecutionProvider::TENSORRT:
-        try {
-          configure_tensorrt_provider();
-        } catch (const std::exception & tensorrt_e) {
-          std::cerr << "TensorRT failed during configuration, falling back to CUDA: " << tensorrt_e.what() << std::endl;
-          execution_provider_ = GpuExecutionProvider::CUDA;
-          configure_cuda_provider();
-        }
-        break;
-    }
-  } catch (const std::exception & e) {
-    throw std::runtime_error("Failed to configure any GPU execution provider: " + std::string(e.what()));
+  // Configure execution provider based on string
+  std::string provider_lower = execution_provider_;
+  std::transform(provider_lower.begin(), provider_lower.end(), provider_lower.begin(), ::tolower);
+
+  if (provider_lower == "cuda") {
+    configure_cuda_provider();
+  } else if (provider_lower == "tensorrt") {
+    configure_tensorrt_provider();
+  } else {
+    throw std::runtime_error(
+      "Unknown execution provider: " + execution_provider_ + ". Valid options: 'cuda', 'tensorrt'");
   }
 }
 
@@ -220,54 +199,23 @@ void OrtGpuBackendExecutor::configure_cuda_provider()
 void OrtGpuBackendExecutor::configure_tensorrt_provider()
 {
   try {
-    // Disable DirectX interop that causes libdxcore issues on Linux
     setenv("CUDA_MODULE_LOADING", "LAZY", 1);
-    setenv("TRT_DISABLE_D3D12", "1", 1);
 
-    // Use the official ORT TensorRT EP API (V2) instead of provider-name aliases.
-    OrtTensorRTProviderOptionsV2 * trt_options = nullptr;
-    auto & api = Ort::GetApi();
-    Ort::ThrowOnError(api.CreateTensorRTProviderOptions(&trt_options));
-    // Configure a minimal, safe set of options.
-    const std::array<const char *, 8> keys = {
-      "device_id",
-      "trt_max_workspace_size",
-      "trt_max_partition_iterations",
-      "trt_min_subgraph_size",
-      "trt_engine_cache_enable",
-      "trt_engine_cache_path",
-      "trt_force_sequential_engine_build",
-      "trt_cuda_graph_enable"
-    };
-    const std::string device_id_str = std::to_string(device_id_);
-    static const std::filesystem::path cache_dir("/tmp/deep_ros_ort_trt_cache");
-    std::error_code ec;
-    std::filesystem::create_directories(cache_dir, ec);
-    const auto cache_dir_str = cache_dir.string();
-    const std::array<const char *, 8> values = {
-      device_id_str.c_str(),
-      "4294967296",  // 4GB workspace
-      "1000",        // Max partition iterations
-      "1",
-      "1",           // trt_engine_cache_enable
-      cache_dir_str.c_str(),
-      "1",
-      "0"
-    };
-    Ort::ThrowOnError(api.UpdateTensorRTProviderOptions(
-      trt_options,
-      keys.data(),
-      values.data(),
-      keys.size()));
+    OrtTensorRTProviderOptions tensorrt_options{};
+    tensorrt_options.device_id = device_id_;
+    tensorrt_options.trt_max_workspace_size = 67108864;  // 64MB
+    tensorrt_options.trt_max_partition_iterations = 1;
+    tensorrt_options.trt_min_subgraph_size = 1;
+    tensorrt_options.trt_engine_cache_enable = 0;
+    tensorrt_options.trt_force_sequential_engine_build = 1;
+    tensorrt_options.trt_fp16_enable = 0;
+    tensorrt_options.trt_int8_enable = 0;
+    tensorrt_options.has_user_compute_stream = 0;
+    tensorrt_options.user_compute_stream = nullptr;
 
-    try {
-      session_options_->AppendExecutionProvider_TensorRT_V2(*trt_options);
-      std::cout << "TensorRT provider registered successfully via V2 API" << std::endl;
-    } catch (...) {
-      api.ReleaseTensorRTProviderOptions(trt_options);
-      throw;
-    }
-    api.ReleaseTensorRTProviderOptions(trt_options);
+    RCLCPP_INFO(logger_, "Configuring TensorRT execution provider on device %d", device_id_);
+    session_options_->AppendExecutionProvider_TensorRT(tensorrt_options);
+    RCLCPP_INFO(logger_, "TensorRT provider registered successfully");
   } catch (const std::exception & e) {
     throw std::runtime_error("Failed to configure TensorRT provider: " + std::string(e.what()));
   }
@@ -336,13 +284,5 @@ size_t OrtGpuBackendExecutor::get_element_size(deep_ros::DataType dtype) const
       throw std::runtime_error("Unsupported data type");
   }
 }
-
-bool OrtGpuBackendExecutor::verify_gpu_availability() const
-{
-  return true;
-}
-
-void OrtGpuBackendExecutor::set_device() const
-{}
 
 }  // namespace deep_ort_gpu_backend

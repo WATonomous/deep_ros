@@ -14,7 +14,6 @@
 
 #include "deep_ort_gpu_backend_plugin/ort_gpu_backend_plugin.hpp"
 
-#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -27,10 +26,32 @@
 namespace deep_ort_gpu_backend
 {
 
-OrtGpuBackendPlugin::OrtGpuBackendPlugin(int device_id, GpuExecutionProvider execution_provider)
-: device_id_(device_id)
-, execution_provider_(execution_provider)
+OrtGpuBackendPlugin::OrtGpuBackendPlugin()
+: device_id_(0)
+, execution_provider_("cuda")
 {
+  // GPU components will be initialized in initialize() after parameters are loaded
+}
+
+void OrtGpuBackendPlugin::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr node)
+{
+  node_ = node;
+
+  // Declare parameters with defaults
+  node_->declare_parameter("Backend.device_id", 0);
+  node_->declare_parameter("Backend.execution_provider", "cuda");
+
+  // Read parameters
+  device_id_ = node_->get_parameter("Backend.device_id").as_int();
+  execution_provider_ = node_->get_parameter("Backend.execution_provider").as_string();
+
+  RCLCPP_INFO(
+    node_->get_logger(),
+    "Initializing GPU backend with device_id=%d, execution_provider=%s",
+    device_id_,
+    execution_provider_.c_str());
+
+  // Initialize GPU components with configured parameters
   if (!initialize_gpu_components()) {
     throw std::runtime_error("Failed to initialize GPU backend components");
   }
@@ -56,28 +77,28 @@ int OrtGpuBackendPlugin::get_device_id() const
   return device_id_;
 }
 
-GpuExecutionProvider OrtGpuBackendPlugin::get_execution_provider() const
-{
-  return execution_provider_;
-}
-
 bool OrtGpuBackendPlugin::initialize_gpu_components()
 {
   try {
-    // Allocate CPU-side buffer allocator used by the GPU executor
+    // Initialize allocator first
     allocator_ = get_ort_gpu_cpu_allocator();
+    if (!allocator_) {
+      RCLCPP_ERROR(node_->get_logger(), "Failed to get GPU backend CPU allocator");
+      return false;
+    }
 
     // Create GPU executor
-    executor_ = std::make_shared<OrtGpuBackendExecutor>(device_id_, execution_provider_);
-    if (auto gpu_executor = std::dynamic_pointer_cast<OrtGpuBackendExecutor>(executor_)) {
-      // Executor may internally downgrade TensorRT to CUDA if unsupported.
-      execution_provider_ = gpu_executor->get_execution_provider();
+    executor_ = std::make_shared<OrtGpuBackendExecutor>(device_id_, execution_provider_, node_->get_logger());
+    if (!executor_) {
+      RCLCPP_ERROR(node_->get_logger(), "Failed to create GPU backend executor");
+      return false;
     }
-    return allocator_ != nullptr && executor_ != nullptr;
+
+    return true;
   } catch (const std::exception & e) {
-    std::cerr << "Failed to initialize GPU components: " << e.what() << std::endl;
-    allocator_.reset();
+    RCLCPP_ERROR(node_->get_logger(), "Failed to initialize GPU components: %s", e.what());
     executor_.reset();
+    allocator_.reset();
     return false;
   }
 }

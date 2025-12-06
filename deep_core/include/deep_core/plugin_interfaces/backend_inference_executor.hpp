@@ -19,6 +19,8 @@
 #include <string>
 #include <vector>
 
+#include <rclcpp/rclcpp.hpp>
+
 #include "deep_core/types/tensor.hpp"
 
 namespace deep_ros

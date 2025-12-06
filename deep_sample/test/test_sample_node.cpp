@@ -44,33 +44,6 @@ public:
   {
     // Clean up
   }
-
-  sensor_msgs::msg::Image create_test_image(uint32_t height, uint32_t width, const std::string & encoding)
-  {
-    sensor_msgs::msg::Image img;
-    img.header.frame_id = "test_camera";
-    img.height = height;
-    img.width = width;
-    img.encoding = encoding;
-    img.is_bigendian = 0;
-
-    if (encoding == "32FC3") {
-      img.step = width * 3 * 4;
-      img.data.resize(height * width * 3 * 4);
-      float * data = reinterpret_cast<float *>(img.data.data());
-      for (size_t i = 0; i < height * width * 3; ++i) {
-        data[i] = static_cast<float>(i) / (height * width * 3);
-      }
-    } else if (encoding == "rgb8") {
-      img.step = width * 3;
-      img.data.resize(height * width * 3);
-      for (size_t i = 0; i < img.data.size(); ++i) {
-        img.data[i] = static_cast<uint8_t>(i % 256);
-      }
-    }
-
-    return img;
-  }
 };
 
 TEST_CASE_METHOD(SampleNodeTestFixture, "SampleInferenceNode construction", "[sample][node]")

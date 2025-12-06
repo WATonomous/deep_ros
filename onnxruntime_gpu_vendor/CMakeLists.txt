@@ -16,38 +16,18 @@ project(onnxruntime_gpu_vendor VERSION 1.22.0)
 
 find_package(ament_cmake REQUIRED)
 
-# Find CUDA libraries (optional, don't fail if not found)
-find_package(CUDAToolkit QUIET)
-if(CUDAToolkit_FOUND)
-  message(STATUS "CUDA found: ${CUDAToolkit_VERSION}")
-else()
-  message(WARNING "CUDA not found - GPU acceleration may not work")
-endif()
 
 set(ONNXRUNTIME_VERSION "${PROJECT_VERSION}")
+set(ONNXRUNTIME_URL
 
-# Package flavor: "gpu" (CUDA-only) or "tensorrt" (CUDA + TensorRT EP, if available for this version).
-set(ONNXRUNTIME_FLAVOR "gpu" CACHE STRING "ONNX Runtime package flavor (gpu|tensorrt)")
-# Recent ONNX Runtime releases no longer publish a separate TensorRT archive.
-# The standard GPU archive already contains the TensorRT provider library, so fall back to it.
-set(ONNXRUNTIME_PACKAGE_FLAVOR "${ONNXRUNTIME_FLAVOR}")
-if(ONNXRUNTIME_FLAVOR STREQUAL "tensorrt")
-  set(ONNXRUNTIME_PACKAGE_FLAVOR "gpu")
-  message(WARNING
-    "TensorRT flavor requested; using the GPU archive instead because upstream no longer ships a separate TensorRT package. "
-    "Ensure TensorRT runtime libraries are installed on the system.")
-endif()
-set(ONNXRUNTIME_URL_DEFAULT
-  "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-${ONNXRUNTIME_PACKAGE_FLAVOR}-${ONNXRUNTIME_VERSION}.tgz"
+  "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-gpu-${ONNXRUNTIME_VERSION}.tgz"
 )
-set(ONNXRUNTIME_URL "${ONNXRUNTIME_URL_DEFAULT}" CACHE STRING "URL to prebuilt ONNX Runtime archive")
 set(ONNXRUNTIME_DOWNLOAD_DIR "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime-download")
-set(ONNXRUNTIME_EXTRACT_DIR "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime-linux-x64-${ONNXRUNTIME_PACKAGE_FLAVOR}-${ONNXRUNTIME_VERSION}")
+set(ONNXRUNTIME_EXTRACT_DIR "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime-linux-x64-gpu-${ONNXRUNTIME_VERSION}")
 
 # Download and extract ONNX Runtime GPU
 if(NOT EXISTS "${ONNXRUNTIME_EXTRACT_DIR}")
   message(STATUS "Downloading ONNX Runtime GPU ${ONNXRUNTIME_VERSION}...")
-  file(MAKE_DIRECTORY "${ONNXRUNTIME_DOWNLOAD_DIR}")
   file(DOWNLOAD
     ${ONNXRUNTIME_URL}
     "${ONNXRUNTIME_DOWNLOAD_DIR}/onnxruntime-gpu.tgz"
@@ -56,9 +36,8 @@ if(NOT EXISTS "${ONNXRUNTIME_EXTRACT_DIR}")
   )
 
   list(GET DOWNLOAD_STATUS 0 DOWNLOAD_RESULT)
-  list(GET DOWNLOAD_STATUS 1 DOWNLOAD_MESSAGE)
   if(NOT DOWNLOAD_RESULT EQUAL 0)
-    message(FATAL_ERROR "Failed to download ONNX Runtime from ${ONNXRUNTIME_URL}: ${DOWNLOAD_MESSAGE}")
+    message(FATAL_ERROR "Failed to download ONNX Runtime GPU")
   endif()
 
   message(STATUS "Extracting ONNX Runtime GPU...")
@@ -84,11 +63,6 @@ install(
   DIRECTORY "${ONNXRUNTIME_EXTRACT_DIR}/lib/"
   DESTINATION lib
   PATTERN "*.a" EXCLUDE
-)
-
-# Export library paths for runtime
-ament_environment_hooks(
-  "${CMAKE_CURRENT_SOURCE_DIR}/env_hook/onnxruntime_library_path.sh.in"
 )
 
 # Create an interface library for users to link against

@@ -39,66 +39,11 @@ ENV DEBIAN_FRONTEND=interactive
 # ONNX Runtime's TensorRT execution provider can resolve unversioned SONAMEs.
 RUN curl -fsSL -o cuda-keyring_1.1-1_all.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb \
     && dpkg -i cuda-keyring_1.1-1_all.deb \
-    && apt-get update && apt-get install -y --no-install-recommends --allow-change-held-packages \
-    cuda-cudart-12-2 \
-    cuda-libraries-12-2 \
-    libnvinfer10 \
-    libnvinfer-plugin10 \
-    libnvonnxparsers10 \
-    # libcudnn9-cuda-12 \
-    && rm cuda-keyring_1.1-1_all.deb \
-    && rm -rf /var/lib/apt/lists/*
-
-# Ensure unversioned SONAMEs exist for CUDA/TensorRT libraries and surface them via LD_LIBRARY_PATH.
-RUN python3 - <<'PY'
-import pathlib
-
-symlinks = {
-    "/usr/local/cuda/targets/x86_64-linux/lib": [
-        ("libcudart.so", "libcudart.so.*"),
-        ("libcublas.so", "libcublas.so.*"),
-        ("libcublasLt.so", "libcublasLt.so.*")
-    ],
-    "/usr/lib/x86_64-linux-gnu": [
-        ("libnvinfer.so", "libnvinfer.so.*"),
-        ("libnvinfer_plugin.so", "libnvinfer_plugin.so.*"),
-        ("libnvonnxparser.so", "libnvonnxparser.so.*"),
-        ("libcudnn.so", "libcudnn.so.*"),
-        ("libcudnn_ops.so", "libcudnn_ops.so.*"),
-        ("libcudnn_adv.so", "libcudnn_adv.so.*"),
-        ("libcudnn_cnn.so", "libcudnn_cnn.so.*")
-    ]
-}
-
-for directory, patterns in symlinks.items():
-    libdir = pathlib.Path(directory)
-    for link_name, glob_pattern in patterns:
-        link_path = libdir / link_name
-        if link_path.exists():
-            continue
-        matches = list(libdir.glob(glob_pattern))
-        if not matches:
-            continue
-        
-        # Sort by version number to ensure we pick the highest (e.g., 10 over 8)
-        # Handle filenames like libname.so.X.Y.Z
-        def get_version_key(path):
-            try:
-                # specific handling for names like libnvinfer.so.10.14.1
-                # split by '.so.' and take the suffix
-                suffix = path.name.split('.so.')[-1]
-                return [int(p) for p in suffix.split('.') if p.isdigit()]
-            except ValueError:
-                return []
-
-        matches.sort(key=get_version_key)
-        
-        # Point at the highest version (last after sorting)
-        target = matches[-1]
-        link_path.symlink_to(target.name)
-PY
-
-ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/targets/x86_64-linux/lib:${LD_LIBRARY_PATH}
+    && apt-get update && apt-get install -y --no-install-recommends \
+    libnvinfer10=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
+    libnvinfer-plugin10=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
+    libnvonnxparsers10=${TENSORRT_RUNTIME_VERSION}-1+cuda${TENSORRT_CUDA_VERSION} \
+    && rm cuda-keyring_1.1-1_all.deb
 
 # ===============================================
 # Install Common Development Tools in Either Base

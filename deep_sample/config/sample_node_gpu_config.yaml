@@ -1,0 +1,39 @@
+# Copyright (c) 2025-present WATonomous. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Configuration for deep_sample inference node with GPU backend
+sample_inference_node:
+  ros__parameters:
+    # Backend configuration - GPU
+    Backend:
+      plugin: "onnxruntime_gpu"
+      device_id: 0
+      execution_provider: "cuda"  # Options: "cuda" or "tensorrt"
+
+    # Bond configuration
+    Bond:
+      enable: true
+      bond_timeout: 4.0
+      bond_heartbeat_period: 0.1
+
+    # Model configuration
+    model_path: "/workspaces/deep_ros/install/deep_sample/share/deep_sample/models/tiny_model.onnx"
+
+    # Topic configuration
+    input_topic: "/camera/image_raw"
+    output_topic: "/inference/output"
+
+    # Node-specific parameters
+    use_sim_time: false
+    log_level: "info"

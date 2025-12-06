@@ -71,3 +71,19 @@ function(add_deep_test TEST_NAME TEST_SOURCE)
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
 endfunction()
+
+
+#
+# Launch Test Function with test_utils support
+# Wraps add_launch_test to automatically add test/launch_tests to PYTHONPATH
+#
+# Usage:
+#   add_deep_launch_test(test/launch_tests/test_example.py)
+#
+macro(add_deep_launch_test filename)
+  add_launch_test(
+    ${filename}
+    ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test/launch_tests:$ENV{PYTHONPATH}
+    ${ARGN}
+  )
+endmacro()
