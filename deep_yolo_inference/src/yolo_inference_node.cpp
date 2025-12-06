@@ -207,7 +207,6 @@ private:
     int input_height{640};
     bool use_letterbox{false};
     int batch_size_limit{3};
-    int max_batch_latency_ms{50};
     int queue_size{10};
     double score_threshold{0.25};
     double nms_iou_threshold{0.45};
@@ -231,7 +230,6 @@ private:
     params_.input_height = this->declare_parameter<int>("input_height", params_.input_height);
     params_.use_letterbox = this->declare_parameter<bool>("use_letterbox", params_.use_letterbox);
     params_.batch_size_limit = this->declare_parameter<int>("batch_size_limit", params_.batch_size_limit);
-    params_.max_batch_latency_ms = this->declare_parameter<int>("max_batch_latency_ms", params_.max_batch_latency_ms);
     params_.score_threshold = this->declare_parameter<double>("score_threshold", params_.score_threshold);
     params_.nms_iou_threshold = this->declare_parameter<double>("nms_iou_threshold", params_.nms_iou_threshold);
     params_.preferred_provider = this->declare_parameter<std::string>("preferred_provider", params_.preferred_provider);
@@ -288,6 +286,13 @@ private:
     if (params_.batch_size_limit < 1 || params_.batch_size_limit > 6) {
       fail("batch_size_limit must be between 1 and 6.");
     }
+    if (params_.batch_size_limit != 3) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "batch_size_limit is fixed at 3; overriding requested value %d",
+        params_.batch_size_limit);
+      params_.batch_size_limit = 3;
+    }
     if (params_.input_width <= 0 || params_.input_height <= 0) {
       fail("input_width and input_height must be positive.");
     }
@@ -299,9 +304,6 @@ private:
     }
     if (params_.nms_iou_threshold <= 0.0 || params_.nms_iou_threshold > 1.0) {
       fail("nms_iou_threshold must be in (0.0, 1.0].");
-    }
-    if (params_.max_batch_latency_ms < 0) {
-      fail("max_batch_latency_ms must be non-negative.");
     }
     if (params_.queue_size < 1) {
       fail("queue_size must be at least 1.");
@@ -437,9 +439,6 @@ private:
       image_queue_.size(),
       rclcpp::Time(msg->header.stamp).seconds());
     RCLCPP_INFO_ONCE(this->get_logger(), "Received first image on %s", params_.input_image_topic.c_str());
-    if (image_queue_.size() >= static_cast<size_t>(params_.batch_size_limit)) {
-      request_process_ = true;
-    }
   }
 
   size_t queueLimit() const
@@ -501,46 +500,18 @@ private:
     ScopeExit guard([this]() { processing_.store(false); });
 
     std::vector<QueuedImage> batch;
+    const size_t required = static_cast<size_t>(params_.batch_size_limit);
     {
       std::lock_guard<std::mutex> lock(queue_mutex_);
-      if (image_queue_.empty()) {
-        request_process_ = false;
+      if (image_queue_.size() < required) {
         return;
       }
 
-      const auto now = this->now();
-      const auto oldest = image_queue_.front().arrival_time;
-      // Dynamic latency adjustment:
-      // If using TensorRT (much faster), we can afford to wait slightly longer to fill the batch,
-      // because inference itself is negligible.
-      // If using CUDA (slower), we might want to flush earlier to avoid total latency violations,
-      // BUT conversely, larger batches amortize the CUDA kernel launch overhead better.
-      // However, if the user explicitly set max_batch_latency_ms, respect it.
-      
-      // We'll stick to the user's configured latency.
-      const auto latency_ms = (now - oldest).nanoseconds() / 1'000'000;
-      bool latency_expired = latency_ms >= params_.max_batch_latency_ms;
-
-      // If we have enough images for a full batch, process immediately.
-      // If time expired, process whatever we have.
-      // Note: With TensorRT, processing is fast, so we prefer filling the batch if possible.
-      // With CUDA, processing is slower, so we might want to avoid large batches if it causes
-      // the total processing time to exceed frame deadlines, but generally batching helps throughput.
-      
-      if (!latency_expired && !request_process_) {
-        return;
-      }
-
-      size_t count = std::min(
-        image_queue_.size(),
-        static_cast<size_t>(params_.batch_size_limit));
-
-      batch.reserve(count);
-      for (size_t i = 0; i < count; ++i) {
+      batch.reserve(required);
+      for (size_t i = 0; i < required; ++i) {
         batch.push_back(image_queue_.front());
         image_queue_.pop_front();
       }
-      request_process_ = false;
     }
 
     if (!batch.empty()) {
@@ -1073,31 +1044,27 @@ private:
     const size_t width = static_cast<size_t>(params_.input_width);
     const size_t per_image = channels * height * width;
 
+    const int batch = params_.batch_size_limit;
     RCLCPP_INFO(
       this->get_logger(),
-      "Priming %s backend tensor shapes for batch sizes up to %d",
+      "Priming %s backend tensor shapes for fixed batch size %d",
       providerToString(provider).c_str(),
-      params_.batch_size_limit);
+      batch);
 
-    for (int batch = 1; batch <= params_.batch_size_limit; ++batch) {
-      PackedInput dummy;
-      dummy.shape = {static_cast<size_t>(batch), channels, height, width};
-      dummy.data.assign(static_cast<size_t>(batch) * per_image, 0.0f);
+    PackedInput dummy;
+    dummy.shape = {static_cast<size_t>(batch), channels, height, width};
+    dummy.data.assign(static_cast<size_t>(batch) * per_image, 0.0f);
 
-      auto input_tensor = buildInputTensor(dummy);
-      try {
-        (void)executor_->run_inference(input_tensor);
-        RCLCPP_DEBUG(
-          this->get_logger(),
-          "Cached tensor shape for batch size %d", batch);
-      } catch (const std::exception & e) {
-        RCLCPP_WARN(
-          this->get_logger(),
-          "Warmup inference for batch size %d failed: %s. Continuing without caching remaining shapes.",
-          batch,
-          e.what());
-        break;
-      }
+    auto input_tensor = buildInputTensor(dummy);
+    try {
+      (void)executor_->run_inference(input_tensor);
+      RCLCPP_DEBUG(this->get_logger(), "Cached tensor shape for batch size %d", batch);
+    } catch (const std::exception & e) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Warmup inference for batch size %d failed: %s",
+        batch,
+        e.what());
     }
   }
 
@@ -1285,7 +1252,6 @@ private:
   std::deque<QueuedImage> image_queue_;
   std::mutex queue_mutex_;
   std::atomic<bool> processing_{false};
-  bool request_process_{false};
   std::string active_input_transport_{"raw"};
 
   std::shared_ptr<deep_ros::BackendInferenceExecutor> executor_;

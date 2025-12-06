@@ -12,7 +12,6 @@ yolo_inference_node:
     input_height: 640
     use_letterbox: false
     batch_size_limit: 3
-    max_batch_latency_ms: 50
     score_threshold: 0.20
     nms_iou_threshold: 0.40
     preferred_provider: "tensorrt"
