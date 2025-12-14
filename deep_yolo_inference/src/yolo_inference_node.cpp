@@ -36,6 +36,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <sensor_msgs/image_encodings.hpp>
 
 #include "deep_yolo_inference/backend_manager.hpp"
@@ -66,39 +67,10 @@ private:
 };
 
 YoloInferenceNode::YoloInferenceNode(const rclcpp::NodeOptions & options)
-: Node("yolo_inference_node", options)
+: LifecycleNode("yolo_inference_node", options)
 {
   declareAndReadParameters();
-  validateParameters();
-
-  loadClassNames();
-  preprocessor_ = std::make_unique<ImagePreprocessor>(params_);
-  postprocessor_ = std::make_unique<Postprocessor>(params_, class_names_);
-  backend_manager_ = std::make_unique<BackendManager>(*this, params_);
-
-  backend_manager_->buildProviderOrder();
-  if (!backend_manager_->initialize()) {
-    throw std::runtime_error("Failed to initialize any execution provider");
-  }
-  detection_pub_ =
-    this->create_publisher<Detection2DArrayMsg>(params_.output_detections_topic, rclcpp::SensorDataQoS{});
-
-  if (params_.camera_topics.empty()) {
-    throw std::runtime_error("camera_topics must contain at least one topic for multi-camera mode");
-  }
-  multi_camera_mode_ = true;
-  setupMultiCameraSubscriptions();
-
-  batch_timer_ = this->create_wall_timer(chrono::milliseconds(5), std::bind(&YoloInferenceNode::onBatchTimer, this));
-
-  RCLCPP_INFO(
-    this->get_logger(),
-    "YOLO inference node initialized. Model: %s, input size: %dx%d, batch limit: %d, provider: %s",
-    params_.model_path.c_str(),
-    params_.input_width,
-    params_.input_height,
-    params_.batch_size_limit,
-    backend_manager_->activeProvider().c_str());
+  RCLCPP_INFO(this->get_logger(), "YOLO inference node created, waiting for configuration");
 }
 
 void YoloInferenceNode::declareAndReadParameters()
@@ -211,6 +183,155 @@ void YoloInferenceNode::validateParameters()
     fail("preboxed_format must be either 'cxcywh' or 'xyxy'.");
   }
   params_.preboxed_format = normalize_preboxed;
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn YoloInferenceNode::on_configure(
+  const rclcpp_lifecycle::State & /*state*/)
+{
+  RCLCPP_INFO(this->get_logger(), "Configuring YOLO inference node");
+
+  try {
+    validateParameters();
+
+    loadClassNames();
+    preprocessor_ = std::make_unique<ImagePreprocessor>(params_);
+    postprocessor_ = std::make_unique<Postprocessor>(params_, class_names_);
+    backend_manager_ = std::make_unique<BackendManager>(*this, params_);
+
+    backend_manager_->buildProviderOrder();
+    if (!backend_manager_->initialize()) {
+      RCLCPP_ERROR(this->get_logger(), "Failed to initialize any execution provider");
+      return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
+    }
+
+    // Create publisher (will be activated in on_activate)
+    detection_pub_ =
+      this->create_publisher<Detection2DArrayMsg>(params_.output_detections_topic, rclcpp::SensorDataQoS{});
+
+    if (params_.camera_topics.empty()) {
+      RCLCPP_ERROR(this->get_logger(), "camera_topics must contain at least one topic for multi-camera mode");
+      return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
+    }
+    multi_camera_mode_ = true;
+
+    RCLCPP_INFO(
+      this->get_logger(),
+      "YOLO inference node configured. Model: %s, input size: %dx%d, batch limit: %d, provider: %s",
+      params_.model_path.c_str(),
+      params_.input_width,
+      params_.input_height,
+      params_.batch_size_limit,
+      backend_manager_->activeProvider().c_str());
+
+    return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(this->get_logger(), "Failed to configure: %s", e.what());
+    return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
+  }
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn YoloInferenceNode::on_activate(
+  const rclcpp_lifecycle::State & /*state*/)
+{
+  RCLCPP_INFO(this->get_logger(), "Activating YOLO inference node");
+
+  try {
+    // Publishers are automatically activated for lifecycle nodes
+    // Setup subscriptions
+    setupMultiCameraSubscriptions();
+
+    // Start batch processing timer
+    batch_timer_ = this->create_wall_timer(chrono::milliseconds(5), std::bind(&YoloInferenceNode::onBatchTimer, this));
+
+    RCLCPP_INFO(this->get_logger(), "YOLO inference node activated and ready to process images");
+    return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(this->get_logger(), "Failed to activate: %s", e.what());
+    return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
+  }
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn YoloInferenceNode::on_deactivate(
+  const rclcpp_lifecycle::State & /*state*/)
+{
+  RCLCPP_INFO(this->get_logger(), "Deactivating YOLO inference node");
+
+  // Stop timer
+  if (batch_timer_) {
+    batch_timer_->cancel();
+    batch_timer_.reset();
+  }
+
+  // Clear subscriptions
+  multi_camera_subscriptions_.clear();
+  image_sub_.shutdown();
+  compressed_image_sub_.reset();
+
+  // Clear image queue
+  {
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    image_queue_.clear();
+  }
+
+  // Publishers are automatically deactivated for lifecycle nodes
+
+  RCLCPP_INFO(this->get_logger(), "YOLO inference node deactivated");
+  return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn YoloInferenceNode::on_cleanup(
+  const rclcpp_lifecycle::State & /*state*/)
+{
+  RCLCPP_INFO(this->get_logger(), "Cleaning up YOLO inference node");
+
+  // Release backend resources
+  backend_manager_.reset();
+
+  // Release preprocessor and postprocessor
+  preprocessor_.reset();
+  postprocessor_.reset();
+
+  // Clear class names
+  class_names_.clear();
+
+  // Reset publisher
+  detection_pub_.reset();
+
+  RCLCPP_INFO(this->get_logger(), "YOLO inference node cleaned up");
+  return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn YoloInferenceNode::on_shutdown(
+  const rclcpp_lifecycle::State & /*state*/)
+{
+  RCLCPP_INFO(this->get_logger(), "Shutting down YOLO inference node");
+
+  // Stop timer if still active
+  if (batch_timer_) {
+    batch_timer_->cancel();
+    batch_timer_.reset();
+  }
+
+  // Clear subscriptions
+  multi_camera_subscriptions_.clear();
+  image_sub_.shutdown();
+  compressed_image_sub_.reset();
+
+  // Clear image queue
+  {
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    image_queue_.clear();
+  }
+
+  // Release all resources
+  backend_manager_.reset();
+  preprocessor_.reset();
+  postprocessor_.reset();
+  class_names_.clear();
+  detection_pub_.reset();
+
+  RCLCPP_INFO(this->get_logger(), "YOLO inference node shut down");
+  return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
 
 void YoloInferenceNode::onImage(const sensor_msgs::msg::Image::ConstSharedPtr & msg)
@@ -453,7 +574,7 @@ void YoloInferenceNode::loadClassNames()
     this->get_logger(), "Loaded %zu class names from %s", class_names_.size(), params_.class_names_path.c_str());
 }
 
-std::shared_ptr<rclcpp::Node> createYoloInferenceNode(const rclcpp::NodeOptions & options)
+std::shared_ptr<rclcpp_lifecycle::LifecycleNode> createYoloInferenceNode(const rclcpp::NodeOptions & options)
 {
   return std::make_shared<YoloInferenceNode>(options);
 }

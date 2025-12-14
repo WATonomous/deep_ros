@@ -23,8 +23,11 @@
 
 #include <image_transport/subscriber.hpp>
 #include <opencv2/core/mat.hpp>
+#include <lifecycle_msgs/msg/state.hpp>
 #include <rclcpp/node_options.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
+#include <rclcpp_lifecycle/state.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <std_msgs/msg/header.hpp>
@@ -37,10 +40,26 @@
 namespace deep_yolo_inference
 {
 
-class YoloInferenceNode : public rclcpp::Node
+class YoloInferenceNode : public rclcpp_lifecycle::LifecycleNode
 {
 public:
   explicit YoloInferenceNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
+
+  // Lifecycle node callbacks
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_configure(
+    const rclcpp_lifecycle::State & state) override;
+
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_activate(
+    const rclcpp_lifecycle::State & state) override;
+
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_deactivate(
+    const rclcpp_lifecycle::State & state) override;
+
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_cleanup(
+    const rclcpp_lifecycle::State & state) override;
+
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_shutdown(
+    const rclcpp_lifecycle::State & state) override;
 
 private:
   void declareAndReadParameters();
@@ -83,6 +102,7 @@ private:
 /**
  * @brief Factory function to create the YOLO inference node
  */
-std::shared_ptr<rclcpp::Node> createYoloInferenceNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
+std::shared_ptr<rclcpp_lifecycle::LifecycleNode> createYoloInferenceNode(
+  const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
 }  // namespace deep_yolo_inference

@@ -17,6 +17,7 @@ import os
 from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -53,11 +54,17 @@ def generate_launch_description():
         default_value="tensorrt",
         description="Execution provider: tensorrt|cuda|cpu",
     )
+    use_lifecycle_manager_arg = DeclareLaunchArgument(
+        "use_lifecycle_manager",
+        default_value="true",
+        description="Whether to use nav2_lifecycle_manager for automatic lifecycle transitions",
+    )
 
     config = LaunchConfiguration("config_file")
     input_topic = LaunchConfiguration("input_image_topic")
     output_topic = LaunchConfiguration("output_detections_topic")
     provider = LaunchConfiguration("preferred_provider")
+    use_lifecycle_manager = LaunchConfiguration("use_lifecycle_manager")
 
     node = Node(
         package="deep_yolo_inference",
@@ -74,14 +81,31 @@ def generate_launch_description():
         ],
     )
 
+    # Optional lifecycle manager for automatic transitions
+    lifecycle_manager = Node(
+        package="nav2_lifecycle_manager",
+        executable="lifecycle_manager",
+        name="yolo_lifecycle_manager",
+        output="screen",
+        parameters=[
+            {
+                "node_names": ["yolo_inference_node"],
+                "autostart": True,
+            }
+        ],
+        condition=IfCondition(use_lifecycle_manager),
+    )
+
     return LaunchDescription(
         [
             config_arg,
             input_topic_arg,
             output_topic_arg,
             provider_arg,
+            use_lifecycle_manager_arg,
             # Ensure ORT GPU/TensorRT provider libraries are discoverable at runtime.
             SetEnvironmentVariable("LD_LIBRARY_PATH", ld_with_ort),
             node,
+            lifecycle_manager,
         ]
     )

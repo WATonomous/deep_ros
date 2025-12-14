@@ -30,7 +30,7 @@
 namespace deep_yolo_inference
 {
 
-BackendManager::BackendManager(rclcpp::Node & node, const YoloParams & params)
+BackendManager::BackendManager(rclcpp_lifecycle::LifecycleNode & node, const YoloParams & params)
 : node_(node)
 , params_(params)
 {}

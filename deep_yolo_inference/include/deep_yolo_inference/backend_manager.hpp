@@ -37,7 +37,7 @@ namespace deep_yolo_inference
 class BackendManager
 {
 public:
-  BackendManager(rclcpp::Node & node, const YoloParams & params);
+  BackendManager(rclcpp_lifecycle::LifecycleNode & node, const YoloParams & params);
 
   void buildProviderOrder();
   bool initialize(size_t start_index = 0);
@@ -69,7 +69,7 @@ private:
   void declareActiveProviderParameter(const std::string & value);
   deep_ros::Tensor buildInputTensor(const PackedInput & packed) const;
 
-  rclcpp::Node & node_;
+  rclcpp_lifecycle::LifecycleNode & node_;
   const YoloParams & params_;
   std::vector<Provider> provider_order_;
   size_t active_provider_index_{0};

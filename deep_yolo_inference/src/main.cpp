@@ -14,12 +14,17 @@
 
 #include "deep_yolo_inference/yolo_inference_node.hpp"
 
+#include <rclcpp/executors.hpp>
+
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
   try {
     auto node = deep_yolo_inference::createYoloInferenceNode();
-    rclcpp::spin(node);
+    // Use executor for lifecycle nodes - can also use rclcpp::spin(node->get_node_base_interface())
+    rclcpp::executors::SingleThreadedExecutor executor;
+    executor.add_node(node->get_node_base_interface());
+    executor.spin();
   } catch (const std::exception & e) {
     std::cerr << "Failed to start yolo_inference_node: " << e.what() << std::endl;
   }
