@@ -18,7 +18,9 @@
 #include <string>
 #include <vector>
 
+#include <deep_core/plugin_interfaces/deep_backend_plugin.hpp>
 #include <deep_core/types/tensor.hpp>
+#include <pluginlib/class_loader.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 
@@ -28,7 +30,6 @@ namespace deep_ros
 {
 class BackendInferenceExecutor;
 class BackendMemoryAllocator;
-class DeepBackendPlugin;
 }  // namespace deep_ros
 
 namespace deep_yolo_inference
@@ -38,6 +39,7 @@ class BackendManager
 {
 public:
   BackendManager(rclcpp_lifecycle::LifecycleNode & node, const YoloParams & params);
+  ~BackendManager();
 
   void buildProviderOrder();
   bool initialize(size_t start_index = 0);
@@ -76,7 +78,12 @@ private:
   std::string active_provider_{"unknown"};
   std::shared_ptr<deep_ros::BackendInferenceExecutor> executor_;
   std::shared_ptr<deep_ros::BackendMemoryAllocator> allocator_;
-  std::shared_ptr<deep_ros::DeepBackendPlugin> plugin_holder_;
+  // plugin_loader_ must be declared before plugin_holder_ so it's destroyed after
+  // (members are destroyed in reverse declaration order)
+  std::unique_ptr<pluginlib::ClassLoader<deep_ros::DeepBackendPlugin>> plugin_loader_;
+  pluginlib::UniquePtr<deep_ros::DeepBackendPlugin> plugin_holder_;
+  
+  std::string providerToPluginName(Provider provider) const;
 };
 
 }  // namespace deep_yolo_inference

@@ -34,10 +34,7 @@ find_package(message_filters REQUIRED)
 find_package(vision_msgs REQUIRED)
 find_package(deep_core REQUIRED)
 find_package(deep_msgs REQUIRED)
-find_package(deep_ort_backend_plugin REQUIRED)
-find_package(deep_ort_gpu_backend_plugin REQUIRED)
-find_package(onnxruntime_vendor REQUIRED)
-find_package(onnxruntime_gpu_vendor REQUIRED)
+find_package(pluginlib REQUIRED)
 find_package(rcl_interfaces REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc)
@@ -68,19 +65,14 @@ ament_target_dependencies(yolo_inference_lib
   vision_msgs
   deep_core
   deep_msgs
-  deep_ort_backend_plugin
-  deep_ort_gpu_backend_plugin
-  onnxruntime_vendor
-  onnxruntime_gpu_vendor
+  pluginlib
   rcl_interfaces
 )
 
 target_link_libraries(yolo_inference_lib
+  pluginlib::pluginlib
+  rclcpp::rclcpp
   deep_core::deep_core_lib
-  deep_ort_backend_plugin::deep_ort_backend_plugin_lib
-  deep_ort_gpu_backend_plugin::deep_ort_gpu_backend_plugin_lib
-  onnxruntime_vendor::onnxruntime_lib
-  onnxruntime_gpu_vendor::onnxruntime_gpu_lib
   ${OpenCV_LIBRARIES}
   yaml-cpp
 )
@@ -123,8 +115,6 @@ if(BUILD_TESTING)
   target_link_libraries(test_parameters
       yolo_inference_lib
       deep_core::deep_core_lib
-      deep_ort_backend_plugin::deep_ort_backend_plugin_lib
-      deep_ort_gpu_backend_plugin::deep_ort_gpu_backend_plugin_lib
       ${OpenCV_LIBRARIES}
     )
     target_include_directories(test_parameters PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -138,10 +128,7 @@ if(BUILD_TESTING)
       vision_msgs
       deep_core
       deep_msgs
-      deep_ort_backend_plugin
-      deep_ort_gpu_backend_plugin
-      onnxruntime_vendor
-      onnxruntime_gpu_vendor
+      pluginlib
       rcl_interfaces
     )
   else()
@@ -153,8 +140,6 @@ if(BUILD_TESTING)
     target_link_libraries(test_fallback_selection
       yolo_inference_lib
       deep_core::deep_core_lib
-      deep_ort_backend_plugin::deep_ort_backend_plugin_lib
-      deep_ort_gpu_backend_plugin::deep_ort_gpu_backend_plugin_lib
       ${OpenCV_LIBRARIES}
       yaml-cpp
     )
@@ -169,10 +154,7 @@ if(BUILD_TESTING)
       vision_msgs
       deep_core
       deep_msgs
-      deep_ort_backend_plugin
-      deep_ort_gpu_backend_plugin
-      onnxruntime_vendor
-      onnxruntime_gpu_vendor
+      pluginlib
       rcl_interfaces
     )
   else()
