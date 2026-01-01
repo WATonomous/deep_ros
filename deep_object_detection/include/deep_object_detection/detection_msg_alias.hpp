@@ -22,34 +22,36 @@
   #include <deep_msgs/msg/detection2_d.hpp>
   #include <deep_msgs/msg/detection2_d_array.hpp>
 
-namespace deep_yolo_inference
+namespace deep_object_detection
 {
 using Detection2DMsg = deep_msgs::msg::Detection2D;
 using Detection2DArrayMsg = deep_msgs::msg::Detection2DArray;
-}  // namespace deep_yolo_inference
+}  // namespace deep_object_detection
 #else
   #include <vision_msgs/msg/detection2_d.hpp>
   #include <vision_msgs/msg/detection2_d_array.hpp>
   #include <vision_msgs/msg/object_hypothesis_with_pose.hpp>
 
-namespace deep_yolo_inference
+namespace deep_object_detection
 {
 using Detection2DMsg = vision_msgs::msg::Detection2D;
 using Detection2DArrayMsg = vision_msgs::msg::Detection2DArray;
-}  // namespace deep_yolo_inference
+}  // namespace deep_object_detection
 #endif
 
-namespace deep_yolo_inference
+namespace deep_object_detection
 {
 
+/// @brief Simple detection structure for internal processing
 struct SimpleDetection
 {
-  float x = 0.0f;
-  float y = 0.0f;
+  float x = 0.0f;       // Top-left x coordinate
+  float y = 0.0f;       // Top-left y coordinate
   float width = 0.0f;
   float height = 0.0f;
   float score = 0.0f;
   int32_t class_id = -1;
 };
 
-}  // namespace deep_yolo_inference
+}  // namespace deep_object_detection
+

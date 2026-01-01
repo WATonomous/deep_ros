@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "deep_yolo_inference/backend_manager.hpp"
+#include "deep_object_detection/backend_manager.hpp"
 
 #include <dlfcn.h>
 
@@ -26,10 +26,10 @@
 #include <pluginlib/class_loader.hpp>
 #include <rcl_interfaces/msg/parameter_descriptor.hpp>
 
-namespace deep_yolo_inference
+namespace deep_object_detection
 {
 
-BackendManager::BackendManager(rclcpp_lifecycle::LifecycleNode & node, const YoloParams & params)
+BackendManager::BackendManager(rclcpp_lifecycle::LifecycleNode & node, const DetectionParams & params)
 : node_(node)
 , params_(params)
 , plugin_loader_(std::make_unique<pluginlib::ClassLoader<deep_ros::DeepBackendPlugin>>("deep_core", "deep_ros::DeepBackendPlugin"))
@@ -200,8 +200,8 @@ void BackendManager::warmupTensorShapeCache(Provider provider)
     return;
   }
   const size_t channels = 3;
-  const size_t height = static_cast<size_t>(params_.input_height);
-  const size_t width = static_cast<size_t>(params_.input_width);
+  const size_t height = static_cast<size_t>(params_.preprocessing.input_height);
+  const size_t width = static_cast<size_t>(params_.preprocessing.input_width);
   const size_t per_image = channels * height * width;
 
   const int batch = params_.batch_size_limit;
@@ -263,7 +263,7 @@ rclcpp_lifecycle::LifecycleNode::SharedPtr BackendManager::createBackendConfigNo
   options.start_parameter_event_publisher(false);
 
   const auto node_id = backend_node_counter.fetch_add(1, std::memory_order_relaxed);
-  auto node_name = "yolo_backend_" + suffix + "_" + std::to_string(node_id);
+  auto node_name = "detection_backend_" + suffix + "_" + std::to_string(node_id);
   return std::make_shared<rclcpp_lifecycle::LifecycleNode>(node_name, options);
 }
 
@@ -301,4 +301,33 @@ std::string BackendManager::providerToPluginName(Provider provider) const
   }
 }
 
-}  // namespace deep_yolo_inference
+std::vector<size_t> BackendManager::getOutputShape(const std::vector<size_t> & input_shape) const
+{
+  if (!executor_ || !allocator_) {
+    throw std::runtime_error("No backend executor or allocator available");
+  }
+
+  try {
+    // Create a dummy input tensor to run inference and get output shape
+    PackedInput dummy;
+    dummy.shape = input_shape;
+    size_t total_elements = 1;
+    for (size_t dim : input_shape) {
+      total_elements *= dim;
+    }
+    dummy.data.assign(total_elements, 0.0f);
+
+    auto input_tensor = buildInputTensor(dummy);
+    auto output_tensor = executor_->run_inference(input_tensor);
+    return output_tensor.shape();
+  } catch (const std::exception & e) {
+    RCLCPP_WARN(
+      node_.get_logger(),
+      "Failed to get output shape from model via dummy inference: %s. Will use auto-detection.",
+      e.what());
+    return {};  // Return empty to trigger auto-detection
+  }
+}
+
+}  // namespace deep_object_detection
+

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "deep_yolo_inference/yolo_inference_node.hpp"
+#include "deep_object_detection/deep_object_detection_node.hpp"
 
 #include <rclcpp/executors.hpp>
 
@@ -20,14 +20,15 @@ int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
   try {
-    auto node = deep_yolo_inference::createYoloInferenceNode();
+    auto node = deep_object_detection::createDeepObjectDetectionNode();
     // Use executor for lifecycle nodes - can also use rclcpp::spin(node->get_node_base_interface())
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_node(node->get_node_base_interface());
     executor.spin();
   } catch (const std::exception & e) {
-    std::cerr << "Failed to start yolo_inference_node: " << e.what() << std::endl;
+    std::cerr << "Failed to start deep_object_detection_node: " << e.what() << std::endl;
   }
   rclcpp::shutdown();
   return 0;
 }
+

@@ -16,16 +16,16 @@ import os
 
 from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, TimerAction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    package_share = get_package_share_directory("deep_yolo_inference")
+    package_share = get_package_share_directory("deep_object_detection")
     default_config = os.path.join(
-        package_share, "config", "object_detection_params.yaml"
+        package_share, "config", "generic_model_params.yaml"
     )
     ort_gpu_lib = os.path.join(get_package_prefix("onnxruntime_gpu_vendor"), "lib")
     ld_with_ort = (
@@ -37,12 +37,7 @@ def generate_launch_description():
     config_arg = DeclareLaunchArgument(
         "config_file",
         default_value=default_config,
-        description="Path to YAML config for YOLO inference",
-    )
-    input_topic_arg = DeclareLaunchArgument(
-        "input_image_topic",
-        default_value="/CAM_FRONT/image_rect_compressed",
-        description="Input image topic (defaults to NuScenes front camera compressed topic)",
+        description="Path to YAML config for object detection",
     )
     output_topic_arg = DeclareLaunchArgument(
         "output_detections_topic",
@@ -61,20 +56,18 @@ def generate_launch_description():
     )
 
     config = LaunchConfiguration("config_file")
-    input_topic = LaunchConfiguration("input_image_topic")
     output_topic = LaunchConfiguration("output_detections_topic")
     provider = LaunchConfiguration("preferred_provider")
     use_lifecycle_manager = LaunchConfiguration("use_lifecycle_manager")
 
     node = Node(
-        package="deep_yolo_inference",
-        executable="yolo_inference_node",
-        name="yolo_inference_node",
+        package="deep_object_detection",
+        executable="deep_object_detection_node",
+        name="deep_object_detection_node",
         output="screen",
         parameters=[
             config,
             {
-                "input_image_topic": input_topic,
                 "output_detections_topic": output_topic,
                 "preferred_provider": provider,
             },
@@ -82,30 +75,39 @@ def generate_launch_description():
     )
 
     # Optional lifecycle manager for automatic transitions
+    # Delay lifecycle manager startup to ensure detection node is ready
     lifecycle_manager = Node(
         package="nav2_lifecycle_manager",
         executable="lifecycle_manager",
-        name="yolo_lifecycle_manager",
+        name="detection_lifecycle_manager",
         output="screen",
         parameters=[
             {
-                "node_names": ["yolo_inference_node"],
+                "node_names": ["deep_object_detection_node"],
                 "autostart": True,
+                "bond_timeout": 10.0,  # Wait longer for node to be ready
             }
         ],
+        condition=IfCondition(use_lifecycle_manager),
+    )
+
+    # Wrap lifecycle manager in a timer to delay its startup
+    delayed_lifecycle_manager = TimerAction(
+        period=2.0,  # Wait 2 seconds for detection node to initialize
+        actions=[lifecycle_manager],
         condition=IfCondition(use_lifecycle_manager),
     )
 
     return LaunchDescription(
         [
             config_arg,
-            input_topic_arg,
             output_topic_arg,
             provider_arg,
             use_lifecycle_manager_arg,
             # Ensure ORT GPU/TensorRT provider libraries are discoverable at runtime.
             SetEnvironmentVariable("LD_LIBRARY_PATH", ld_with_ort),
             node,
-            lifecycle_manager,
+            delayed_lifecycle_manager,
         ]
     )
+

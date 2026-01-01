@@ -32,18 +32,30 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <std_msgs/msg/header.hpp>
 
-#include "deep_yolo_inference/backend_manager.hpp"
-#include "deep_yolo_inference/detection_msg_alias.hpp"
-#include "deep_yolo_inference/processing.hpp"
-#include "deep_yolo_inference/yolo_types.hpp"
+#if __has_include(<deep_msgs/msg/multi_image.hpp>)
+  #include <deep_msgs/msg/multi_image.hpp>
+#endif
 
-namespace deep_yolo_inference
+#include "deep_object_detection/backend_manager.hpp"
+#include "deep_object_detection/detection_msg_alias.hpp"
+#include "deep_object_detection/generic_postprocessor.hpp"
+#include "deep_object_detection/detection_types.hpp"
+#include "deep_object_detection/image_preprocessor.hpp"
+
+namespace deep_object_detection
 {
 
-class YoloInferenceNode : public rclcpp_lifecycle::LifecycleNode
+/**
+ * @brief Generic deep learning object detection node
+ *
+ * Supports any ONNX-compatible object detection model with configurable
+ * input/output formats. Processes batched multi-camera inputs and outputs
+ * Detection2DArray messages.
+ */
+class DeepObjectDetectionNode : public rclcpp_lifecycle::LifecycleNode
 {
 public:
-  explicit YoloInferenceNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
+  explicit DeepObjectDetectionNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
   // Lifecycle node callbacks
   rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_configure(
@@ -67,6 +79,8 @@ private:
   void onImage(const sensor_msgs::msg::Image::ConstSharedPtr & msg);
   void onCompressedImage(const sensor_msgs::msg::CompressedImage::ConstSharedPtr & msg);
   void setupMultiCameraSubscriptions();
+  void setupCameraSyncSubscription();
+  void onMultiImage(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg);
   void handleCompressedImage(const sensor_msgs::msg::CompressedImage::ConstSharedPtr & msg, int camera_id);
   void enqueueImage(cv::Mat image, const std_msgs::msg::Header & header);
   size_t queueLimit() const;
@@ -80,29 +94,34 @@ private:
     const std::vector<ImageMeta> & metas);
   void loadClassNames();
 
-  YoloParams params_;
+  DetectionParams params_;
 
   image_transport::Subscriber image_sub_;
   rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_image_sub_;
   std::vector<rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr> multi_camera_subscriptions_;
+#if __has_include(<deep_msgs/msg/multi_image.hpp>)
+  rclcpp::Subscription<deep_msgs::msg::MultiImage>::SharedPtr multi_image_sub_;
+#endif
   bool multi_camera_mode_{false};
+  bool use_camera_sync_{false};
+  std::string camera_sync_topic_;
   rclcpp::Publisher<Detection2DArrayMsg>::SharedPtr detection_pub_;
   rclcpp::TimerBase::SharedPtr batch_timer_;
 
   std::deque<QueuedImage> image_queue_;
   std::mutex queue_mutex_;
   std::atomic<bool> processing_{false};
-  std::vector<std::string> class_names_;
 
   std::unique_ptr<ImagePreprocessor> preprocessor_;
-  std::unique_ptr<Postprocessor> postprocessor_;
+  std::unique_ptr<GenericPostprocessor> postprocessor_;
   std::unique_ptr<BackendManager> backend_manager_;
 };
 
 /**
- * @brief Factory function to create the YOLO inference node
+ * @brief Factory function to create the deep object detection node
  */
-std::shared_ptr<rclcpp_lifecycle::LifecycleNode> createYoloInferenceNode(
+std::shared_ptr<rclcpp_lifecycle::LifecycleNode> createDeepObjectDetectionNode(
   const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
-}  // namespace deep_yolo_inference
+}  // namespace deep_object_detection
+

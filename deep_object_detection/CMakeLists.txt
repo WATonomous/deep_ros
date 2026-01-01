@@ -13,7 +13,7 @@
 # limitations under the License.
 
 cmake_minimum_required(VERSION 3.22)
-project(deep_yolo_inference)
+project(deep_object_detection)
 
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
@@ -39,22 +39,23 @@ find_package(rcl_interfaces REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc)
 
-add_executable(yolo_inference_node
+add_executable(deep_object_detection_node
   src/main.cpp
 )
 
-add_library(yolo_inference_lib SHARED
+add_library(deep_object_detection_lib SHARED
   src/backend_manager.cpp
-  src/processing.cpp
-  src/yolo_inference_node.cpp
+  src/generic_postprocessor.cpp
+  src/image_preprocessor.cpp
+  src/deep_object_detection_node.cpp
 )
 
-target_include_directories(yolo_inference_lib PUBLIC
+target_include_directories(deep_object_detection_lib PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
 
-ament_target_dependencies(yolo_inference_lib
+ament_target_dependencies(deep_object_detection_lib
   rclcpp
   rclcpp_components
   rclcpp_lifecycle
@@ -69,7 +70,7 @@ ament_target_dependencies(yolo_inference_lib
   rcl_interfaces
 )
 
-target_link_libraries(yolo_inference_lib
+target_link_libraries(deep_object_detection_lib
   pluginlib::pluginlib
   rclcpp::rclcpp
   deep_core::deep_core_lib
@@ -77,26 +78,26 @@ target_link_libraries(yolo_inference_lib
   yaml-cpp
 )
 
-target_include_directories(yolo_inference_lib SYSTEM PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_include_directories(deep_object_detection_lib SYSTEM PRIVATE ${OpenCV_INCLUDE_DIRS})
 
-rclcpp_components_register_nodes(yolo_inference_lib "deep_yolo_inference::YoloInferenceNode")
+rclcpp_components_register_nodes(deep_object_detection_lib "deep_object_detection::DeepObjectDetectionNode")
 
-target_link_libraries(yolo_inference_node
-  yolo_inference_lib
+target_link_libraries(deep_object_detection_node
+  deep_object_detection_lib
 )
 
-target_include_directories(yolo_inference_node PUBLIC
+target_include_directories(deep_object_detection_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
 
-install(TARGETS yolo_inference_lib
+install(TARGETS deep_object_detection_lib
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
 
-install(TARGETS yolo_inference_node
+install(TARGETS deep_object_detection_node
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -110,15 +111,15 @@ install(DIRECTORY config launch
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
-  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_parameters.cpp)
-  ament_add_gtest(test_parameters test/test_parameters.cpp)
-  target_link_libraries(test_parameters
-      yolo_inference_lib
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_postprocessors.cpp)
+    ament_add_gtest(test_postprocessors test/test_postprocessors.cpp)
+    target_link_libraries(test_postprocessors
+      deep_object_detection_lib
       deep_core::deep_core_lib
       ${OpenCV_LIBRARIES}
     )
-    target_include_directories(test_parameters PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-    ament_target_dependencies(test_parameters
+    target_include_directories(test_postprocessors PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    ament_target_dependencies(test_postprocessors
       rclcpp
       rclcpp_lifecycle
       sensor_msgs
@@ -131,20 +132,18 @@ if(BUILD_TESTING)
       pluginlib
       rcl_interfaces
     )
-  else()
-    message(WARNING "Skipping test_parameters: test/test_parameters.cpp not found")
   endif()
 
-  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_fallback_selection.cpp)
-    ament_add_gtest(test_fallback_selection test/test_fallback_selection.cpp)
-    target_link_libraries(test_fallback_selection
-      yolo_inference_lib
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_preprocessor.cpp)
+    ament_add_gtest(test_preprocessor test/test_preprocessor.cpp)
+    target_link_libraries(test_preprocessor
+      deep_object_detection_lib
       deep_core::deep_core_lib
       ${OpenCV_LIBRARIES}
       yaml-cpp
     )
-    target_include_directories(test_fallback_selection PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-    ament_target_dependencies(test_fallback_selection
+    target_include_directories(test_preprocessor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    ament_target_dependencies(test_preprocessor
       rclcpp
       rclcpp_lifecycle
       sensor_msgs
@@ -157,9 +156,8 @@ if(BUILD_TESTING)
       pluginlib
       rcl_interfaces
     )
-  else()
-    message(WARNING "Skipping test_fallback_selection: test/test_fallback_selection.cpp not found")
   endif()
 endif()
 
 ament_package()
+

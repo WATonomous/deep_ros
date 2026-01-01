@@ -24,7 +24,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 
-#include "deep_yolo_inference/yolo_types.hpp"
+#include "deep_object_detection/detection_types.hpp"
 
 namespace deep_ros
 {
@@ -32,13 +32,19 @@ class BackendInferenceExecutor;
 class BackendMemoryAllocator;
 }  // namespace deep_ros
 
-namespace deep_yolo_inference
+namespace deep_object_detection
 {
 
+/**
+ * @brief Manages backend inference execution with provider fallback
+ *
+ * Handles loading of ONNX models via pluginlib backends with automatic
+ * fallback from TensorRT -> CUDA -> CPU.
+ */
 class BackendManager
 {
 public:
-  BackendManager(rclcpp_lifecycle::LifecycleNode & node, const YoloParams & params);
+  BackendManager(rclcpp_lifecycle::LifecycleNode & node, const DetectionParams & params);
   ~BackendManager();
 
   void buildProviderOrder();
@@ -61,6 +67,15 @@ public:
     return static_cast<bool>(executor_);
   }
 
+  /**
+   * @brief Get the expected output shape from the model
+   *
+   * @param input_shape Input tensor shape to use for shape inference
+   * @return Output tensor shape
+   * @throws std::runtime_error if model not loaded or shape inference fails
+   */
+  std::vector<size_t> getOutputShape(const std::vector<size_t> & input_shape) const;
+
 private:
   bool initializeBackend(size_t start_index);
   void warmupTensorShapeCache(Provider provider);
@@ -72,7 +87,7 @@ private:
   deep_ros::Tensor buildInputTensor(const PackedInput & packed) const;
 
   rclcpp_lifecycle::LifecycleNode & node_;
-  const YoloParams & params_;
+  const DetectionParams & params_;
   std::vector<Provider> provider_order_;
   size_t active_provider_index_{0};
   std::string active_provider_{"unknown"};
@@ -86,4 +101,5 @@ private:
   std::string providerToPluginName(Provider provider) const;
 };
 
-}  // namespace deep_yolo_inference
+}  // namespace deep_object_detection
+

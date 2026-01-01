@@ -1,8 +1,12 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>deep_yolo_inference</name>
+  <name>deep_object_detection</name>
   <version>0.1.0</version>
-  <description>YOLO inference node using ONNX Runtime with CUDA/TensorRT/CPU fallback and dynamic batching.</description>
+  <description>
+    Generic model-agnostic deep learning object detection node using ONNX Runtime with CUDA/TensorRT/CPU fallback.
+    Works with any ONNX-compatible object detection model - automatically detects and adapts to model output format.
+    Features dynamic batching, multi-camera support, and configurable preprocessing/postprocessing.
+  </description>
 
   <maintainer email="watonomous@example.com">WATonomous</maintainer>
   <license>Apache License 2.0</license>
@@ -35,3 +39,4 @@
     <build_type>ament_cmake</build_type>
   </export>
 </package>
+
