@@ -19,7 +19,6 @@
   <depend>sensor_msgs</depend>
   <depend>image_transport</depend>
   <depend>cv_bridge</depend>
-  <depend>message_filters</depend>
   <depend>vision_msgs</depend>
   <depend>deep_core</depend>
   <depend>deep_msgs</depend>
@@ -27,7 +26,6 @@
   <depend>deep_ort_gpu_backend_plugin</depend>
   <depend>onnxruntime_vendor</depend>
   <depend>onnxruntime_gpu_vendor</depend>
-  <depend>yaml-cpp</depend>
   <depend>opencv2</depend>
   <depend>rcl_interfaces</depend>
 

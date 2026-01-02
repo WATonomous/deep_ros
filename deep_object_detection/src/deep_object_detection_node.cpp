@@ -41,7 +41,7 @@
 
 #include "deep_object_detection/backend_manager.hpp"
 #include "deep_object_detection/detection_msg_alias.hpp"
-#include "deep_object_detection/postprocessor_factory.hpp"
+#include "deep_object_detection/generic_postprocessor.hpp"
 
 #if __has_include(<deep_msgs/msg/multi_image.hpp>)
   #include <deep_msgs/msg/multi_image.hpp>
@@ -113,6 +113,14 @@ void DeepObjectDetectionNode::declareAndReadParameters()
   params_.postprocessing.nms_iou_threshold = static_cast<float>(
     this->declare_parameter<double>("postprocessing.nms_iou_threshold", 0.45));
   params_.postprocessing.max_detections = this->declare_parameter<int>("postprocessing.max_detections", 300);
+  auto score_activation_str = this->declare_parameter<std::string>("postprocessing.score_activation", "sigmoid");
+  params_.postprocessing.score_activation = stringToScoreActivation(score_activation_str);
+  
+  // Multi-output model support
+  params_.postprocessing.use_multi_output = this->declare_parameter<bool>("postprocessing.use_multi_output", false);
+  params_.postprocessing.output_boxes_idx = this->declare_parameter<int>("postprocessing.output_boxes_idx", 0);
+  params_.postprocessing.output_scores_idx = this->declare_parameter<int>("postprocessing.output_scores_idx", 1);
+  params_.postprocessing.output_classes_idx = this->declare_parameter<int>("postprocessing.output_classes_idx", 2);
   
   // Topic configuration
   params_.input_image_topic = this->declare_parameter<std::string>("input_image_topic", "/camera/image_raw");
@@ -306,7 +314,19 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
     }
 
     // Create postprocessor with auto-detection
-    postprocessor_ = PostprocessorFactory::create(params_, output_shape);
+    const auto & config = params_.postprocessing;
+    const auto & model_meta = params_.model_metadata;
+    const bool use_letterbox = (params_.preprocessing.resize_method == ResizeMethod::LETTERBOX);
+    
+    GenericPostprocessor::OutputLayout layout;
+    if (!output_shape.empty()) {
+      layout = GenericPostprocessor::detectLayout(output_shape);
+    } else {
+      layout.auto_detect = true;
+    }
+    postprocessor_ = std::make_unique<GenericPostprocessor>(
+      config, layout, model_meta.bbox_format, model_meta.num_classes,
+      params_.class_names, use_letterbox);
 
     // Create publisher (will be activated in on_activate)
     detection_pub_ =
@@ -707,8 +727,16 @@ void DeepObjectDetectionNode::processBatch(const std::vector<QueuedImage> & batc
 
     RCLCPP_INFO(this->get_logger(), "Input tensor shape about to build: [%s]", formatShape(packed_input.shape).c_str());
 
-    auto output_tensor = backend_manager_->infer(packed_input);
-    auto batch_detections = postprocessor_->decode(output_tensor, metas);
+    std::vector<std::vector<SimpleDetection>> batch_detections;
+    if (params_.postprocessing.use_multi_output) {
+      // Multi-output model: get all outputs and decode separately
+      auto output_tensors = backend_manager_->inferAllOutputs(packed_input);
+      batch_detections = postprocessor_->decodeMultiOutput(output_tensors, metas);
+    } else {
+      // Single output model: use standard decode
+      auto output_tensor = backend_manager_->infer(packed_input);
+      batch_detections = postprocessor_->decode(output_tensor, metas);
+    }
     for (size_t i = 0; i < batch_detections.size(); ++i) {
       RCLCPP_INFO(this->get_logger(), "Image %zu: %zu detections", i, batch_detections[i].size());
     }

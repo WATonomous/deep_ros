@@ -95,6 +95,35 @@ deep_ros::Tensor BackendManager::infer(const PackedInput & input)
   throw std::runtime_error("All backends failed");
 }
 
+std::vector<deep_ros::Tensor> BackendManager::inferAllOutputs(const PackedInput & input)
+{
+  if (!executor_) {
+    throw std::runtime_error("No backend initialized; dropping batch");
+  }
+
+  // TODO: When backend executor interface supports multiple outputs, enhance this
+  // For now, return a vector with the single output for backward compatibility
+  // The postprocessor can still handle multi-output configuration when available
+  size_t attempts = 0;
+  const size_t max_attempts = provider_order_.empty() ? 1 : provider_order_.size();
+  while (attempts < max_attempts) {
+    auto input_tensor = buildInputTensor(input);
+    try {
+      auto output = executor_->run_inference(input_tensor);
+      return {output};  // Return as single-element vector
+    } catch (const std::exception & e) {
+      RCLCPP_WARN(node_.get_logger(), "Inference failed on provider %s: %s", active_provider_.c_str(), e.what());
+    }
+
+    ++attempts;
+    if (!fallbackToNextProvider()) {
+      break;
+    }
+  }
+
+  throw std::runtime_error("All backends failed");
+}
+
 bool BackendManager::fallbackToNextProvider()
 {
   if (provider_order_.empty()) {

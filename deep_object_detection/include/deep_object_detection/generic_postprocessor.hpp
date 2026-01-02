@@ -93,6 +93,17 @@ public:
     const deep_ros::Tensor & output,
     const std::vector<ImageMeta> & metas) const;
 
+  /**
+   * @brief Decode detections from multiple output tensors (boxes, scores, classes)
+   *
+   * @param outputs Vector of output tensors (must contain at least boxes and scores)
+   * @param metas Image metadata for coordinate transformation
+   * @return Batch of detections per image
+   */
+  std::vector<std::vector<SimpleDetection>> decodeMultiOutput(
+    const std::vector<deep_ros::Tensor> & outputs,
+    const std::vector<ImageMeta> & metas) const;
+
   std::string getFormatName() const { return "generic"; }
 
   void fillDetectionMessage(
@@ -123,6 +134,11 @@ protected:
    * @brief Get class label for a given class ID
    */
   std::string classLabel(int class_id, const std::vector<std::string> & class_names) const;
+
+  /**
+   * @brief Apply activation function to a raw score/logit
+   */
+  float applyActivation(float raw_score) const;
 
 private:
   /**

@@ -95,6 +95,21 @@ GenericPostprocessor::OutputLayout GenericPostprocessor::detectLayout(const std:
   return layout;
 }
 
+float GenericPostprocessor::applyActivation(float raw_score) const
+{
+  switch (config_.score_activation) {
+    case ScoreActivation::SIGMOID:
+      return 1.0f / (1.0f + std::exp(-raw_score));
+    case ScoreActivation::SOFTMAX:
+      // Softmax is applied over all classes, not individual scores
+      // This is a fallback - softmax should be computed over all class logits
+      return raw_score;  // Will be handled in decode method
+    case ScoreActivation::NONE:
+    default:
+      return raw_score;
+  }
+}
+
 float GenericPostprocessor::extractValue(
   const float * data,
   size_t batch_idx,
@@ -211,34 +226,63 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decode(
     dets.reserve(num_detections);
 
     for (size_t d = 0; d < num_detections; ++d) {
-      // For YOLO models: find the max class score (with sigmoid) from class logits
-      // YOLOv8 format: [x, y, w, h, class0_score, class1_score, ..., classN_score]
-      // No separate objectness score - use max class score as confidence
+      // Extract class scores and apply activation
+      // Format: [x, y, w, h, class0_score, class1_score, ..., classN_score]
       
       float score = 0.0f;
       int32_t class_id = -1;
       
       if (num_features > layout.bbox_count) {
-        // Find argmax of class scores (after sigmoid)
-        float max_score = -std::numeric_limits<float>::max();
-        size_t best_class = 0;
-        
+        // Extract all class logits
         size_t class_end = std::min(num_features, static_cast<size_t>(num_classes_ + layout.bbox_count));
+        std::vector<float> class_logits;
+        class_logits.reserve(class_end - layout.bbox_count);
+        
         for (size_t c = layout.bbox_count; c < class_end; ++c) {
           float cls_logit = extractValue(data, b, d, c, shape);
-          // Apply sigmoid: score = 1 / (1 + exp(-x))
-          float cls_score = 1.0f / (1.0f + std::exp(-cls_logit));
-          if (cls_score > max_score) {
-            max_score = cls_score;
-            best_class = c - layout.bbox_count;
-          }
+          class_logits.push_back(cls_logit);
         }
-        score = max_score;
-        class_id = static_cast<int32_t>(best_class);
+        
+        // Apply activation based on config
+        if (config_.score_activation == ScoreActivation::SOFTMAX) {
+          // Softmax: compute over all classes
+          float max_logit = *std::max_element(class_logits.begin(), class_logits.end());
+          float sum_exp = 0.0f;
+          for (float & logit : class_logits) {
+            logit = std::exp(logit - max_logit);  // Numerical stability
+            sum_exp += logit;
+          }
+          
+          // Find argmax and get score
+          float max_score = -std::numeric_limits<float>::max();
+          size_t best_class = 0;
+          for (size_t i = 0; i < class_logits.size(); ++i) {
+            float prob = class_logits[i] / sum_exp;
+            if (prob > max_score) {
+              max_score = prob;
+              best_class = i;
+            }
+          }
+          score = max_score;
+          class_id = static_cast<int32_t>(best_class);
+        } else {
+          // Sigmoid or None: apply activation to each, then find max
+          float max_score = -std::numeric_limits<float>::max();
+          size_t best_class = 0;
+          for (size_t i = 0; i < class_logits.size(); ++i) {
+            float cls_score = applyActivation(class_logits[i]);
+            if (cls_score > max_score) {
+              max_score = cls_score;
+              best_class = i;
+            }
+          }
+          score = max_score;
+          class_id = static_cast<int32_t>(best_class);
+        }
       } else if (layout.score_idx < num_features) {
         // Fallback: use explicit score index
         float raw_score = extractValue(data, b, d, layout.score_idx, shape);
-        score = 1.0f / (1.0f + std::exp(-raw_score));  // Apply sigmoid
+        score = applyActivation(raw_score);
         if (layout.class_idx < num_features) {
           class_id = static_cast<int32_t>(std::round(extractValue(data, b, d, layout.class_idx, shape)));
         }
@@ -250,6 +294,169 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decode(
 
       SimpleDetection det;
       convertBbox(data, b, d, shape, det);
+      det.score = score;
+      det.class_id = class_id;
+
+      adjustToOriginal(det, metas[b], use_letterbox_);
+      dets.push_back(det);
+    }
+
+    batch_detections.push_back(applyNms(dets, config_.nms_iou_threshold));
+  }
+
+  return batch_detections;
+}
+
+std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decodeMultiOutput(
+  const std::vector<deep_ros::Tensor> & outputs,
+  const std::vector<ImageMeta> & metas) const
+{
+  std::vector<std::vector<SimpleDetection>> batch_detections;
+
+  if (outputs.empty()) {
+    throw std::runtime_error("No output tensors provided");
+  }
+
+  // Validate indices
+  const int boxes_idx = config_.output_boxes_idx;
+  const int scores_idx = config_.output_scores_idx;
+  const int classes_idx = config_.output_classes_idx;
+
+  if (boxes_idx < 0 || boxes_idx >= static_cast<int>(outputs.size())) {
+    throw std::runtime_error("Invalid output_boxes_idx: " + std::to_string(boxes_idx));
+  }
+  if (scores_idx < 0 || scores_idx >= static_cast<int>(outputs.size())) {
+    throw std::runtime_error("Invalid output_scores_idx: " + std::to_string(scores_idx));
+  }
+
+  const auto & boxes_tensor = outputs[boxes_idx];
+  const auto & scores_tensor = outputs[scores_idx];
+
+  const auto & boxes_shape = boxes_tensor.shape();
+  const auto & scores_shape = scores_tensor.shape();
+
+  if (boxes_shape.empty() || scores_shape.empty()) {
+    throw std::runtime_error("Output tensors have empty shapes");
+  }
+
+  const float * boxes_data = boxes_tensor.data_as<float>();
+  const float * scores_data = scores_tensor.data_as<float>();
+
+  if (!boxes_data || !scores_data) {
+    throw std::runtime_error("Output tensors have null data");
+  }
+
+  // Determine batch size from boxes tensor
+  // Expected format: [batch, num_detections, 4] for boxes
+  //                  [batch, num_detections, num_classes] for scores
+  size_t batch_size = boxes_shape[0];
+  size_t num_detections = boxes_shape.size() > 1 ? boxes_shape[1] : 1;
+  size_t bbox_dims = boxes_shape.size() > 2 ? boxes_shape[2] : boxes_shape.back();
+
+  if (bbox_dims < 4) {
+    throw std::runtime_error("Boxes tensor must have at least 4 values per detection");
+  }
+
+  batch_detections.reserve(std::min(batch_size, metas.size()));
+
+  for (size_t b = 0; b < batch_size && b < metas.size(); ++b) {
+    std::vector<SimpleDetection> dets;
+    dets.reserve(num_detections);
+
+    for (size_t d = 0; d < num_detections; ++d) {
+      // Extract bounding box
+      size_t box_offset = (b * num_detections + d) * bbox_dims;
+      float x = boxes_data[box_offset];
+      float y = boxes_data[box_offset + 1];
+      float w = boxes_data[box_offset + 2];
+      float h = boxes_data[box_offset + 3];
+
+      // Extract score and class
+      float score = 0.0f;
+      int32_t class_id = -1;
+
+      // Determine scores tensor layout: [batch, num_detections, num_classes] or [batch, num_classes, num_detections]
+      size_t scores_dim1 = scores_shape.size() > 1 ? scores_shape[1] : 1;
+      size_t scores_dim2 = scores_shape.size() > 2 ? scores_shape[2] : 1;
+
+      if (scores_dim1 == static_cast<size_t>(num_classes_) || scores_dim2 == static_cast<size_t>(num_classes_)) {
+        // Format: [batch, num_detections, num_classes] or [batch, num_classes, num_detections]
+        bool detections_first = (scores_dim1 == num_detections);
+
+        if (detections_first) {
+          // [batch, num_detections, num_classes]
+          size_t score_base = (b * num_detections + d) * num_classes_;
+          float max_score = -std::numeric_limits<float>::max();
+          size_t best_class = 0;
+
+          for (size_t c = 0; c < static_cast<size_t>(num_classes_); ++c) {
+            float raw_score = scores_data[score_base + c];
+            float activated_score = applyActivation(raw_score);
+            if (activated_score > max_score) {
+              max_score = activated_score;
+              best_class = c;
+            }
+          }
+          score = max_score;
+          class_id = static_cast<int32_t>(best_class);
+        } else {
+          // [batch, num_classes, num_detections]
+          float max_score = -std::numeric_limits<float>::max();
+          size_t best_class = 0;
+
+          for (size_t c = 0; c < static_cast<size_t>(num_classes_); ++c) {
+            float raw_score = scores_data[b * num_classes_ * num_detections + c * num_detections + d];
+            float activated_score = applyActivation(raw_score);
+            if (activated_score > max_score) {
+              max_score = activated_score;
+              best_class = c;
+            }
+          }
+          score = max_score;
+          class_id = static_cast<int32_t>(best_class);
+        }
+      } else {
+        // Single score per detection: [batch, num_detections]
+        size_t score_offset = b * num_detections + d;
+        float raw_score = scores_data[score_offset];
+        score = applyActivation(raw_score);
+
+        // Get class from separate classes tensor if available
+        if (classes_idx >= 0 && classes_idx < static_cast<int>(outputs.size())) {
+          const auto & classes_tensor = outputs[classes_idx];
+          const auto & classes_shape = classes_tensor.shape();
+          const float * classes_data = classes_tensor.data_as<float>();
+          if (classes_data && classes_shape.size() >= 2) {
+            size_t class_offset = b * classes_shape[1] + d;
+            class_id = static_cast<int32_t>(std::round(classes_data[class_offset]));
+          }
+        }
+      }
+
+      if (score < config_.score_threshold) {
+        continue;
+      }
+
+      // Create detection
+      SimpleDetection det;
+      // Convert bbox format based on config
+      if (bbox_format_ == BboxFormat::CXCYWH) {
+        det.x = x;
+        det.y = y;
+        det.width = w;
+        det.height = h;
+      } else if (bbox_format_ == BboxFormat::XYXY) {
+        det.x = x;
+        det.y = y;
+        det.width = w - x;
+        det.height = h - y;
+      } else if (bbox_format_ == BboxFormat::XYWH) {
+        det.x = x;
+        det.y = y;
+        det.width = w;
+        det.height = h;
+      }
+
       det.score = score;
       det.class_id = class_id;
 

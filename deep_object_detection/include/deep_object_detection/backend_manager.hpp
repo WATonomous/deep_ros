@@ -50,6 +50,7 @@ public:
   void buildProviderOrder();
   bool initialize(size_t start_index = 0);
   deep_ros::Tensor infer(const PackedInput & input);
+  std::vector<deep_ros::Tensor> inferAllOutputs(const PackedInput & input);
   bool fallbackToNextProvider();
 
   const std::string & activeProvider() const
@@ -93,8 +94,6 @@ private:
   std::string active_provider_{"unknown"};
   std::shared_ptr<deep_ros::BackendInferenceExecutor> executor_;
   std::shared_ptr<deep_ros::BackendMemoryAllocator> allocator_;
-  // plugin_loader_ must be declared before plugin_holder_ so it's destroyed after
-  // (members are destroyed in reverse declaration order)
   std::unique_ptr<pluginlib::ClassLoader<deep_ros::DeepBackendPlugin>> plugin_loader_;
   pluginlib::UniquePtr<deep_ros::DeepBackendPlugin> plugin_holder_;
   

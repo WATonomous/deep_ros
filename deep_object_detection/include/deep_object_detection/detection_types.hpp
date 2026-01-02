@@ -123,6 +123,13 @@ struct PostprocessingConfig
   float score_threshold = 0.25f;
   float nms_iou_threshold = 0.45f;
   int max_detections = 300;
+  ScoreActivation score_activation = ScoreActivation::SIGMOID;
+  
+  // Multi-output model support
+  bool use_multi_output = false;  // If true, model has separate outputs for boxes/scores/classes
+  int output_boxes_idx = 0;       // Index of output tensor containing boxes
+  int output_scores_idx = 1;      // Index of output tensor containing scores
+  int output_classes_idx = 2;     // Index of output tensor containing classes (optional, -1 if not separate)
 };
 
 /// @brief Main detection node parameters

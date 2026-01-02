@@ -30,13 +30,11 @@ find_package(rclcpp_lifecycle REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(cv_bridge REQUIRED)
-find_package(message_filters REQUIRED)
 find_package(vision_msgs REQUIRED)
 find_package(deep_core REQUIRED)
 find_package(deep_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rcl_interfaces REQUIRED)
-find_package(yaml-cpp REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc)
 
 add_executable(deep_object_detection_node
@@ -55,27 +53,20 @@ target_include_directories(deep_object_detection_lib PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
-ament_target_dependencies(deep_object_detection_lib
-  rclcpp
-  rclcpp_components
-  rclcpp_lifecycle
-  sensor_msgs
-  image_transport
-  cv_bridge
-  message_filters
-  vision_msgs
-  deep_core
-  deep_msgs
-  pluginlib
-  rcl_interfaces
-)
-
 target_link_libraries(deep_object_detection_lib
-  pluginlib::pluginlib
-  rclcpp::rclcpp
+  ${rclcpp_TARGETS}
+  ${rclcpp_components_TARGETS}
+  ${rclcpp_lifecycle_TARGETS}
+  ${sensor_msgs_TARGETS}
+  ${image_transport_TARGETS}
+  ${cv_bridge_TARGETS}
+  ${vision_msgs_TARGETS}
+  ${deep_core_TARGETS}
+  ${deep_msgs_TARGETS}
+  ${pluginlib_TARGETS}
+  ${rcl_interfaces_TARGETS}
   deep_core::deep_core_lib
   ${OpenCV_LIBRARIES}
-  yaml-cpp
 )
 
 target_include_directories(deep_object_detection_lib SYSTEM PRIVATE ${OpenCV_INCLUDE_DIRS})
@@ -117,21 +108,18 @@ if(BUILD_TESTING)
       deep_object_detection_lib
       deep_core::deep_core_lib
       ${OpenCV_LIBRARIES}
+      ${rclcpp_TARGETS}
+      ${rclcpp_lifecycle_TARGETS}
+      ${sensor_msgs_TARGETS}
+      ${image_transport_TARGETS}
+      ${cv_bridge_TARGETS}
+      ${vision_msgs_TARGETS}
+      ${deep_core_TARGETS}
+      ${deep_msgs_TARGETS}
+      ${pluginlib_TARGETS}
+      ${rcl_interfaces_TARGETS}
     )
     target_include_directories(test_postprocessors PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-    ament_target_dependencies(test_postprocessors
-      rclcpp
-      rclcpp_lifecycle
-      sensor_msgs
-      image_transport
-      cv_bridge
-      message_filters
-      vision_msgs
-      deep_core
-      deep_msgs
-      pluginlib
-      rcl_interfaces
-    )
   endif()
 
   if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_preprocessor.cpp)
@@ -140,22 +128,18 @@ if(BUILD_TESTING)
       deep_object_detection_lib
       deep_core::deep_core_lib
       ${OpenCV_LIBRARIES}
-      yaml-cpp
+      ${rclcpp_TARGETS}
+      ${rclcpp_lifecycle_TARGETS}
+      ${sensor_msgs_TARGETS}
+      ${image_transport_TARGETS}
+      ${cv_bridge_TARGETS}
+      ${vision_msgs_TARGETS}
+      ${deep_core_TARGETS}
+      ${deep_msgs_TARGETS}
+      ${pluginlib_TARGETS}
+      ${rcl_interfaces_TARGETS}
     )
     target_include_directories(test_preprocessor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-    ament_target_dependencies(test_preprocessor
-      rclcpp
-      rclcpp_lifecycle
-      sensor_msgs
-      image_transport
-      cv_bridge
-      message_filters
-      vision_msgs
-      deep_core
-      deep_msgs
-      pluginlib
-      rcl_interfaces
-    )
   endif()
 endif()
 

@@ -18,6 +18,11 @@ deep_object_detection_node:
       score_threshold: 0.25
       nms_iou_threshold: 0.45
       max_detections: 300
+      score_activation: "sigmoid"
+      use_multi_output: false
+      output_boxes_idx: 0
+      output_scores_idx: 1
+      output_classes_idx: 2
     
     use_camera_sync: true
     camera_sync_topic: "/multi_camera_sync/multi_image_compressed"

@@ -86,7 +86,28 @@ bool OrtGpuBackendExecutor::load_model_impl(const std::filesystem::path & model_
     model_path_ = model_path;
 
     // Create session with GPU execution provider
+    // Note: For TensorRT, this is where the engine is built or loaded from cache
+    // Even with caching, this can take 5-30+ seconds depending on model size and GPU
+    const bool using_tensorrt = is_tensorrt_provider();
+    if (using_tensorrt) {
+      if (enable_trt_engine_cache_) {
+        RCLCPP_INFO(
+          logger_,
+          "Creating TensorRT session (loading cached engine from %s if available)...",
+          trt_engine_cache_path_.c_str());
+      } else {
+        RCLCPP_INFO(logger_, "Creating TensorRT session (building engine, caching disabled)...");
+      }
+    } else {
+      RCLCPP_INFO(logger_, "Creating CUDA session...");
+    }
+
+    auto start_time = std::chrono::steady_clock::now();
     session_ = std::make_unique<Ort::Session>(*env_, model_path_.c_str(), *session_options_);
+    auto end_time = std::chrono::steady_clock::now();
+    auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+
+    RCLCPP_INFO(logger_, "Session created in %.2f seconds", duration_ms / 1000.0);
 
     return true;
   } catch (const std::exception & e) {
