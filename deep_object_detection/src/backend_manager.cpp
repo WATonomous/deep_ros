@@ -19,8 +19,11 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <memory>
 #include <stdexcept>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include <deep_core/plugin_interfaces/deep_backend_plugin.hpp>
 #include <pluginlib/class_loader.hpp>
@@ -32,197 +35,125 @@ namespace deep_object_detection
 BackendManager::BackendManager(rclcpp_lifecycle::LifecycleNode & node, const DetectionParams & params)
 : node_(node)
 , params_(params)
-, plugin_loader_(std::make_unique<pluginlib::ClassLoader<deep_ros::DeepBackendPlugin>>("deep_core", "deep_ros::DeepBackendPlugin"))
+, plugin_loader_(
+    std::make_unique<pluginlib::ClassLoader<deep_ros::DeepBackendPlugin>>("deep_core", "deep_ros::DeepBackendPlugin"))
 {}
 
 BackendManager::~BackendManager()
 {
-  // Reset plugin holder before plugin loader is destroyed
-  // This ensures proper cleanup order to avoid class_loader warnings
   plugin_holder_.reset();
   executor_.reset();
   allocator_.reset();
 }
 
-void BackendManager::buildProviderOrder()
+void BackendManager::initialize()
 {
-  auto normalize_pref = params_.preferred_provider;
-  std::transform(normalize_pref.begin(), normalize_pref.end(), normalize_pref.begin(), [](unsigned char c) {
-    return static_cast<char>(std::tolower(c));
-  });
-
-  provider_order_.clear();
-  if (normalize_pref == "cpu") {
-    provider_order_.push_back(Provider::CPU);
-  } else if (normalize_pref == "cuda") {
-    provider_order_.push_back(Provider::CUDA);
-    provider_order_.push_back(Provider::CPU);
-  } else {
-    provider_order_.push_back(Provider::TENSORRT);
-    provider_order_.push_back(Provider::CUDA);
-    provider_order_.push_back(Provider::CPU);
-  }
-  active_provider_index_ = 0;
-}
-
-bool BackendManager::initialize(size_t start_index)
-{
-  return initializeBackend(start_index);
+  provider_ = parseProvider(params_.preferred_provider);
+  initializeBackend();
 }
 
 deep_ros::Tensor BackendManager::infer(const PackedInput & input)
 {
   if (!executor_) {
-    throw std::runtime_error("No backend initialized; dropping batch");
+    RCLCPP_ERROR(node_.get_logger(), "Cannot perform inference: no backend executor initialized");
+    throw std::runtime_error("Cannot perform inference: no backend executor initialized");
   }
 
-  size_t attempts = 0;
-  const size_t max_attempts = provider_order_.empty() ? 1 : provider_order_.size();
-  while (attempts < max_attempts) {
-    auto input_tensor = buildInputTensor(input);
-    try {
-      return executor_->run_inference(input_tensor);
-    } catch (const std::exception & e) {
-      RCLCPP_WARN(node_.get_logger(), "Inference failed on provider %s: %s", active_provider_.c_str(), e.what());
-    }
-
-    ++attempts;
-    if (!fallbackToNextProvider()) {
-      break;
-    }
-  }
-
-  throw std::runtime_error("All backends failed");
+  auto input_tensor = buildInputTensor(input);
+  return executor_->run_inference(input_tensor);
 }
 
 std::vector<deep_ros::Tensor> BackendManager::inferAllOutputs(const PackedInput & input)
 {
   if (!executor_) {
-    throw std::runtime_error("No backend initialized; dropping batch");
+    RCLCPP_ERROR(node_.get_logger(), "Cannot perform inference: no backend executor initialized");
+    throw std::runtime_error("Cannot perform inference: no backend executor initialized");
   }
 
-  // TODO: When backend executor interface supports multiple outputs, enhance this
-  // For now, return a vector with the single output for backward compatibility
-  // The postprocessor can still handle multi-output configuration when available
-  size_t attempts = 0;
-  const size_t max_attempts = provider_order_.empty() ? 1 : provider_order_.size();
-  while (attempts < max_attempts) {
-    auto input_tensor = buildInputTensor(input);
-    try {
-      auto output = executor_->run_inference(input_tensor);
-      return {output};  // Return as single-element vector
-    } catch (const std::exception & e) {
-      RCLCPP_WARN(node_.get_logger(), "Inference failed on provider %s: %s", active_provider_.c_str(), e.what());
-    }
-
-    ++attempts;
-    if (!fallbackToNextProvider()) {
-      break;
-    }
-  }
-
-  throw std::runtime_error("All backends failed");
+  auto input_tensor = buildInputTensor(input);
+  auto output = executor_->run_inference(input_tensor);
+  return {output};
 }
 
-bool BackendManager::fallbackToNextProvider()
+Provider BackendManager::parseProvider(const std::string & provider_str) const
 {
-  if (provider_order_.empty()) {
-    return false;
+  std::string normalized = provider_str;
+  std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
+
+  if (normalized == "cpu") {
+    return Provider::CPU;
+  } else if (normalized == "cuda") {
+    return Provider::CUDA;
+  } else if (normalized == "tensorrt") {
+    return Provider::TENSORRT;
+  } else {
+    throw std::runtime_error("Unknown provider: " + provider_str + ". Valid options: cpu, cuda, tensorrt");
+  }
+}
+
+void BackendManager::initializeBackend()
+{
+  // Check CUDA availability if needed
+  if ((provider_ == Provider::TENSORRT || provider_ == Provider::CUDA) && !isCudaRuntimeAvailable()) {
+    std::string error = "Provider " + providerToString(provider_) +
+                        " requires CUDA runtime libraries (libcudart/libcuda) which are not available";
+    throw std::runtime_error(error);
   }
 
-  const size_t next_index = active_provider_index_ + 1;
-  if (next_index >= provider_order_.size()) {
-    RCLCPP_ERROR(node_.get_logger(), "No more providers to fall back to");
-    return false;
+  const std::string plugin_name = providerToPluginName(provider_);
+  if (plugin_name.empty()) {
+    throw std::runtime_error("No plugin name for provider: " + providerToString(provider_));
   }
 
-  active_provider_index_ = next_index;
-  RCLCPP_WARN(
+  rclcpp_lifecycle::LifecycleNode::SharedPtr backend_node;
+  if (provider_ == Provider::TENSORRT || provider_ == Provider::CUDA) {
+    const auto provider_name = providerToString(provider_);
+    auto overrides = std::vector<rclcpp::Parameter>{
+      rclcpp::Parameter("Backend.device_id", params_.device_id),
+      rclcpp::Parameter("Backend.execution_provider", provider_name),
+      rclcpp::Parameter("Backend.trt_engine_cache_enable", params_.enable_trt_engine_cache),
+      rclcpp::Parameter("Backend.trt_engine_cache_path", params_.trt_engine_cache_path)};
+    backend_node = createBackendConfigNode(provider_name, std::move(overrides));
+  } else {
+    backend_node = createBackendConfigNode("cpu");
+  }
+
+  plugin_holder_ = plugin_loader_->createUniqueInstance(plugin_name);
+  plugin_holder_->initialize(backend_node);
+  allocator_ = plugin_holder_->get_allocator();
+  executor_ = plugin_holder_->get_inference_executor();
+
+  if (!executor_ || !allocator_) {
+    throw std::runtime_error("Executor or allocator is null after plugin initialization");
+  }
+
+  if (params_.model_path.empty()) {
+    throw std::runtime_error("Model path is not set");
+  }
+
+  if (!executor_->load_model(params_.model_path)) {
+    throw std::runtime_error("Failed to load model: " + params_.model_path);
+  }
+
+  active_provider_ = providerToString(provider_);
+  declareActiveProviderParameter(active_provider_);
+  warmupTensorShapeCache();
+
+  RCLCPP_INFO(
     node_.get_logger(),
-    "Falling back to provider: %s",
-    providerToString(provider_order_[active_provider_index_]).c_str());
-  return initializeBackend(active_provider_index_);
+    "Initialized backend using provider: %s (device %d)",
+    active_provider_.c_str(),
+    params_.device_id);
 }
 
-bool BackendManager::initializeBackend(size_t start_index)
-{
-  for (size_t idx = start_index; idx < provider_order_.size(); ++idx) {
-    active_provider_index_ = idx;
-    Provider provider = provider_order_[idx];
-
-    if ((provider == Provider::TENSORRT || provider == Provider::CUDA) && !isCudaRuntimeAvailable()) {
-      RCLCPP_WARN(
-        node_.get_logger(),
-        "Skipping provider %s: CUDA runtime libraries not found (libcudart/libcuda).",
-        providerToString(provider).c_str());
-      continue;
-    }
-
-    try {
-      const std::string plugin_name = providerToPluginName(provider);
-      if (plugin_name.empty()) {
-        RCLCPP_WARN(node_.get_logger(), "No plugin name for provider: %s", providerToString(provider).c_str());
-        continue;
-      }
-
-      // Create backend config node with provider-specific parameters
-      rclcpp_lifecycle::LifecycleNode::SharedPtr backend_node;
-      if (provider == Provider::TENSORRT || provider == Provider::CUDA) {
-        const auto provider_name = providerToString(provider);
-        auto overrides = std::vector<rclcpp::Parameter>{
-          rclcpp::Parameter("Backend.device_id", params_.device_id),
-          rclcpp::Parameter("Backend.execution_provider", provider_name),
-          rclcpp::Parameter("Backend.trt_engine_cache_enable", params_.enable_trt_engine_cache),
-          rclcpp::Parameter("Backend.trt_engine_cache_path", params_.trt_engine_cache_path)};
-        backend_node = createBackendConfigNode(provider_name, std::move(overrides));
-      } else {
-        backend_node = createBackendConfigNode("cpu");
-      }
-
-      // Load plugin using pluginlib
-      plugin_holder_ = plugin_loader_->createUniqueInstance(plugin_name);
-      plugin_holder_->initialize(backend_node);
-      allocator_ = plugin_holder_->get_allocator();
-      executor_ = plugin_holder_->get_inference_executor();
-
-      if (!executor_ || !allocator_) {
-        throw std::runtime_error("Executor or allocator is null");
-      }
-
-      if (params_.model_path.empty()) {
-        throw std::runtime_error("Model path is not set");
-      }
-
-      if (!executor_->load_model(params_.model_path)) {
-        throw std::runtime_error("Failed to load model: " + params_.model_path);
-      }
-
-      active_provider_ = providerToString(provider);
-      declareActiveProviderParameter(active_provider_);
-      warmupTensorShapeCache(provider);
-
-      RCLCPP_INFO(
-        node_.get_logger(),
-        "Initialized backend using provider: %s (device %d)",
-        active_provider_.c_str(),
-        params_.device_id);
-      return true;
-    } catch (const std::exception & e) {
-      RCLCPP_WARN(
-        node_.get_logger(), "Provider %s initialization failed: %s", providerToString(provider).c_str(), e.what());
-    }
-  }
-
-  RCLCPP_ERROR(node_.get_logger(), "Unable to initialize any execution provider");
-  return false;
-}
-
-void BackendManager::warmupTensorShapeCache(Provider provider)
+void BackendManager::warmupTensorShapeCache()
 {
   if (!params_.warmup_tensor_shapes) {
     return;
   }
-  if (provider == Provider::CPU) {
+  if (provider_ == Provider::CPU) {
     return;
   }
   if (!executor_ || !allocator_) {
@@ -235,22 +166,15 @@ void BackendManager::warmupTensorShapeCache(Provider provider)
 
   const int batch = params_.batch_size_limit;
   RCLCPP_INFO(
-    node_.get_logger(),
-    "Priming %s backend tensor shapes for batch size %d",
-    providerToString(provider).c_str(),
-    batch);
+    node_.get_logger(), "Priming %s backend tensor shapes for batch size %d", active_provider_.c_str(), batch);
 
   PackedInput dummy;
   dummy.shape = {static_cast<size_t>(batch), channels, height, width};
   dummy.data.assign(static_cast<size_t>(batch) * per_image, 0.0f);
 
   auto input_tensor = buildInputTensor(dummy);
-  try {
-    (void)executor_->run_inference(input_tensor);
-    RCLCPP_DEBUG(node_.get_logger(), "Cached tensor shape for batch size %d", batch);
-  } catch (const std::exception & e) {
-    RCLCPP_WARN(node_.get_logger(), "Warmup inference for batch size %d failed: %s", batch, e.what());
-  }
+  (void)executor_->run_inference(input_tensor);
+  RCLCPP_DEBUG(node_.get_logger(), "Cached tensor shape for batch size %d", batch);
 }
 
 bool BackendManager::isCudaRuntimeAvailable() const
@@ -333,30 +257,26 @@ std::string BackendManager::providerToPluginName(Provider provider) const
 std::vector<size_t> BackendManager::getOutputShape(const std::vector<size_t> & input_shape) const
 {
   if (!executor_ || !allocator_) {
-    throw std::runtime_error("No backend executor or allocator available");
-  }
-
-  try {
-    // Create a dummy input tensor to run inference and get output shape
-    PackedInput dummy;
-    dummy.shape = input_shape;
-    size_t total_elements = 1;
-    for (size_t dim : input_shape) {
-      total_elements *= dim;
-    }
-    dummy.data.assign(total_elements, 0.0f);
-
-    auto input_tensor = buildInputTensor(dummy);
-    auto output_tensor = executor_->run_inference(input_tensor);
-    return output_tensor.shape();
-  } catch (const std::exception & e) {
-    RCLCPP_WARN(
+    RCLCPP_ERROR(
       node_.get_logger(),
-      "Failed to get output shape from model via dummy inference: %s. Will use auto-detection.",
-      e.what());
-    return {};  // Return empty to trigger auto-detection
+      "Cannot get output shape: backend not initialized (executor: %s, allocator: %s)",
+      executor_ ? "available" : "null",
+      allocator_ ? "available" : "null");
+    throw std::runtime_error("Cannot get output shape: backend executor or allocator not available");
   }
+
+  // NO TRY-CATCH - let exceptions propagate
+  PackedInput dummy;
+  dummy.shape = input_shape;
+  size_t total_elements = 1;
+  for (size_t dim : input_shape) {
+    total_elements *= dim;
+  }
+  dummy.data.assign(total_elements, 0.0f);
+
+  auto input_tensor = buildInputTensor(dummy);
+  auto output_tensor = executor_->run_inference(input_tensor);
+  return output_tensor.shape();
 }
 
 }  // namespace deep_object_detection
-

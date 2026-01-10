@@ -26,6 +26,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "deep_ort_gpu_backend_plugin/ort_gpu_memory_allocator.hpp"

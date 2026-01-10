@@ -15,9 +15,11 @@
 #include "deep_object_detection/generic_postprocessor.hpp"
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace deep_object_detection
 {
@@ -47,43 +49,35 @@ GenericPostprocessor::OutputLayout GenericPostprocessor::detectLayout(const std:
     throw std::runtime_error("Output tensor must have at least 2 dimensions");
   }
 
-  // Default: assume [batch, detections, features] or [batch, features, detections]
   layout.batch_dim = 0;
-  
-  // Determine layout based on shape
+
   if (output_shape.size() == 2) {
-    // [batch, features] - single detection per batch
-    layout.detection_dim = 0;  // Batch is also detection
+    layout.detection_dim = 0;
     layout.feature_dim = 1;
     layout.bbox_start_idx = 0;
     layout.bbox_count = 4;
     layout.score_idx = 4;
     layout.class_idx = 5;
   } else if (output_shape.size() == 3) {
-    // [batch, dim1, dim2] - need to determine which is detections vs features
     size_t dim1 = output_shape[1];
     size_t dim2 = output_shape[2];
-    
+
     if (dim1 <= 8 && dim2 > 8) {
-      // [batch, features, detections] - features first
       layout.detection_dim = 2;
       layout.feature_dim = 1;
     } else if (dim1 > 8 && dim2 <= 8) {
-      // [batch, detections, features] - detections first
       layout.detection_dim = 1;
       layout.feature_dim = 2;
     } else {
-      // Ambiguous - default to [batch, detections, features]
       layout.detection_dim = 1;
       layout.feature_dim = 2;
     }
-    
+
     layout.bbox_start_idx = 0;
     layout.bbox_count = 4;
     layout.score_idx = 4;
     layout.class_idx = 5;
   } else {
-    // Higher dimensional - use defaults
     layout.detection_dim = 1;
     layout.feature_dim = 2;
     layout.bbox_start_idx = 0;
@@ -101,9 +95,7 @@ float GenericPostprocessor::applyActivation(float raw_score) const
     case ScoreActivation::SIGMOID:
       return 1.0f / (1.0f + std::exp(-raw_score));
     case ScoreActivation::SOFTMAX:
-      // Softmax is applied over all classes, not individual scores
-      // This is a fallback - softmax should be computed over all class logits
-      return raw_score;  // Will be handled in decode method
+      return raw_score;
     case ScoreActivation::NONE:
     default:
       return raw_score;
@@ -118,19 +110,15 @@ float GenericPostprocessor::extractValue(
   const std::vector<size_t> & shape) const
 {
   if (shape.size() == 2) {
-    // [batch, features]
     return data[batch_idx * shape[1] + feature_idx];
   } else if (shape.size() == 3) {
     if (layout_.detection_dim == 1 && layout_.feature_dim == 2) {
-      // [batch, detections, features]
       return data[(batch_idx * shape[1] + detection_idx) * shape[2] + feature_idx];
     } else if (layout_.detection_dim == 2 && layout_.feature_dim == 1) {
-      // [batch, features, detections]
       return data[(batch_idx * shape[1] + feature_idx) * shape[2] + detection_idx];
     }
   }
-  
-  // Generic indexing for higher dimensions
+
   size_t index = 0;
   size_t stride = 1;
   for (int i = static_cast<int>(shape.size()) - 1; i >= 0; --i) {
@@ -145,7 +133,7 @@ float GenericPostprocessor::extractValue(
     index += dim_idx * stride;
     stride *= shape[i];
   }
-  
+
   return data[index];
 }
 
@@ -156,17 +144,13 @@ void GenericPostprocessor::convertBbox(
   const std::vector<size_t> & shape,
   SimpleDetection & det) const
 {
-  // Extract bbox coordinates
   float coords[4];
   for (size_t i = 0; i < 4; ++i) {
-    coords[i] = extractValue(
-      bbox_data, batch_idx, detection_idx, layout_.bbox_start_idx + i, shape);
+    coords[i] = extractValue(bbox_data, batch_idx, detection_idx, layout_.bbox_start_idx + i, shape);
   }
 
-  // Convert based on format
   switch (bbox_format_) {
     case BboxFormat::XYXY: {
-      // [x1, y1, x2, y2] -> center + size
       det.x = (coords[0] + coords[2]) * 0.5f;
       det.y = (coords[1] + coords[3]) * 0.5f;
       det.width = coords[2] - coords[0];
@@ -174,7 +158,6 @@ void GenericPostprocessor::convertBbox(
       break;
     }
     case BboxFormat::XYWH: {
-      // [x, y, w, h] -> center + size
       det.x = coords[0] + coords[2] * 0.5f;
       det.y = coords[1] + coords[3] * 0.5f;
       det.width = coords[2];
@@ -183,7 +166,6 @@ void GenericPostprocessor::convertBbox(
     }
     case BboxFormat::CXCYWH:
     default: {
-      // [cx, cy, w, h] -> already in center format
       det.x = coords[0];
       det.y = coords[1];
       det.width = coords[2];
@@ -208,52 +190,48 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decode(
     throw std::runtime_error("Output tensor has null data");
   }
 
-  // Auto-detect layout if needed
   OutputLayout layout = layout_;
   if (layout.auto_detect) {
     layout = detectLayout(shape);
   }
 
-  // Determine dimensions
   size_t batch_size = shape[layout.batch_dim];
   size_t num_detections = shape.size() > layout.detection_dim ? shape[layout.detection_dim] : 1;
   size_t num_features = shape.size() > layout.feature_dim ? shape[layout.feature_dim] : shape.back();
 
   batch_detections.reserve(std::min(batch_size, metas.size()));
-  
+
   for (size_t b = 0; b < batch_size && b < metas.size(); ++b) {
     std::vector<SimpleDetection> dets;
     dets.reserve(num_detections);
 
     for (size_t d = 0; d < num_detections; ++d) {
-      // Extract class scores and apply activation
-      // Format: [x, y, w, h, class0_score, class1_score, ..., classN_score]
-      
       float score = 0.0f;
       int32_t class_id = -1;
-      
-      if (num_features > layout.bbox_count) {
-        // Extract all class logits
-        size_t class_end = std::min(num_features, static_cast<size_t>(num_classes_ + layout.bbox_count));
+
+      size_t class_start_idx =
+        (config_.class_score_start_idx >= 0) ? static_cast<size_t>(config_.class_score_start_idx) : layout.bbox_count;
+      size_t class_count = (config_.class_score_count > 0) ? static_cast<size_t>(config_.class_score_count)
+                                                           : static_cast<size_t>(num_classes_);
+
+      if (config_.class_score_mode == ClassScoreMode::ALL_CLASSES && num_features > class_start_idx) {
+        size_t class_end = std::min(num_features, class_start_idx + class_count);
         std::vector<float> class_logits;
-        class_logits.reserve(class_end - layout.bbox_count);
-        
-        for (size_t c = layout.bbox_count; c < class_end; ++c) {
+        class_logits.reserve(class_end - class_start_idx);
+
+        for (size_t c = class_start_idx; c < class_end; ++c) {
           float cls_logit = extractValue(data, b, d, c, shape);
           class_logits.push_back(cls_logit);
         }
-        
-        // Apply activation based on config
+
         if (config_.score_activation == ScoreActivation::SOFTMAX) {
-          // Softmax: compute over all classes
           float max_logit = *std::max_element(class_logits.begin(), class_logits.end());
           float sum_exp = 0.0f;
           for (float & logit : class_logits) {
-            logit = std::exp(logit - max_logit);  // Numerical stability
+            logit = std::exp(logit - max_logit);
             sum_exp += logit;
           }
-          
-          // Find argmax and get score
+
           float max_score = -std::numeric_limits<float>::max();
           size_t best_class = 0;
           for (size_t i = 0; i < class_logits.size(); ++i) {
@@ -266,7 +244,6 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decode(
           score = max_score;
           class_id = static_cast<int32_t>(best_class);
         } else {
-          // Sigmoid or None: apply activation to each, then find max
           float max_score = -std::numeric_limits<float>::max();
           size_t best_class = 0;
           for (size_t i = 0; i < class_logits.size(); ++i) {
@@ -279,11 +256,18 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decode(
           score = max_score;
           class_id = static_cast<int32_t>(best_class);
         }
+      } else if (config_.class_score_mode == ClassScoreMode::SINGLE_CONFIDENCE) {
+        if (layout.score_idx < num_features) {
+          float raw_score = extractValue(data, b, d, layout.score_idx, shape);
+          score = applyActivation(raw_score);
+        }
+        if (layout.class_idx < num_features && layout.class_idx != SIZE_MAX) {
+          class_id = static_cast<int32_t>(std::round(extractValue(data, b, d, layout.class_idx, shape)));
+        }
       } else if (layout.score_idx < num_features) {
-        // Fallback: use explicit score index
         float raw_score = extractValue(data, b, d, layout.score_idx, shape);
         score = applyActivation(raw_score);
-        if (layout.class_idx < num_features) {
+        if (layout.class_idx < num_features && layout.class_idx != SIZE_MAX) {
           class_id = static_cast<int32_t>(std::round(extractValue(data, b, d, layout.class_idx, shape)));
         }
       }
@@ -297,19 +281,26 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decode(
       det.score = score;
       det.class_id = class_id;
 
-      adjustToOriginal(det, metas[b], use_letterbox_);
+      // Apply coordinate transformation only if coordinates are in preprocessed space
+      if (config_.coordinate_space == CoordinateSpace::PREPROCESSED) {
+        adjustToOriginal(det, metas[b], use_letterbox_);
+      }
       dets.push_back(det);
     }
 
-    batch_detections.push_back(applyNms(dets, config_.nms_iou_threshold));
+    // Apply NMS only if enabled
+    if (config_.enable_nms) {
+      batch_detections.push_back(applyNms(dets, config_.nms_iou_threshold));
+    } else {
+      batch_detections.push_back(dets);
+    }
   }
 
   return batch_detections;
 }
 
 std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decodeMultiOutput(
-  const std::vector<deep_ros::Tensor> & outputs,
-  const std::vector<ImageMeta> & metas) const
+  const std::vector<deep_ros::Tensor> & outputs, const std::vector<ImageMeta> & metas) const
 {
   std::vector<std::vector<SimpleDetection>> batch_detections;
 
@@ -317,7 +308,6 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decodeMultiOutpu
     throw std::runtime_error("No output tensors provided");
   }
 
-  // Validate indices
   const int boxes_idx = config_.output_boxes_idx;
   const int scores_idx = config_.output_scores_idx;
   const int classes_idx = config_.output_classes_idx;
@@ -346,9 +336,6 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decodeMultiOutpu
     throw std::runtime_error("Output tensors have null data");
   }
 
-  // Determine batch size from boxes tensor
-  // Expected format: [batch, num_detections, 4] for boxes
-  //                  [batch, num_detections, num_classes] for scores
   size_t batch_size = boxes_shape[0];
   size_t num_detections = boxes_shape.size() > 1 ? boxes_shape[1] : 1;
   size_t bbox_dims = boxes_shape.size() > 2 ? boxes_shape[2] : boxes_shape.back();
@@ -364,23 +351,19 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decodeMultiOutpu
     dets.reserve(num_detections);
 
     for (size_t d = 0; d < num_detections; ++d) {
-      // Extract bounding box
       size_t box_offset = (b * num_detections + d) * bbox_dims;
       float x = boxes_data[box_offset];
       float y = boxes_data[box_offset + 1];
       float w = boxes_data[box_offset + 2];
       float h = boxes_data[box_offset + 3];
 
-      // Extract score and class
       float score = 0.0f;
       int32_t class_id = -1;
 
-      // Determine scores tensor layout: [batch, num_detections, num_classes] or [batch, num_classes, num_detections]
       size_t scores_dim1 = scores_shape.size() > 1 ? scores_shape[1] : 1;
       size_t scores_dim2 = scores_shape.size() > 2 ? scores_shape[2] : 1;
 
       if (scores_dim1 == static_cast<size_t>(num_classes_) || scores_dim2 == static_cast<size_t>(num_classes_)) {
-        // Format: [batch, num_detections, num_classes] or [batch, num_classes, num_detections]
         bool detections_first = (scores_dim1 == num_detections);
 
         if (detections_first) {
@@ -416,12 +399,10 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decodeMultiOutpu
           class_id = static_cast<int32_t>(best_class);
         }
       } else {
-        // Single score per detection: [batch, num_detections]
         size_t score_offset = b * num_detections + d;
         float raw_score = scores_data[score_offset];
         score = applyActivation(raw_score);
 
-        // Get class from separate classes tensor if available
         if (classes_idx >= 0 && classes_idx < static_cast<int>(outputs.size())) {
           const auto & classes_tensor = outputs[classes_idx];
           const auto & classes_shape = classes_tensor.shape();
@@ -437,9 +418,7 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decodeMultiOutpu
         continue;
       }
 
-      // Create detection
       SimpleDetection det;
-      // Convert bbox format based on config
       if (bbox_format_ == BboxFormat::CXCYWH) {
         det.x = x;
         det.y = y;
@@ -460,18 +439,25 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decodeMultiOutpu
       det.score = score;
       det.class_id = class_id;
 
-      adjustToOriginal(det, metas[b], use_letterbox_);
+      // Apply coordinate transformation only if coordinates are in preprocessed space
+      if (config_.coordinate_space == CoordinateSpace::PREPROCESSED) {
+        adjustToOriginal(det, metas[b], use_letterbox_);
+      }
       dets.push_back(det);
     }
 
-    batch_detections.push_back(applyNms(dets, config_.nms_iou_threshold));
+    // Apply NMS only if enabled
+    if (config_.enable_nms) {
+      batch_detections.push_back(applyNms(dets, config_.nms_iou_threshold));
+    } else {
+      batch_detections.push_back(dets);
+    }
   }
 
   return batch_detections;
 }
 
-void GenericPostprocessor::adjustToOriginal(
-  SimpleDetection & det, const ImageMeta & meta, bool use_letterbox) const
+void GenericPostprocessor::adjustToOriginal(SimpleDetection & det, const ImageMeta & meta, bool use_letterbox) const
 {
   float cx = det.x;
   float cy = det.y;
@@ -534,9 +520,7 @@ std::vector<SimpleDetection> GenericPostprocessor::applyNms(
   }
 
   std::stable_sort(
-    dets.begin(), dets.end(), [](const SimpleDetection & a, const SimpleDetection & b) { 
-      return a.score > b.score; 
-    });
+    dets.begin(), dets.end(), [](const SimpleDetection & a, const SimpleDetection & b) { return a.score > b.score; });
 
   std::vector<bool> suppressed(dets.size(), false);
   for (size_t i = 0; i < dets.size(); ++i) {
@@ -560,8 +544,7 @@ std::vector<SimpleDetection> GenericPostprocessor::applyNms(
   return result;
 }
 
-std::string GenericPostprocessor::classLabel(
-  int class_id, const std::vector<std::string> & class_names) const
+std::string GenericPostprocessor::classLabel(int class_id, const std::vector<std::string> & class_names) const
 {
   if (class_id >= 0 && static_cast<size_t>(class_id) < class_names.size()) {
     return class_names[static_cast<size_t>(class_id)];
@@ -613,4 +596,3 @@ void GenericPostprocessor::fillDetectionMessage(
 }
 
 }  // namespace deep_object_detection
-

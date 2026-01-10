@@ -2,40 +2,78 @@ deep_object_detection_node:
   ros__parameters:
     model_path: "/workspaces/deep_ros/yolov8m.onnx"
     class_names_path: "/workspaces/deep_ros/deep_object_detection/config/coco_classes.txt"
-    
+
     model:
       num_classes: 80
       bbox_format: "cxcywh"
-    
+
     preprocessing:
       input_width: 640
       input_height: 640
       normalization_type: "scale_0_1"
       resize_method: "letterbox"
       color_format: "rgb"
-    
+
     postprocessing:
       score_threshold: 0.25
       nms_iou_threshold: 0.45
       max_detections: 300
       score_activation: "sigmoid"
+      enable_nms: true  # Set to false if model already applies NMS (e.g., DETR)
       use_multi_output: false
       output_boxes_idx: 0
       output_scores_idx: 1
       output_classes_idx: 2
-    
+
+      # Class score extraction configuration
+      # class_score_mode: "all_classes" extracts all class scores/logits (default)
+      # class_score_mode: "single_confidence" uses single confidence + class_id
+      class_score_mode: "all_classes"
+      # class_score_start_idx: -1 means use bbox_count (default), otherwise specify start index
+      # Useful when objectness/confidence comes before class scores: [bbox(4), objectness, class0, class1, ...]
+      class_score_start_idx: -1
+      # class_score_count: -1 means use num_classes (default), otherwise specify count
+      class_score_count: -1
+
+      # Coordinate system configuration
+      # coordinate_space: "preprocessed" means coordinates are in preprocessed image space (default)
+      # coordinate_space: "original" means coordinates are already in original image space
+      coordinate_space: "preprocessed"
+
+      # Manual layout specification (optional - set auto_detect: false to use)
+      # If auto_detect is true (default), layout is automatically detected from model output shape
+      # Use manual layout when auto-detection fails or for ambiguous tensor shapes
+      # Example: For shape [1, 7, 100] where dim1=features(7), dim2=detections(100):
+      #   layout:
+      #     auto_detect: false
+      #     batch_dim: 0      # Dimension 0 is batch
+      #     detection_dim: 2  # Dimension 2 contains detections (100)
+      #     feature_dim: 1     # Dimension 1 contains features (7)
+      #     bbox_start_idx: 0  # Bbox starts at feature index 0
+      #     bbox_count: 4      # 4 bbox values (x, y, w, h)
+      #     score_idx: 4       # Score is at feature index 4
+      #     class_idx: 5       # Class ID is at feature index 5
+      layout:
+        auto_detect: true  # Set to false and specify dimensions below to override auto-detection
+        batch_dim: 0
+        detection_dim: 1
+        feature_dim: 2
+        bbox_start_idx: 0
+        bbox_count: 4
+        score_idx: 4
+        class_idx: 5
+
     use_camera_sync: true
     camera_sync_topic: "/multi_camera_sync/multi_image_compressed"
     input_transport: "compressed"
     input_qos_reliability: "best_effort"
     output_detections_topic: "/detections"
-    
+
     batch_size_limit: 3
     queue_size: 10
-    
+
     preferred_provider: "tensorrt"
     device_id: 0
     warmup_tensor_shapes: true
     enable_trt_engine_cache: true
     trt_engine_cache_path: "/tmp/deep_ros_ort_trt_cache"
-

@@ -35,23 +35,15 @@ class BackendMemoryAllocator;
 namespace deep_object_detection
 {
 
-/**
- * @brief Manages backend inference execution with provider fallback
- *
- * Handles loading of ONNX models via pluginlib backends with automatic
- * fallback from TensorRT -> CUDA -> CPU.
- */
 class BackendManager
 {
 public:
   BackendManager(rclcpp_lifecycle::LifecycleNode & node, const DetectionParams & params);
   ~BackendManager();
 
-  void buildProviderOrder();
-  bool initialize(size_t start_index = 0);
+  void initialize();
   deep_ros::Tensor infer(const PackedInput & input);
   std::vector<deep_ros::Tensor> inferAllOutputs(const PackedInput & input);
-  bool fallbackToNextProvider();
 
   const std::string & activeProvider() const
   {
@@ -68,18 +60,12 @@ public:
     return static_cast<bool>(executor_);
   }
 
-  /**
-   * @brief Get the expected output shape from the model
-   *
-   * @param input_shape Input tensor shape to use for shape inference
-   * @return Output tensor shape
-   * @throws std::runtime_error if model not loaded or shape inference fails
-   */
   std::vector<size_t> getOutputShape(const std::vector<size_t> & input_shape) const;
 
 private:
-  bool initializeBackend(size_t start_index);
-  void warmupTensorShapeCache(Provider provider);
+  void initializeBackend();
+  void warmupTensorShapeCache();
+  Provider parseProvider(const std::string & provider_str) const;
   bool isCudaRuntimeAvailable() const;
   std::string providerToString(Provider provider) const;
   rclcpp_lifecycle::LifecycleNode::SharedPtr createBackendConfigNode(
@@ -89,16 +75,14 @@ private:
 
   rclcpp_lifecycle::LifecycleNode & node_;
   const DetectionParams & params_;
-  std::vector<Provider> provider_order_;
-  size_t active_provider_index_{0};
+  Provider provider_;
   std::string active_provider_{"unknown"};
   std::shared_ptr<deep_ros::BackendInferenceExecutor> executor_;
   std::shared_ptr<deep_ros::BackendMemoryAllocator> allocator_;
   std::unique_ptr<pluginlib::ClassLoader<deep_ros::DeepBackendPlugin>> plugin_loader_;
   pluginlib::UniquePtr<deep_ros::DeepBackendPlugin> plugin_holder_;
-  
+
   std::string providerToPluginName(Provider provider) const;
 };
 
 }  // namespace deep_object_detection
-

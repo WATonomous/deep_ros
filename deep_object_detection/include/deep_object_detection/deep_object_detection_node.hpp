@@ -23,7 +23,6 @@
 
 #include <image_transport/subscriber.hpp>
 #include <opencv2/core/mat.hpp>
-#include <lifecycle_msgs/msg/state.hpp>
 #include <rclcpp/node_options.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
@@ -37,27 +36,18 @@
 #endif
 
 #include "deep_object_detection/backend_manager.hpp"
-#include "deep_object_detection/detection_msg_alias.hpp"
-#include "deep_object_detection/generic_postprocessor.hpp"
 #include "deep_object_detection/detection_types.hpp"
+#include "deep_object_detection/generic_postprocessor.hpp"
 #include "deep_object_detection/image_preprocessor.hpp"
 
 namespace deep_object_detection
 {
 
-/**
- * @brief Generic deep learning object detection node
- *
- * Supports any ONNX-compatible object detection model with configurable
- * input/output formats. Processes batched multi-camera inputs and outputs
- * Detection2DArray messages.
- */
 class DeepObjectDetectionNode : public rclcpp_lifecycle::LifecycleNode
 {
 public:
   explicit DeepObjectDetectionNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
-  // Lifecycle node callbacks
   rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_configure(
     const rclcpp_lifecycle::State & state) override;
 
@@ -83,7 +73,6 @@ private:
   void onMultiImage(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg);
   void handleCompressedImage(const sensor_msgs::msg::CompressedImage::ConstSharedPtr & msg, int camera_id);
   void enqueueImage(cv::Mat image, const std_msgs::msg::Header & header);
-  size_t queueLimit() const;
   bool isCompressedTopic(const std::string & topic) const;
   std::string formatShape(const std::vector<size_t> & shape) const;
   void onBatchTimer();
@@ -117,11 +106,7 @@ private:
   std::unique_ptr<BackendManager> backend_manager_;
 };
 
-/**
- * @brief Factory function to create the deep object detection node
- */
 std::shared_ptr<rclcpp_lifecycle::LifecycleNode> createDeepObjectDetectionNode(
   const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
 }  // namespace deep_object_detection
-

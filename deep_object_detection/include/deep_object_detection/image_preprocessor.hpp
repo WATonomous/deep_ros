@@ -24,43 +24,17 @@
 namespace deep_object_detection
 {
 
-/**
- * @brief Configurable image preprocessor for object detection models
- *
- * Supports various normalization schemes (ImageNet, scale_0_1, custom, none) and
- * resize methods (letterbox, simple resize, crop, pad).
- */
 class ImagePreprocessor
 {
 public:
-  /**
-   * @brief Construct an image preprocessor
-   *
-   * @param config Preprocessing configuration
-   */
   explicit ImagePreprocessor(const PreprocessingConfig & config);
-
-  /**
-   * @brief Preprocess a single image
-   *
-   * @param bgr Input BGR image
-   * @param meta Output metadata for coordinate transformation
-   * @return Preprocessed image (float32, normalized)
-   */
   cv::Mat preprocess(const cv::Mat & bgr, ImageMeta & meta) const;
-
-  /**
-   * @brief Pack multiple preprocessed images into a batch tensor
-   *
-   * @param images Vector of preprocessed images
-   * @return Packed input tensor data
-   */
   const PackedInput & pack(const std::vector<cv::Mat> & images) const;
 
-  /**
-   * @brief Get the current preprocessing configuration
-   */
-  const PreprocessingConfig & config() const { return config_; }
+  const PreprocessingConfig & config() const
+  {
+    return config_;
+  }
 
 private:
   cv::Mat applyLetterbox(const cv::Mat & bgr, ImageMeta & meta) const;
@@ -75,4 +49,3 @@ private:
 };
 
 }  // namespace deep_object_detection
-

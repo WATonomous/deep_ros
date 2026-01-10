@@ -54,22 +54,24 @@ target_include_directories(deep_object_detection_lib PUBLIC
 )
 
 target_link_libraries(deep_object_detection_lib
-  ${rclcpp_TARGETS}
-  ${rclcpp_components_TARGETS}
-  ${rclcpp_lifecycle_TARGETS}
-  ${sensor_msgs_TARGETS}
-  ${image_transport_TARGETS}
-  ${cv_bridge_TARGETS}
-  ${vision_msgs_TARGETS}
-  ${deep_core_TARGETS}
-  ${deep_msgs_TARGETS}
-  ${pluginlib_TARGETS}
-  ${rcl_interfaces_TARGETS}
-  deep_core::deep_core_lib
-  ${OpenCV_LIBRARIES}
+  PUBLIC
+    ${rclcpp_TARGETS}
+    ${rclcpp_lifecycle_TARGETS}
+    ${deep_core_TARGETS}
+    ${pluginlib_TARGETS}
+    ${image_transport_TARGETS}
+    ${vision_msgs_TARGETS}
+    ${deep_msgs_TARGETS}
+    deep_core::deep_core_lib
+  PRIVATE
+    ${rclcpp_components_TARGETS}
+    ${sensor_msgs_TARGETS}
+    ${cv_bridge_TARGETS}
+    ${rcl_interfaces_TARGETS}
+    ${OpenCV_LIBRARIES}
 )
 
-target_include_directories(deep_object_detection_lib SYSTEM PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_include_directories(deep_object_detection_lib SYSTEM PUBLIC ${OpenCV_INCLUDE_DIRS})
 
 rclcpp_components_register_nodes(deep_object_detection_lib "deep_object_detection::DeepObjectDetectionNode")
 
@@ -101,47 +103,28 @@ install(DIRECTORY config launch
 )
 
 if(BUILD_TESTING)
-  find_package(ament_cmake_gtest REQUIRED)
+  find_package(deep_test REQUIRED)
   if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_postprocessors.cpp)
-    ament_add_gtest(test_postprocessors test/test_postprocessors.cpp)
-    target_link_libraries(test_postprocessors
-      deep_object_detection_lib
-      deep_core::deep_core_lib
-      ${OpenCV_LIBRARIES}
-      ${rclcpp_TARGETS}
-      ${rclcpp_lifecycle_TARGETS}
-      ${sensor_msgs_TARGETS}
-      ${image_transport_TARGETS}
-      ${cv_bridge_TARGETS}
-      ${vision_msgs_TARGETS}
-      ${deep_core_TARGETS}
-      ${deep_msgs_TARGETS}
-      ${pluginlib_TARGETS}
-      ${rcl_interfaces_TARGETS}
+    add_deep_test(test_postprocessors test/test_postprocessors.cpp
+      LIBRARIES
+        deep_object_detection_lib
+        ${OpenCV_LIBRARIES}
+        ${cv_bridge_TARGETS}
+        ${sensor_msgs_TARGETS}
+        ${rcl_interfaces_TARGETS}
     )
-    target_include_directories(test_postprocessors PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   endif()
 
   if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_preprocessor.cpp)
-    ament_add_gtest(test_preprocessor test/test_preprocessor.cpp)
-    target_link_libraries(test_preprocessor
-      deep_object_detection_lib
-      deep_core::deep_core_lib
-      ${OpenCV_LIBRARIES}
-      ${rclcpp_TARGETS}
-      ${rclcpp_lifecycle_TARGETS}
-      ${sensor_msgs_TARGETS}
-      ${image_transport_TARGETS}
-      ${cv_bridge_TARGETS}
-      ${vision_msgs_TARGETS}
-      ${deep_core_TARGETS}
-      ${deep_msgs_TARGETS}
-      ${pluginlib_TARGETS}
-      ${rcl_interfaces_TARGETS}
+    add_deep_test(test_preprocessor test/test_preprocessor.cpp
+      LIBRARIES
+        deep_object_detection_lib
+        ${OpenCV_LIBRARIES}
+        ${cv_bridge_TARGETS}
+        ${sensor_msgs_TARGETS}
+        ${rcl_interfaces_TARGETS}
     )
-    target_include_directories(test_preprocessor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   endif()
 endif()
 
 ament_package()
-

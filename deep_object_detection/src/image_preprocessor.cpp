@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstring>
 #include <stdexcept>
+#include <vector>
 
 #include <opencv2/imgproc.hpp>
 
@@ -39,7 +40,7 @@ cv::Mat ImagePreprocessor::preprocess(const cv::Mat & bgr, ImageMeta & meta) con
   meta.original_height = bgr.rows;
 
   cv::Mat resized;
-  
+
   switch (config_.resize_method) {
     case ResizeMethod::LETTERBOX:
       resized = applyLetterbox(bgr, meta);
@@ -56,16 +57,11 @@ cv::Mat ImagePreprocessor::preprocess(const cv::Mat & bgr, ImageMeta & meta) con
       break;
   }
 
-  // Convert to float and normalize
   cv::Mat float_image;
   resized.convertTo(float_image, CV_32F, 1.0 / 255.0);
-  
-  // Apply normalization
   applyNormalization(float_image);
-  
-  // Apply color conversion if needed
   applyColorConversion(float_image);
-  
+
   return float_image;
 }
 
@@ -76,7 +72,7 @@ cv::Mat ImagePreprocessor::applyLetterbox(const cv::Mat & bgr, ImageMeta & meta)
     static_cast<float>(config_.input_height) / static_cast<float>(bgr.rows));
   const int new_w = std::max(1, static_cast<int>(std::round(bgr.cols * scale)));
   const int new_h = std::max(1, static_cast<int>(std::round(bgr.rows * scale)));
-  
+
   cv::Mat resized;
   cv::resize(bgr, resized, cv::Size(new_w, new_h));
 
@@ -88,13 +84,19 @@ cv::Mat ImagePreprocessor::applyLetterbox(const cv::Mat & bgr, ImageMeta & meta)
   const int pad_bottom = pad_h - pad_top;
 
   cv::copyMakeBorder(
-    resized, resized, pad_top, pad_bottom, pad_left, pad_right, 
-    cv::BORDER_CONSTANT, cv::Scalar(config_.pad_value, config_.pad_value, config_.pad_value));
+    resized,
+    resized,
+    pad_top,
+    pad_bottom,
+    pad_left,
+    pad_right,
+    cv::BORDER_CONSTANT,
+    cv::Scalar(config_.pad_value, config_.pad_value, config_.pad_value));
 
   meta.scale_x = meta.scale_y = scale;
   meta.pad_x = static_cast<float>(pad_left);
   meta.pad_y = static_cast<float>(pad_top);
-  
+
   return resized;
 }
 
@@ -110,57 +112,58 @@ cv::Mat ImagePreprocessor::applyResize(const cv::Mat & bgr, ImageMeta & meta) co
 
 cv::Mat ImagePreprocessor::applyCrop(const cv::Mat & bgr, ImageMeta & meta) const
 {
-  // Center crop
   const int crop_x = (bgr.cols - config_.input_width) / 2;
   const int crop_y = (bgr.rows - config_.input_height) / 2;
-  
+
   cv::Mat cropped;
   if (bgr.cols >= config_.input_width && bgr.rows >= config_.input_height) {
     cropped = bgr(cv::Rect(crop_x, crop_y, config_.input_width, config_.input_height)).clone();
   } else {
-    // If image is smaller than target, resize first then crop
-    float scale = std::max(
-      static_cast<float>(config_.input_width) / bgr.cols,
-      static_cast<float>(config_.input_height) / bgr.rows);
+    float scale =
+      std::max(static_cast<float>(config_.input_width) / bgr.cols, static_cast<float>(config_.input_height) / bgr.rows);
     cv::Mat scaled;
     cv::resize(bgr, scaled, cv::Size(), scale, scale);
     const int new_crop_x = (scaled.cols - config_.input_width) / 2;
     const int new_crop_y = (scaled.rows - config_.input_height) / 2;
     cropped = scaled(cv::Rect(new_crop_x, new_crop_y, config_.input_width, config_.input_height)).clone();
   }
-  
+
   meta.scale_x = static_cast<float>(meta.original_width) / static_cast<float>(config_.input_width);
   meta.scale_y = static_cast<float>(meta.original_height) / static_cast<float>(config_.input_height);
   meta.pad_x = static_cast<float>(-crop_x);
   meta.pad_y = static_cast<float>(-crop_y);
-  
+
   return cropped;
 }
 
 cv::Mat ImagePreprocessor::applyPad(const cv::Mat & bgr, ImageMeta & meta) const
 {
-  // Pad image to target size without resizing
   const int pad_w = config_.input_width - bgr.cols;
   const int pad_h = config_.input_height - bgr.rows;
-  
+
   cv::Mat padded;
   if (pad_w >= 0 && pad_h >= 0) {
     const int pad_left = pad_w / 2;
     const int pad_right = pad_w - pad_left;
     const int pad_top = pad_h / 2;
     const int pad_bottom = pad_h - pad_top;
-    
+
     cv::copyMakeBorder(
-      bgr, padded, pad_top, pad_bottom, pad_left, pad_right,
-      cv::BORDER_CONSTANT, cv::Scalar(config_.pad_value, config_.pad_value, config_.pad_value));
-    
+      bgr,
+      padded,
+      pad_top,
+      pad_bottom,
+      pad_left,
+      pad_right,
+      cv::BORDER_CONSTANT,
+      cv::Scalar(config_.pad_value, config_.pad_value, config_.pad_value));
+
     meta.pad_x = static_cast<float>(pad_left);
     meta.pad_y = static_cast<float>(pad_top);
   } else {
-    // Image larger than target, resize first
     return applyResize(bgr, meta);
   }
-  
+
   meta.scale_x = meta.scale_y = 1.0f;
   return padded;
 }
@@ -169,19 +172,15 @@ void ImagePreprocessor::applyNormalization(cv::Mat & image) const
 {
   switch (config_.normalization_type) {
     case NormalizationType::IMAGENET: {
-      // ImageNet normalization: (pixel - mean) / std
-      // Mean: [0.485, 0.456, 0.406], Std: [0.229, 0.224, 0.225] (RGB order)
       static const std::array<float, 3> imagenet_mean = {0.485f, 0.456f, 0.406f};
       static const std::array<float, 3> imagenet_std = {0.229f, 0.224f, 0.225f};
-      
+
       std::vector<cv::Mat> channels;
       cv::split(image, channels);
-      
-      // Note: OpenCV loads as BGR, so we apply in reverse order
-      channels[0] = (channels[0] - imagenet_mean[2]) / imagenet_std[2];  // B
-      channels[1] = (channels[1] - imagenet_mean[1]) / imagenet_std[1];  // G
-      channels[2] = (channels[2] - imagenet_mean[0]) / imagenet_std[0];  // R
-      
+      channels[0] = (channels[0] - imagenet_mean[2]) / imagenet_std[2];
+      channels[1] = (channels[1] - imagenet_mean[1]) / imagenet_std[1];
+      channels[2] = (channels[2] - imagenet_mean[0]) / imagenet_std[0];
+
       cv::merge(channels, image);
       break;
     }
@@ -189,12 +188,10 @@ void ImagePreprocessor::applyNormalization(cv::Mat & image) const
       if (config_.mean.size() >= 3 && config_.std.size() >= 3) {
         std::vector<cv::Mat> channels;
         cv::split(image, channels);
-        
-        // Apply custom mean/std (assuming BGR order in config)
         for (size_t i = 0; i < 3; ++i) {
           channels[i] = (channels[i] - config_.mean[i]) / config_.std[i];
         }
-        
+
         cv::merge(channels, image);
       }
       break;
@@ -202,8 +199,6 @@ void ImagePreprocessor::applyNormalization(cv::Mat & image) const
     case NormalizationType::SCALE_0_1:
     case NormalizationType::NONE:
     default:
-      // Scale normalization is just 0-255 to 0-1, already done in convertTo
-      // NONE means no additional normalization
       break;
   }
 }
@@ -213,7 +208,6 @@ void ImagePreprocessor::applyColorConversion(cv::Mat & image) const
   if (config_.color_format == "rgb" || config_.color_format == "RGB") {
     cv::cvtColor(image, image, cv::COLOR_BGR2RGB);
   }
-  // If "bgr" or anything else, keep as BGR (default from OpenCV)
 }
 
 const PackedInput & ImagePreprocessor::pack(const std::vector<cv::Mat> & images) const
@@ -261,4 +255,3 @@ const PackedInput & ImagePreprocessor::pack(const std::vector<cv::Mat> & images)
 }
 
 }  // namespace deep_object_detection
-

@@ -37,6 +37,7 @@ The generic postprocessor automatically adapts to **any** tensor layout:
 ## Configuration
 
 ### Model Metadata (Minimal - Auto-Detected)
+
 ```yaml
 model:
   num_classes: 80  # Number of classes your model detects
@@ -44,6 +45,7 @@ model:
 ```
 
 ### Preprocessing
+
 ```yaml
 preprocessing:
   input_width: 640   # Match your model's expected input size
@@ -54,6 +56,7 @@ preprocessing:
 ```
 
 ### Postprocessing
+
 ```yaml
 postprocessing:
   score_threshold: 0.25
@@ -89,6 +92,7 @@ ros2 launch camera_sync multi_camera_sync.launch.yaml
 Or with custom configuration using a parameter file:
 
 Create a config file `camera_sync_config.yaml`:
+
 ```yaml
 multi_camera_sync:
   ros__parameters:
@@ -101,6 +105,7 @@ multi_camera_sync:
 ```
 
 Then launch with:
+
 ```bash
 ros2 launch camera_sync multi_camera_sync.launch.yaml \
   --ros-args --params-file camera_sync_config.yaml
@@ -190,7 +195,7 @@ def generate_launch_description():
 
 #### How It Works Together
 
-1. **Camera Sync Node**: 
+1. **Camera Sync Node**:
    - Subscribes to individual camera topics (e.g., `/CAM_FRONT/image_rect_compressed`, `/CAM_FRONT_LEFT/image_rect_compressed`, etc.)
    - Uses message filters to synchronize images based on timestamps
    - Publishes a **single MultiImage message** to `~/multi_image_compressed` containing all synchronized images as an array
@@ -202,8 +207,10 @@ def generate_launch_description():
    - Processes them together through the model
 
 3. **Data Flow**:
+
    ```
-   Camera Topics → Camera Sync Node → MultiImage Message → Detection Node → Detections
+Camera Topics → Camera Sync Node → MultiImage Message → Detection Node → Detections
+
    ```
 
 **Key Point**: The camera sync node publishes **one topic** (`~/multi_image_compressed`) that contains **all synchronized images** in a single message. The detection node subscribes to this topic and extracts the individual images for batch processing.
@@ -251,4 +258,3 @@ The node supports backward compatibility with legacy parameter names:
 - ONNX Runtime (CPU/CUDA/TensorRT)
 - OpenCV
 - deep_core, deep_msgs
-

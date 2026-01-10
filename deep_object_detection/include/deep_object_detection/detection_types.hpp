@@ -20,6 +20,27 @@
 #include <opencv2/core/mat.hpp>
 #include <std_msgs/msg/header.hpp>
 
+#if __has_include(<deep_msgs/msg/detection2_d_array.hpp>)
+  #include <deep_msgs/msg/detection2_d.hpp>
+  #include <deep_msgs/msg/detection2_d_array.hpp>
+
+namespace deep_object_detection
+{
+using Detection2DMsg = deep_msgs::msg::Detection2D;
+using Detection2DArrayMsg = deep_msgs::msg::Detection2DArray;
+}  // namespace deep_object_detection
+#else
+  #include <vision_msgs/msg/detection2_d.hpp>
+  #include <vision_msgs/msg/detection2_d_array.hpp>
+  #include <vision_msgs/msg/object_hypothesis_with_pose.hpp>
+
+namespace deep_object_detection
+{
+using Detection2DMsg = vision_msgs::msg::Detection2D;
+using Detection2DArrayMsg = vision_msgs::msg::Detection2DArray;
+}  // namespace deep_object_detection
+#endif
+
 namespace deep_object_detection
 {
 
@@ -30,47 +51,53 @@ enum class Provider
   CPU
 };
 
-/// @brief Postprocessor type enumeration (deprecated - always uses generic)
 enum class PostprocessorType
 {
-  GENERIC     // Generic auto-detecting postprocessor (always used)
+  GENERIC
 };
 
-/// @brief Bounding box format enumeration
 enum class BboxFormat
 {
-  CXCYWH,     // Center-x, center-y, width, height
-  XYXY,       // Top-left x, top-left y, bottom-right x, bottom-right y
-  XYWH        // Top-left x, top-left y, width, height
+  CXCYWH,
+  XYXY,
+  XYWH
 };
 
-/// @brief Normalization type enumeration
 enum class NormalizationType
 {
-  IMAGENET,   // ImageNet mean/std normalization
-  SCALE_0_1,  // Simple 0-255 to 0-1 normalization (scale by 1/255)
-  CUSTOM,     // Custom mean/std values
-  NONE        // No normalization
+  IMAGENET,
+  SCALE_0_1,
+  CUSTOM,
+  NONE
 };
 
-/// @brief Resize method enumeration
 enum class ResizeMethod
 {
-  LETTERBOX,  // Letterbox resize with padding
-  RESIZE,     // Simple resize (may distort aspect ratio)
-  CROP,       // Center crop
-  PAD         // Pad to target size
+  LETTERBOX,
+  RESIZE,
+  CROP,
+  PAD
 };
 
-/// @brief Score activation enumeration
 enum class ScoreActivation
 {
-  SIGMOID,    // Sigmoid activation
-  SOFTMAX,    // Softmax activation
-  NONE        // No activation (raw scores)
+  SIGMOID,
+  SOFTMAX,
+  NONE
 };
 
-/// @brief Image metadata for coordinate transformation
+enum class ClassScoreMode
+{
+  ALL_CLASSES,
+  SINGLE_CONFIDENCE
+};
+
+enum class CoordinateSpace
+{
+  PREPROCESSED,
+  ORIGINAL
+};
+
 struct ImageMeta
 {
   int original_width = 0;
@@ -81,21 +108,18 @@ struct ImageMeta
   float pad_y = 0.0f;
 };
 
-/// @brief Queued image with header for batch processing
 struct QueuedImage
 {
   cv::Mat bgr;
   std_msgs::msg::Header header;
 };
 
-/// @brief Packed input tensor data
 struct PackedInput
 {
   std::vector<float> data;
   std::vector<size_t> shape;
 };
 
-/// @brief Preprocessing configuration
 struct PreprocessingConfig
 {
   int input_width = 640;
@@ -106,74 +130,72 @@ struct PreprocessingConfig
   ResizeMethod resize_method = ResizeMethod::LETTERBOX;
   bool keep_aspect_ratio = true;
   int pad_value = 114;
-  std::string color_format = "bgr";  // "bgr" or "rgb"
+  std::string color_format = "bgr";
 };
 
-/// @brief Model metadata configuration
 struct ModelMetadata
 {
   int num_classes = 80;
   std::string class_names_file;
-  BboxFormat bbox_format = BboxFormat::CXCYWH;  // Auto-detected from model output
+  BboxFormat bbox_format = BboxFormat::CXCYWH;
 };
 
-/// @brief Postprocessing configuration
+struct OutputLayoutConfig
+{
+  bool auto_detect = true;
+  int batch_dim = 0;
+  int detection_dim = 1;
+  int feature_dim = 2;
+  int bbox_start_idx = 0;
+  int bbox_count = 4;
+  int score_idx = 4;
+  int class_idx = 5;
+};
+
 struct PostprocessingConfig
 {
   float score_threshold = 0.25f;
   float nms_iou_threshold = 0.45f;
   int max_detections = 300;
   ScoreActivation score_activation = ScoreActivation::SIGMOID;
-  
-  // Multi-output model support
-  bool use_multi_output = false;  // If true, model has separate outputs for boxes/scores/classes
-  int output_boxes_idx = 0;       // Index of output tensor containing boxes
-  int output_scores_idx = 1;      // Index of output tensor containing scores
-  int output_classes_idx = 2;     // Index of output tensor containing classes (optional, -1 if not separate)
+  bool enable_nms = true;
+  bool use_multi_output = false;
+  int output_boxes_idx = 0;
+  int output_scores_idx = 1;
+  int output_classes_idx = 2;
+  ClassScoreMode class_score_mode = ClassScoreMode::ALL_CLASSES;
+  int class_score_start_idx = -1;
+  int class_score_count = -1;
+  CoordinateSpace coordinate_space = CoordinateSpace::PREPROCESSED;
+  OutputLayoutConfig layout;
 };
 
-/// @brief Main detection node parameters
 struct DetectionParams
 {
-  // Model configuration
   std::string model_path;
   ModelMetadata model_metadata;
-  
-  // Preprocessing configuration
   PreprocessingConfig preprocessing;
-  
-  // Postprocessing configuration
   PostprocessingConfig postprocessing;
-  
-  // Topic configuration
   std::string input_image_topic{"/camera/image_raw"};
   std::vector<std::string> camera_topics;
   std::string input_transport{"raw"};
   std::string input_qos_reliability{"best_effort"};
   std::string output_detections_topic{"/detections"};
-  
-  // Batching configuration
   int batch_size_limit{3};
   int queue_size{10};
-  
-  // Backend configuration
   std::string preferred_provider{"tensorrt"};
   int device_id{0};
   bool warmup_tensor_shapes{true};
   bool enable_trt_engine_cache{false};
   std::string trt_engine_cache_path{"/tmp/deep_ros_ort_trt_cache"};
-  
-  // Class names (loaded from file or config)
   std::vector<std::string> class_names;
 };
 
-/// @brief Helper to convert string to PostprocessorType (deprecated - always returns GENERIC)
 inline PostprocessorType stringToPostprocessorType(const std::string & /*type*/)
 {
-  return PostprocessorType::GENERIC;  // Always use generic
+  return PostprocessorType::GENERIC;
 }
 
-/// @brief Helper to convert string to BboxFormat
 inline BboxFormat stringToBboxFormat(const std::string & format)
 {
   if (format == "cxcywh" || format == "CXCYWH") {
@@ -183,25 +205,23 @@ inline BboxFormat stringToBboxFormat(const std::string & format)
   } else if (format == "xywh" || format == "XYWH") {
     return BboxFormat::XYWH;
   }
-  return BboxFormat::CXCYWH;  // Default
+  return BboxFormat::CXCYWH;
 }
 
-/// @brief Helper to convert string to NormalizationType
 inline NormalizationType stringToNormalizationType(const std::string & type)
 {
   if (type == "imagenet" || type == "IMAGENET") {
     return NormalizationType::IMAGENET;
   } else if (type == "scale_0_1" || type == "SCALE_0_1" || type == "yolo" || type == "YOLO") {
-    return NormalizationType::SCALE_0_1;  // "yolo" kept for backward compatibility
+    return NormalizationType::SCALE_0_1;
   } else if (type == "custom" || type == "CUSTOM") {
     return NormalizationType::CUSTOM;
   } else if (type == "none" || type == "NONE") {
     return NormalizationType::NONE;
   }
-  return NormalizationType::SCALE_0_1;  // Default
+  return NormalizationType::SCALE_0_1;
 }
 
-/// @brief Helper to convert string to ResizeMethod
 inline ResizeMethod stringToResizeMethod(const std::string & method)
 {
   if (method == "letterbox" || method == "LETTERBOX") {
@@ -213,10 +233,9 @@ inline ResizeMethod stringToResizeMethod(const std::string & method)
   } else if (method == "pad" || method == "PAD") {
     return ResizeMethod::PAD;
   }
-  return ResizeMethod::LETTERBOX;  // Default
+  return ResizeMethod::LETTERBOX;
 }
 
-/// @brief Helper to convert string to ScoreActivation
 inline ScoreActivation stringToScoreActivation(const std::string & activation)
 {
   if (activation == "sigmoid" || activation == "SIGMOID") {
@@ -226,8 +245,37 @@ inline ScoreActivation stringToScoreActivation(const std::string & activation)
   } else if (activation == "none" || activation == "NONE") {
     return ScoreActivation::NONE;
   }
-  return ScoreActivation::SIGMOID;  // Default
+  return ScoreActivation::SIGMOID;
 }
 
-}  // namespace deep_object_detection
+inline ClassScoreMode stringToClassScoreMode(const std::string & mode)
+{
+  if (mode == "all_classes" || mode == "ALL_CLASSES") {
+    return ClassScoreMode::ALL_CLASSES;
+  } else if (mode == "single_confidence" || mode == "SINGLE_CONFIDENCE") {
+    return ClassScoreMode::SINGLE_CONFIDENCE;
+  }
+  return ClassScoreMode::ALL_CLASSES;
+}
 
+inline CoordinateSpace stringToCoordinateSpace(const std::string & space)
+{
+  if (space == "preprocessed" || space == "PREPROCESSED") {
+    return CoordinateSpace::PREPROCESSED;
+  } else if (space == "original" || space == "ORIGINAL") {
+    return CoordinateSpace::ORIGINAL;
+  }
+  return CoordinateSpace::PREPROCESSED;
+}
+
+struct SimpleDetection
+{
+  float x = 0.0f;
+  float y = 0.0f;
+  float width = 0.0f;
+  float height = 0.0f;
+  float score = 0.0f;
+  int32_t class_id = -1;
+};
+
+}  // namespace deep_object_detection

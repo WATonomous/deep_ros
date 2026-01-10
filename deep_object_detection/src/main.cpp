@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "deep_object_detection/deep_object_detection_node.hpp"
+#include <iostream>
 
 #include <rclcpp/executors.hpp>
+
+#include "deep_object_detection/deep_object_detection_node.hpp"
 
 int main(int argc, char ** argv)
 {
@@ -31,4 +33,3 @@ int main(int argc, char ** argv)
   rclcpp::shutdown();
   return 0;
 }
-

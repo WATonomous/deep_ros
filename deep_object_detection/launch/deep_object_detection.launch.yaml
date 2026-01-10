@@ -1,0 +1,65 @@
+# Copyright (c) 2025-present WATonomous. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+launch:
+  - arg:
+      name: "config_file"
+      default: "$(find-pkg-share deep_object_detection)/config/generic_model_params.yaml"
+      description: "Path to YAML config for object detection"
+
+  - arg:
+      name: "output_detections_topic"
+      default: "/detections"
+      description: "Detections output topic override"
+
+  - arg:
+      name: "preferred_provider"
+      default: "tensorrt"
+      description: "Execution provider: tensorrt|cuda|cpu (explicit, node fails if provider fails)"
+
+  - arg:
+      name: "use_lifecycle_manager"
+      default: "true"
+      description: "Whether to use nav2_lifecycle_manager for automatic lifecycle transitions"
+
+  # Main object detection node
+  # Note: LD_LIBRARY_PATH is set via env_hook in onnxruntime_gpu_vendor package
+  # If needed, you can set it explicitly using the env field below
+  - node:
+      pkg: "deep_object_detection"
+      exec: "deep_object_detection_node"
+      name: "deep_object_detection_node"
+      output: "screen"
+      param:
+        - from: "$(var config_file)"
+        - name: "output_detections_topic"
+          value: "$(var output_detections_topic)"
+        - name: "preferred_provider"
+          value: "$(var preferred_provider)"
+
+  # Nav2 lifecycle manager for automatic transitions
+  # Note: YAML launch files don't support conditional execution or timers
+  # The lifecycle manager will start immediately (no delay)
+  - node:
+      pkg: "nav2_lifecycle_manager"
+      exec: "lifecycle_manager"
+      name: "detection_lifecycle_manager"
+      output: "screen"
+      param:
+        - name: "node_names"
+          value: ["deep_object_detection_node"]
+        - name: "autostart"
+          value: true
+        - name: "bond_timeout"
+          value: 0.0
