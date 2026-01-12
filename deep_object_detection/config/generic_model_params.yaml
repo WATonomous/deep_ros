@@ -19,42 +19,20 @@ deep_object_detection_node:
       nms_iou_threshold: 0.45
       max_detections: 300
       score_activation: "sigmoid"
-      enable_nms: true  # Set to false if model already applies NMS (e.g., DETR)
+      enable_nms: true
       use_multi_output: false
       output_boxes_idx: 0
       output_scores_idx: 1
       output_classes_idx: 2
 
-      # Class score extraction configuration
-      # class_score_mode: "all_classes" extracts all class scores/logits (default)
-      # class_score_mode: "single_confidence" uses single confidence + class_id
       class_score_mode: "all_classes"
-      # class_score_start_idx: -1 means use bbox_count (default), otherwise specify start index
-      # Useful when objectness/confidence comes before class scores: [bbox(4), objectness, class0, class1, ...]
       class_score_start_idx: -1
-      # class_score_count: -1 means use num_classes (default), otherwise specify count
       class_score_count: -1
 
-      # Coordinate system configuration
-      # coordinate_space: "preprocessed" means coordinates are in preprocessed image space (default)
-      # coordinate_space: "original" means coordinates are already in original image space
       coordinate_space: "preprocessed"
 
-      # Manual layout specification (optional - set auto_detect: false to use)
-      # If auto_detect is true (default), layout is automatically detected from model output shape
-      # Use manual layout when auto-detection fails or for ambiguous tensor shapes
-      # Example: For shape [1, 7, 100] where dim1=features(7), dim2=detections(100):
-      #   layout:
-      #     auto_detect: false
-      #     batch_dim: 0      # Dimension 0 is batch
-      #     detection_dim: 2  # Dimension 2 contains detections (100)
-      #     feature_dim: 1     # Dimension 1 contains features (7)
-      #     bbox_start_idx: 0  # Bbox starts at feature index 0
-      #     bbox_count: 4      # 4 bbox values (x, y, w, h)
-      #     score_idx: 4       # Score is at feature index 4
-      #     class_idx: 5       # Class ID is at feature index 5
       layout:
-        auto_detect: true  # Set to false and specify dimensions below to override auto-detection
+        auto_detect: true
         batch_dim: 0
         detection_dim: 1
         feature_dim: 2
@@ -65,12 +43,15 @@ deep_object_detection_node:
 
     use_camera_sync: true
     camera_sync_topic: "/multi_camera_sync/multi_image_compressed"
-    input_transport: "compressed"
     input_qos_reliability: "best_effort"
     output_detections_topic: "/detections"
 
-    batch_size_limit: 3
+    min_batch_size: 1
+    max_batch_size: 3
+    max_batch_latency_ms: 0
     queue_size: 10
+    queue_overflow_policy: "drop_oldest"
+    decode_failure_policy: "drop"
 
     preferred_provider: "tensorrt"
     device_id: 0

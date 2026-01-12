@@ -17,12 +17,10 @@
 #include <dlfcn.h>
 
 #include <algorithm>
-#include <atomic>
 #include <cctype>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include <deep_core/plugin_interfaces/deep_backend_plugin.hpp>
@@ -107,21 +105,14 @@ void BackendManager::initializeBackend()
     throw std::runtime_error("No plugin name for provider: " + providerToString(provider_));
   }
 
-  rclcpp_lifecycle::LifecycleNode::SharedPtr backend_node;
-  if (provider_ == Provider::TENSORRT || provider_ == Provider::CUDA) {
-    const auto provider_name = providerToString(provider_);
-    auto overrides = std::vector<rclcpp::Parameter>{
-      rclcpp::Parameter("Backend.device_id", params_.device_id),
-      rclcpp::Parameter("Backend.execution_provider", provider_name),
-      rclcpp::Parameter("Backend.trt_engine_cache_enable", params_.enable_trt_engine_cache),
-      rclcpp::Parameter("Backend.trt_engine_cache_path", params_.trt_engine_cache_path)};
-    backend_node = createBackendConfigNode(provider_name, std::move(overrides));
-  } else {
-    backend_node = createBackendConfigNode("cpu");
-  }
+  // Update Backend.execution_provider parameter to match the actual provider
+  const auto provider_name = providerToString(provider_);
+  node_.set_parameters({rclcpp::Parameter("Backend.execution_provider", provider_name)});
 
+  // Pass the main node directly to the plugin (plugin will read Backend.* parameters from it)
+  auto node_ptr = node_.shared_from_this();
   plugin_holder_ = plugin_loader_->createUniqueInstance(plugin_name);
-  plugin_holder_->initialize(backend_node);
+  plugin_holder_->initialize(node_ptr);
   allocator_ = plugin_holder_->get_allocator();
   executor_ = plugin_holder_->get_inference_executor();
 
@@ -159,12 +150,12 @@ void BackendManager::warmupTensorShapeCache()
   if (!executor_ || !allocator_) {
     return;
   }
-  const size_t channels = 3;
+  const size_t channels = RGB_CHANNELS;
   const size_t height = static_cast<size_t>(params_.preprocessing.input_height);
   const size_t width = static_cast<size_t>(params_.preprocessing.input_width);
   const size_t per_image = channels * height * width;
 
-  const int batch = params_.batch_size_limit;
+  const int batch = params_.max_batch_size;
   RCLCPP_INFO(
     node_.get_logger(), "Priming %s backend tensor shapes for batch size %d", active_provider_.c_str(), batch);
 
@@ -204,21 +195,6 @@ std::string BackendManager::providerToString(Provider provider) const
   }
 }
 
-rclcpp_lifecycle::LifecycleNode::SharedPtr BackendManager::createBackendConfigNode(
-  const std::string & suffix, std::vector<rclcpp::Parameter> overrides) const
-{
-  static std::atomic<uint64_t> backend_node_counter{0};
-  rclcpp::NodeOptions options;
-  if (!overrides.empty()) {
-    options.parameter_overrides(overrides);
-  }
-  options.start_parameter_services(false);
-  options.start_parameter_event_publisher(false);
-
-  const auto node_id = backend_node_counter.fetch_add(1, std::memory_order_relaxed);
-  auto node_name = "detection_backend_" + suffix + "_" + std::to_string(node_id);
-  return std::make_shared<rclcpp_lifecycle::LifecycleNode>(node_name, options);
-}
 
 void BackendManager::declareActiveProviderParameter(const std::string & value)
 {

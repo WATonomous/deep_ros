@@ -39,13 +39,7 @@ void OrtGpuBackendPlugin::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr 
 {
   node_ = node;
 
-  // Declare parameters with defaults
-  node_->declare_parameter("Backend.device_id", 0);
-  node_->declare_parameter("Backend.execution_provider", "cuda");
-  node_->declare_parameter("Backend.trt_engine_cache_enable", false);
-  node_->declare_parameter("Backend.trt_engine_cache_path", std::string("/tmp/deep_ros_ort_trt_cache"));
 
-  // Read parameters
   device_id_ = node_->get_parameter("Backend.device_id").as_int();
   execution_provider_ = node_->get_parameter("Backend.execution_provider").as_string();
   enable_trt_engine_cache_ = node_->get_parameter("Backend.trt_engine_cache_enable").as_bool();

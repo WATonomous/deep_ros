@@ -62,6 +62,22 @@ cv::Mat ImagePreprocessor::preprocess(const cv::Mat & bgr, ImageMeta & meta) con
   applyNormalization(float_image);
   applyColorConversion(float_image);
 
+  // Fail fast - ensure preprocessing didn't silently fail
+  if (float_image.empty()) {
+    throw std::runtime_error("Preprocessing failed: result image is empty");
+  }
+  if (float_image.rows != config_.input_height || float_image.cols != config_.input_width) {
+    throw std::runtime_error(
+      "Preprocessing failed: result image size (" + std::to_string(float_image.cols) + "x" +
+      std::to_string(float_image.rows) + ") doesn't match expected size (" +
+      std::to_string(config_.input_width) + "x" + std::to_string(config_.input_height) + ")");
+  }
+  if (float_image.channels() != static_cast<int>(RGB_CHANNELS)) {
+    throw std::runtime_error(
+      "Preprocessing failed: result image has " + std::to_string(float_image.channels()) + " channels, expected " +
+      std::to_string(RGB_CHANNELS));
+  }
+
   return float_image;
 }
 
@@ -172,8 +188,8 @@ void ImagePreprocessor::applyNormalization(cv::Mat & image) const
 {
   switch (config_.normalization_type) {
     case NormalizationType::IMAGENET: {
-      static const std::array<float, 3> imagenet_mean = {0.485f, 0.456f, 0.406f};
-      static const std::array<float, 3> imagenet_std = {0.229f, 0.224f, 0.225f};
+      static const std::array<float, RGB_CHANNELS> imagenet_mean = {0.485f, 0.456f, 0.406f};
+      static const std::array<float, RGB_CHANNELS> imagenet_std = {0.229f, 0.224f, 0.225f};
 
       std::vector<cv::Mat> channels;
       cv::split(image, channels);
@@ -185,10 +201,10 @@ void ImagePreprocessor::applyNormalization(cv::Mat & image) const
       break;
     }
     case NormalizationType::CUSTOM: {
-      if (config_.mean.size() >= 3 && config_.std.size() >= 3) {
+      if (config_.mean.size() >= RGB_CHANNELS && config_.std.size() >= RGB_CHANNELS) {
         std::vector<cv::Mat> channels;
         cv::split(image, channels);
-        for (size_t i = 0; i < 3; ++i) {
+        for (size_t i = 0; i < RGB_CHANNELS; ++i) {
           channels[i] = (channels[i] - config_.mean[i]) / config_.std[i];
         }
 
@@ -220,7 +236,7 @@ const PackedInput & ImagePreprocessor::pack(const std::vector<cv::Mat> & images)
   }
 
   const size_t batch = images.size();
-  const size_t channels = 3;
+  const size_t channels = RGB_CHANNELS;
   const size_t height = images[0].rows;
   const size_t width = images[0].cols;
   const size_t image_size = channels * height * width;
@@ -229,7 +245,7 @@ const PackedInput & ImagePreprocessor::pack(const std::vector<cv::Mat> & images)
   packed.shape = {batch, channels, height, width};
   packed.data.resize(required);
 
-  std::array<cv::Mat, 3> channel_planes;
+  std::array<cv::Mat, RGB_CHANNELS> channel_planes;
   const size_t plane_elements = height * width;
   const size_t plane_bytes = plane_elements * sizeof(float);
   for (auto & plane : channel_planes) {
@@ -238,8 +254,19 @@ const PackedInput & ImagePreprocessor::pack(const std::vector<cv::Mat> & images)
 
   for (size_t b = 0; b < batch; ++b) {
     const cv::Mat & img = images[b];
-    if (img.channels() != 3 || img.type() != CV_32FC3) {
-      throw std::runtime_error("Preprocessed image must be CV_32FC3");
+    // Fail fast - validate each image
+    if (img.empty()) {
+      throw std::runtime_error("Image at batch index " + std::to_string(b) + " is empty");
+    }
+    if (img.channels() != static_cast<int>(RGB_CHANNELS) || img.type() != CV_32FC3) {
+      throw std::runtime_error(
+        "Preprocessed image at batch index " + std::to_string(b) + " must be CV_32FC3 (expected " +
+        std::to_string(RGB_CHANNELS) + " channels)");
+    }
+    if (img.rows != static_cast<int>(height) || img.cols != static_cast<int>(width)) {
+      throw std::runtime_error(
+        "Preprocessed image at batch index " + std::to_string(b) + " has size " + std::to_string(img.cols) + "x" +
+        std::to_string(img.rows) + ", expected " + std::to_string(width) + "x" + std::to_string(height));
     }
 
     cv::split(img, channel_planes.data());

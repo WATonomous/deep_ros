@@ -23,7 +23,6 @@ int main(int argc, char ** argv)
   rclcpp::init(argc, argv);
   try {
     auto node = deep_object_detection::createDeepObjectDetectionNode();
-    // Use executor for lifecycle nodes - can also use rclcpp::spin(node->get_node_base_interface())
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_node(node->get_node_base_interface());
     executor.spin();

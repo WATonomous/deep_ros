@@ -68,8 +68,6 @@ private:
   Provider parseProvider(const std::string & provider_str) const;
   bool isCudaRuntimeAvailable() const;
   std::string providerToString(Provider provider) const;
-  rclcpp_lifecycle::LifecycleNode::SharedPtr createBackendConfigNode(
-    const std::string & suffix, std::vector<rclcpp::Parameter> overrides = {}) const;
   void declareActiveProviderParameter(const std::string & value);
   deep_ros::Tensor buildInputTensor(const PackedInput & packed) const;
 

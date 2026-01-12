@@ -44,6 +44,9 @@ using Detection2DArrayMsg = vision_msgs::msg::Detection2DArray;
 namespace deep_object_detection
 {
 
+// Image processing constants
+constexpr size_t RGB_CHANNELS = 3;  // Number of channels in RGB/BGR images
+
 enum class Provider
 {
   TENSORRT,
@@ -98,6 +101,19 @@ enum class CoordinateSpace
   ORIGINAL
 };
 
+enum class QueueOverflowPolicy
+{
+  DROP_OLDEST,
+  DROP_NEWEST,
+  THROW
+};
+
+enum class DecodeFailurePolicy
+{
+  DROP,
+  THROW
+};
+
 struct ImageMeta
 {
   int original_width = 0;
@@ -128,7 +144,6 @@ struct PreprocessingConfig
   std::vector<float> mean = {0.0f, 0.0f, 0.0f};
   std::vector<float> std = {1.0f, 1.0f, 1.0f};
   ResizeMethod resize_method = ResizeMethod::LETTERBOX;
-  bool keep_aspect_ratio = true;
   int pad_value = 114;
   std::string color_format = "bgr";
 };
@@ -176,13 +191,15 @@ struct DetectionParams
   ModelMetadata model_metadata;
   PreprocessingConfig preprocessing;
   PostprocessingConfig postprocessing;
-  std::string input_image_topic{"/camera/image_raw"};
   std::vector<std::string> camera_topics;
-  std::string input_transport{"raw"};
   std::string input_qos_reliability{"best_effort"};
   std::string output_detections_topic{"/detections"};
-  int batch_size_limit{3};
+  int min_batch_size{1};
+  int max_batch_size{3};
+  int max_batch_latency_ms{0};  // 0 means no timeout (wait for min_batch_size)
   int queue_size{10};
+  QueueOverflowPolicy queue_overflow_policy{QueueOverflowPolicy::DROP_OLDEST};
+  DecodeFailurePolicy decode_failure_policy{DecodeFailurePolicy::DROP};
   std::string preferred_provider{"tensorrt"};
   int device_id{0};
   bool warmup_tensor_shapes{true};
@@ -266,6 +283,28 @@ inline CoordinateSpace stringToCoordinateSpace(const std::string & space)
     return CoordinateSpace::ORIGINAL;
   }
   return CoordinateSpace::PREPROCESSED;
+}
+
+inline QueueOverflowPolicy stringToQueueOverflowPolicy(const std::string & policy)
+{
+  if (policy == "drop_oldest" || policy == "DROP_OLDEST") {
+    return QueueOverflowPolicy::DROP_OLDEST;
+  } else if (policy == "drop_newest" || policy == "DROP_NEWEST") {
+    return QueueOverflowPolicy::DROP_NEWEST;
+  } else if (policy == "throw" || policy == "THROW") {
+    return QueueOverflowPolicy::THROW;
+  }
+  return QueueOverflowPolicy::DROP_OLDEST;
+}
+
+inline DecodeFailurePolicy stringToDecodeFailurePolicy(const std::string & policy)
+{
+  if (policy == "drop" || policy == "DROP") {
+    return DecodeFailurePolicy::DROP;
+  } else if (policy == "throw" || policy == "THROW") {
+    return DecodeFailurePolicy::THROW;
+  }
+  return DecodeFailurePolicy::DROP;
 }
 
 struct SimpleDetection

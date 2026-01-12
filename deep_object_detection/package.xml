@@ -3,9 +3,9 @@
   <name>deep_object_detection</name>
   <version>0.1.0</version>
   <description>
-    Generic model-agnostic deep learning object detection node using ONNX Runtime with CUDA/TensorRT/CPU fallback.
+    Generic model-agnostic deep learning object detection node using ONNX Runtime with explicit provider selection (TensorRT/CUDA/CPU).
     Works with any ONNX-compatible object detection model - automatically detects and adapts to model output format.
-    Features dynamic batching, multi-camera support, and configurable preprocessing/postprocessing.
+    Features dynamic batching, multi-camera support, configurable preprocessing/postprocessing, and fail-fast error handling.
   </description>
 
   <maintainer email="watonomous@example.com">WATonomous</maintainer>
@@ -17,7 +17,6 @@
   <depend>rclcpp_components</depend>
   <depend>rclcpp_lifecycle</depend>
   <depend>sensor_msgs</depend>
-  <depend>image_transport</depend>
   <depend>cv_bridge</depend>
   <depend>vision_msgs</depend>
   <depend>deep_core</depend>

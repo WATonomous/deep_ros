@@ -24,11 +24,6 @@ launch:
       description: "Detections output topic override"
 
   - arg:
-      name: "preferred_provider"
-      default: "tensorrt"
-      description: "Execution provider: tensorrt|cuda|cpu (explicit, node fails if provider fails)"
-
-  - arg:
       name: "use_lifecycle_manager"
       default: "true"
       description: "Whether to use nav2_lifecycle_manager for automatic lifecycle transitions"
@@ -45,8 +40,6 @@ launch:
         - from: "$(var config_file)"
         - name: "output_detections_topic"
           value: "$(var output_detections_topic)"
-        - name: "preferred_provider"
-          value: "$(var preferred_provider)"
 
   # Nav2 lifecycle manager for automatic transitions
   # Note: YAML launch files don't support conditional execution or timers
