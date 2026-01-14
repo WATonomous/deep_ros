@@ -54,6 +54,17 @@ public:
 
   static OutputLayout detectLayout(const std::vector<size_t> & output_shape);
 
+  /**
+   * @brief Auto-configure output layout based on config and optional output shape
+   * @param output_shape Model output shape (can be empty for deferred detection)
+   * @param layout_config Layout configuration from parameters
+   * @return Configured OutputLayout
+   *
+   * Handles both manual and auto-detection modes. If auto_detect is true and output_shape
+   * is available, automatically detects layout. Otherwise uses manual config or defers detection.
+   */
+  static OutputLayout autoConfigure(const std::vector<size_t> & output_shape, const OutputLayoutConfig & layout_config);
+
   std::vector<std::vector<SimpleDetection>> decode(
     const deep_ros::Tensor & output, const std::vector<ImageMeta> & metas) const;
 

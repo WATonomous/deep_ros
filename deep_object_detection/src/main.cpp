@@ -23,7 +23,7 @@ int main(int argc, char ** argv)
   rclcpp::init(argc, argv);
   try {
     auto node = deep_object_detection::createDeepObjectDetectionNode();
-    rclcpp::executors::SingleThreadedExecutor executor;
+    rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 4);
     executor.add_node(node->get_node_base_interface());
     executor.spin();
   } catch (const std::exception & e) {

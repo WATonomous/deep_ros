@@ -89,6 +89,32 @@ GenericPostprocessor::OutputLayout GenericPostprocessor::detectLayout(const std:
   return layout;
 }
 
+GenericPostprocessor::OutputLayout GenericPostprocessor::autoConfigure(
+  const std::vector<size_t> & output_shape, const OutputLayoutConfig & layout_config)
+{
+  OutputLayout layout;
+
+  if (!layout_config.auto_detect) {
+    layout.auto_detect = false;
+    layout.batch_dim = static_cast<size_t>(layout_config.batch_dim);
+    layout.detection_dim = static_cast<size_t>(layout_config.detection_dim);
+    layout.feature_dim = static_cast<size_t>(layout_config.feature_dim);
+    layout.bbox_start_idx = static_cast<size_t>(layout_config.bbox_start_idx);
+    layout.bbox_count = static_cast<size_t>(layout_config.bbox_count);
+    layout.score_idx = static_cast<size_t>(layout_config.score_idx);
+    layout.class_idx = (layout_config.class_idx >= 0) ? static_cast<size_t>(layout_config.class_idx) : SIZE_MAX;
+    if (!output_shape.empty()) {
+      layout.shape = output_shape;
+    }
+  } else if (!output_shape.empty()) {
+    layout = detectLayout(output_shape);
+  } else {
+    layout.auto_detect = true;
+  }
+
+  return layout;
+}
+
 float GenericPostprocessor::applyActivation(float raw_score) const
 {
   switch (config_.score_activation) {
@@ -281,14 +307,12 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decode(
       det.score = score;
       det.class_id = class_id;
 
-      // Apply coordinate transformation only if coordinates are in preprocessed space
       if (config_.coordinate_space == CoordinateSpace::PREPROCESSED) {
         adjustToOriginal(det, metas[b], use_letterbox_);
       }
       dets.push_back(det);
     }
 
-    // Apply NMS only if enabled
     if (config_.enable_nms) {
       batch_detections.push_back(applyNms(dets, config_.nms_iou_threshold));
     } else {
@@ -367,7 +391,6 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decodeMultiOutpu
         bool detections_first = (scores_dim1 == num_detections);
 
         if (detections_first) {
-          // [batch, num_detections, num_classes]
           size_t score_base = (b * num_detections + d) * num_classes_;
           float max_score = -std::numeric_limits<float>::max();
           size_t best_class = 0;
@@ -439,14 +462,12 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decodeMultiOutpu
       det.score = score;
       det.class_id = class_id;
 
-      // Apply coordinate transformation only if coordinates are in preprocessed space
       if (config_.coordinate_space == CoordinateSpace::PREPROCESSED) {
         adjustToOriginal(det, metas[b], use_letterbox_);
       }
       dets.push_back(det);
     }
 
-    // Apply NMS only if enabled
     if (config_.enable_nms) {
       batch_detections.push_back(applyNms(dets, config_.nms_iou_threshold));
     } else {

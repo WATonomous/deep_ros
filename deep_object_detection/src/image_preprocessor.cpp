@@ -62,15 +62,14 @@ cv::Mat ImagePreprocessor::preprocess(const cv::Mat & bgr, ImageMeta & meta) con
   applyNormalization(float_image);
   applyColorConversion(float_image);
 
-  // Fail fast - ensure preprocessing didn't silently fail
   if (float_image.empty()) {
     throw std::runtime_error("Preprocessing failed: result image is empty");
   }
   if (float_image.rows != config_.input_height || float_image.cols != config_.input_width) {
     throw std::runtime_error(
       "Preprocessing failed: result image size (" + std::to_string(float_image.cols) + "x" +
-      std::to_string(float_image.rows) + ") doesn't match expected size (" +
-      std::to_string(config_.input_width) + "x" + std::to_string(config_.input_height) + ")");
+      std::to_string(float_image.rows) + ") doesn't match expected size (" + std::to_string(config_.input_width) + "x" +
+      std::to_string(config_.input_height) + ")");
   }
   if (float_image.channels() != static_cast<int>(RGB_CHANNELS)) {
     throw std::runtime_error(
@@ -254,7 +253,6 @@ const PackedInput & ImagePreprocessor::pack(const std::vector<cv::Mat> & images)
 
   for (size_t b = 0; b < batch; ++b) {
     const cv::Mat & img = images[b];
-    // Fail fast - validate each image
     if (img.empty()) {
       throw std::runtime_error("Image at batch index " + std::to_string(b) + " is empty");
     }

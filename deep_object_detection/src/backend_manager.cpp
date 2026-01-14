@@ -93,7 +93,6 @@ Provider BackendManager::parseProvider(const std::string & provider_str) const
 
 void BackendManager::initializeBackend()
 {
-  // Check CUDA availability if needed
   if ((provider_ == Provider::TENSORRT || provider_ == Provider::CUDA) && !isCudaRuntimeAvailable()) {
     std::string error = "Provider " + providerToString(provider_) +
                         " requires CUDA runtime libraries (libcudart/libcuda) which are not available";
@@ -105,11 +104,32 @@ void BackendManager::initializeBackend()
     throw std::runtime_error("No plugin name for provider: " + providerToString(provider_));
   }
 
-  // Update Backend.execution_provider parameter to match the actual provider
   const auto provider_name = providerToString(provider_);
-  node_.set_parameters({rclcpp::Parameter("Backend.execution_provider", provider_name)});
 
-  // Pass the main node directly to the plugin (plugin will read Backend.* parameters from it)
+  if (!node_.has_parameter("Backend.execution_provider")) {
+    node_.declare_parameter<std::string>("Backend.execution_provider", provider_name);
+  } else {
+    node_.set_parameters({rclcpp::Parameter("Backend.execution_provider", provider_name)});
+  }
+
+  if (!node_.has_parameter("Backend.device_id")) {
+    node_.declare_parameter<int>("Backend.device_id", params_.device_id);
+  } else {
+    node_.set_parameters({rclcpp::Parameter("Backend.device_id", params_.device_id)});
+  }
+
+  if (!node_.has_parameter("Backend.trt_engine_cache_enable")) {
+    node_.declare_parameter<bool>("Backend.trt_engine_cache_enable", params_.enable_trt_engine_cache);
+  } else {
+    node_.set_parameters({rclcpp::Parameter("Backend.trt_engine_cache_enable", params_.enable_trt_engine_cache)});
+  }
+
+  if (!node_.has_parameter("Backend.trt_engine_cache_path")) {
+    node_.declare_parameter<std::string>("Backend.trt_engine_cache_path", params_.trt_engine_cache_path);
+  } else {
+    node_.set_parameters({rclcpp::Parameter("Backend.trt_engine_cache_path", params_.trt_engine_cache_path)});
+  }
+
   auto node_ptr = node_.shared_from_this();
   plugin_holder_ = plugin_loader_->createUniqueInstance(plugin_name);
   plugin_holder_->initialize(node_ptr);
@@ -194,7 +214,6 @@ std::string BackendManager::providerToString(Provider provider) const
       return "unknown";
   }
 }
-
 
 void BackendManager::declareActiveProviderParameter(const std::string & value)
 {

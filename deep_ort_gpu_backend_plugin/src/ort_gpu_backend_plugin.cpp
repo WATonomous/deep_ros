@@ -39,7 +39,6 @@ void OrtGpuBackendPlugin::initialize(rclcpp_lifecycle::LifecycleNode::SharedPtr 
 {
   node_ = node;
 
-
   device_id_ = node_->get_parameter("Backend.device_id").as_int();
   execution_provider_ = node_->get_parameter("Backend.execution_provider").as_string();
   enable_trt_engine_cache_ = node_->get_parameter("Backend.trt_engine_cache_enable").as_bool();

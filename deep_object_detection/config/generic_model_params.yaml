@@ -19,11 +19,7 @@ deep_object_detection_node:
       nms_iou_threshold: 0.45
       max_detections: 300
       score_activation: "sigmoid"
-      enable_nms: true
       use_multi_output: false
-      output_boxes_idx: 0
-      output_scores_idx: 1
-      output_classes_idx: 2
 
       class_score_mode: "all_classes"
       class_score_start_idx: -1
@@ -41,20 +37,19 @@ deep_object_detection_node:
         score_idx: 4
         class_idx: 5
 
-    use_camera_sync: true
-    camera_sync_topic: "/multi_camera_sync/multi_image_compressed"
-    input_qos_reliability: "best_effort"
+    input_topic: "/multi_camera_sync/multi_image_compressed"
     output_detections_topic: "/detections"
 
-    min_batch_size: 1
     max_batch_size: 3
-    max_batch_latency_ms: 0
     queue_size: 10
-    queue_overflow_policy: "drop_oldest"
-    decode_failure_policy: "drop"
 
     preferred_provider: "tensorrt"
     device_id: 0
-    warmup_tensor_shapes: true
     enable_trt_engine_cache: true
     trt_engine_cache_path: "/tmp/deep_ros_ort_trt_cache"
+
+    Backend:
+      execution_provider: "tensorrt"
+      device_id: 0
+      trt_engine_cache_enable: true
+      trt_engine_cache_path: "/tmp/deep_ros_ort_trt_cache"

@@ -44,8 +44,7 @@ using Detection2DArrayMsg = vision_msgs::msg::Detection2DArray;
 namespace deep_object_detection
 {
 
-// Image processing constants
-constexpr size_t RGB_CHANNELS = 3;  // Number of channels in RGB/BGR images
+constexpr size_t RGB_CHANNELS = 3;
 
 enum class Provider
 {
@@ -126,8 +125,8 @@ struct ImageMeta
 
 struct QueuedImage
 {
-  cv::Mat bgr;
-  std_msgs::msg::Header header;
+  cv::Mat bgr;  ///< Decoded BGR image (OpenCV Mat)
+  std_msgs::msg::Header header;  ///< ROS message header with timestamp and frame_id
 };
 
 struct PackedInput
@@ -191,12 +190,9 @@ struct DetectionParams
   ModelMetadata model_metadata;
   PreprocessingConfig preprocessing;
   PostprocessingConfig postprocessing;
-  std::vector<std::string> camera_topics;
   std::string input_qos_reliability{"best_effort"};
   std::string output_detections_topic{"/detections"};
-  int min_batch_size{1};
   int max_batch_size{3};
-  int max_batch_latency_ms{0};  // 0 means no timeout (wait for min_batch_size)
   int queue_size{10};
   QueueOverflowPolicy queue_overflow_policy{QueueOverflowPolicy::DROP_OLDEST};
   DecodeFailurePolicy decode_failure_policy{DecodeFailurePolicy::DROP};
