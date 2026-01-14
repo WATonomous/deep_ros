@@ -19,31 +19,37 @@ launch:
       description: "Path to YAML config for object detection"
 
   - arg:
+      name: "input_topic"
+      default: "/multi_camera_sync/multi_image_compressed"
+      description: "Input MultiImage topic (configured via remapping)"
+
+  - arg:
       name: "output_detections_topic"
       default: "/detections"
-      description: "Detections output topic override"
+      description: "Output detections topic (configured via remapping)"
 
   - arg:
       name: "use_lifecycle_manager"
       default: "true"
       description: "Whether to use nav2_lifecycle_manager for automatic lifecycle transitions"
 
-  # Main object detection node
-  # Note: LD_LIBRARY_PATH is set via env_hook in onnxruntime_gpu_vendor package
-  # If needed, you can set it explicitly using the env field below
   - node:
       pkg: "deep_object_detection"
       exec: "deep_object_detection_node"
       name: "deep_object_detection_node"
       output: "screen"
+      remap:
+        - from: "/multi_camera_sync/multi_image_compressed"
+          to: "$(var input_topic)"
+        - from: "/detections"
+          to: "$(var output_detections_topic)"
       param:
         - from: "$(var config_file)"
+        - name: "input_topic"
+          value: "$(var input_topic)"
         - name: "output_detections_topic"
           value: "$(var output_detections_topic)"
 
-  # Nav2 lifecycle manager for automatic transitions
-  # Note: YAML launch files don't support conditional execution or timers
-  # The lifecycle manager will start immediately (no delay)
   - node:
       pkg: "nav2_lifecycle_manager"
       exec: "lifecycle_manager"

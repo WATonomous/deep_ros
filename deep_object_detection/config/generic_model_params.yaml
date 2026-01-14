@@ -37,9 +37,6 @@ deep_object_detection_node:
         score_idx: 4
         class_idx: 5
 
-    input_topic: "/multi_camera_sync/multi_image_compressed"
-    output_detections_topic: "/detections"
-
     max_batch_size: 3
     queue_size: 10
 
@@ -47,9 +44,3 @@ deep_object_detection_node:
     device_id: 0
     enable_trt_engine_cache: true
     trt_engine_cache_path: "/tmp/deep_ros_ort_trt_cache"
-
-    Backend:
-      execution_provider: "tensorrt"
-      device_id: 0
-      trt_engine_cache_enable: true
-      trt_engine_cache_path: "/tmp/deep_ros_ort_trt_cache"

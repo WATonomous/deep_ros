@@ -12,6 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/**
+ * @file deep_object_detection_node.hpp
+ * @brief ROS 2 lifecycle node for object detection using ONNX models
+ *
+ * This header defines the main DeepObjectDetectionNode class which:
+ * - Subscribes to MultiImage messages (synchronized multi-camera input)
+ * - Batches images for efficient inference
+ * - Runs preprocessing, inference, and postprocessing
+ * - Publishes Detection2DArray messages with bounding boxes and scores
+ * - Manages lifecycle states (configure, activate, deactivate, cleanup, shutdown)
+ */
+
 #pragma once
 
 #include <deque>
@@ -112,40 +124,153 @@ public:
     const rclcpp_lifecycle::State &) override;
 
 private:
+  /**
+   * @brief Declare and read all ROS parameters from the parameter server
+   *
+   * Reads configuration for model, preprocessing, postprocessing, execution provider,
+   * batching, and topic names. Validates required parameters and sets defaults.
+   */
   void declareAndReadParameters();
+
+  /**
+   * @brief Setup the MultiImage subscription
+   *
+   * Creates a subscription to the input_topic_ with best_effort QoS.
+   * Subscription is only active when node is in active state.
+   */
   void setupSubscription();
+
+  /**
+   * @brief Callback for MultiImage messages
+   * @param msg Shared pointer to MultiImage message containing synchronized compressed images
+   *
+   * Decodes each compressed image in the MultiImage message and enqueues them
+   * for batch processing. Failed decodes are dropped according to decode_failure_policy.
+   */
   void onMultiImage(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg);
+
+  /**
+   * @brief Handle a single compressed image from MultiImage message
+   * @param msg Compressed image message to decode and enqueue
+   *
+   * Decodes the compressed image using cv::imdecode(). If decoding fails,
+   * the image is dropped according to decode_failure_policy.
+   */
   void handleCompressedImage(const sensor_msgs::msg::CompressedImage & msg);
+
+  /**
+   * @brief Enqueue an image for batch processing
+   * @param image Decoded BGR image (OpenCV Mat)
+   * @param header ROS message header with timestamp and frame_id
+   *
+   * Adds the image to the processing queue. If queue is full, drops oldest
+   * image according to queue_overflow_policy. Thread-safe.
+   */
   void enqueueImage(cv::Mat image, const std_msgs::msg::Header & header);
+
+  /**
+   * @brief Timer callback for batch processing
+   *
+   * Called periodically (5ms) to check if enough images have accumulated
+   * to form a batch. Processes batch if min_batch_size is met or max_batch_latency_ms
+   * timeout has elapsed.
+   */
   void onBatchTimer();
+
+  /**
+   * @brief Process a batch of images through the inference pipeline
+   * @param batch Vector of queued images to process
+   *
+   * Runs preprocessing, inference, and postprocessing for the batch.
+   * Publishes detection results. Runs asynchronously to avoid blocking timer callback.
+   */
   void processBatch(const std::vector<QueuedImage> & batch);
+
+  /**
+   * @brief Publish detection results for a batch
+   * @param batch_detections Detections for each image in the batch
+   * @param headers ROS headers for each image (for timestamp and frame_id)
+   * @param metas Image metadata for coordinate transformations
+   *
+   * Converts SimpleDetection objects to Detection2DArray messages and publishes
+   * them. Each image in the batch gets its own Detection2DArray message.
+   */
   void publishDetections(
     const std::vector<std::vector<SimpleDetection>> & batch_detections,
     const std::vector<std_msgs::msg::Header> & headers,
     const std::vector<ImageMeta> & metas);
+
+  /**
+   * @brief Load class names from file
+   *
+   * Reads class names from class_names_path (one per line) and stores them
+   * in params_.class_names. If file doesn't exist or is empty, class_names
+   * remains empty and class IDs will be used in output messages.
+   */
   void loadClassNames();
+
+  /**
+   * @brief Cleanup resources if configuration partially fails
+   *
+   * Releases resources that were allocated during on_configure() if an error
+   * occurs partway through configuration. Ensures no resource leaks.
+   */
   void cleanupPartialConfiguration();
+
+  /**
+   * @brief Cleanup all node resources
+   *
+   * Releases backend_manager_, preprocessor_, postprocessor_, and clears
+   * all subscriptions and timers. Called during on_cleanup() and on_shutdown().
+   */
   void cleanupAllResources();
+
+  /**
+   * @brief Stop all subscriptions and cancel batch timer
+   *
+   * Called during on_deactivate() to stop processing without full cleanup.
+   * Node can be reactivated without reconfiguration.
+   */
   void stopSubscriptionsAndTimer();
 
+  /// Configuration parameters loaded from ROS parameter server
   DetectionParams params_;
 
+  /// Subscription to MultiImage topic (synchronized multi-camera input)
   rclcpp::Subscription<deep_msgs::msg::MultiImage>::SharedPtr multi_image_sub_;
+  /// Input topic name (can be set via parameter or remapping)
   std::string input_topic_;
+  /// Publisher for Detection2DArray messages
   rclcpp_lifecycle::LifecyclePublisher<Detection2DArrayMsg>::SharedPtr detection_pub_;
+  /// Timer for periodic batch processing checks (5ms period)
   rclcpp::TimerBase::SharedPtr batch_timer_;
 
+  /// Queue of images waiting to be processed (thread-safe)
   std::deque<QueuedImage> image_queue_;
+  /// Mutex protecting image_queue_ access
   std::mutex queue_mutex_;
+  /// Callback group for subscription (allows concurrent execution)
   rclcpp::CallbackGroup::SharedPtr callback_group_;
 
+  /// Counter for dropped images (queue overflow or decode failures)
   size_t dropped_images_count_;
 
+  /// Image preprocessor (resize, normalize, color conversion)
   std::unique_ptr<ImagePreprocessor> preprocessor_;
+  /// Postprocessor (NMS, coordinate transformation, message formatting)
   std::unique_ptr<GenericPostprocessor> postprocessor_;
+  /// Backend manager (handles ONNX Runtime plugin loading and inference)
   std::unique_ptr<BackendManager> backend_manager_;
 };
 
+/**
+ * @brief Factory function to create a DeepObjectDetectionNode instance
+ * @param options ROS2 node options for configuration
+ * @return Shared pointer to lifecycle node instance
+ *
+ * Used by rclcpp_components for composable node loading.
+ * Allows the node to be loaded as a component in a component container.
+ */
 std::shared_ptr<rclcpp_lifecycle::LifecycleNode> createDeepObjectDetectionNode(
   const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
