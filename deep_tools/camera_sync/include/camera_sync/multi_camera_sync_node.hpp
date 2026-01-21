@@ -21,7 +21,9 @@
 #include <message_filters/synchronizer.h>
 
 #include <chrono>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -239,6 +241,27 @@ private:
   int64_t sync_count_;
   rclcpp::Time last_sync_time_;
   std::chrono::steady_clock::time_point start_time_;
+
+  // For 12-camera manual synchronization (message_filters max is 9)
+  struct ImageBuffer {
+    std::map<uint64_t, ImageMsg::ConstSharedPtr> buffer;
+    std::shared_ptr<std::mutex> mutex;
+    ImageBuffer() : mutex(std::make_shared<std::mutex>()) {}
+  };
+
+  struct CompressedImageBuffer {
+    std::map<uint64_t, CompressedImageMsg::ConstSharedPtr> buffer;
+    std::shared_ptr<std::mutex> mutex;
+    CompressedImageBuffer() : mutex(std::make_shared<std::mutex>()) {}
+  };
+
+  std::vector<ImageBuffer> raw_image_buffers_;
+  std::vector<CompressedImageBuffer> compressed_image_buffers_;
+
+  void handleRawImageCallback12(size_t camera_idx, const ImageMsg::ConstSharedPtr & msg);
+  void handleCompressedImageCallback12(size_t camera_idx, const CompressedImageMsg::ConstSharedPtr & msg);
+  void tryPublishSyncedImages12Raw();
+  void tryPublishSyncedImages12Compressed();
 };
 
 }  // namespace camera_sync

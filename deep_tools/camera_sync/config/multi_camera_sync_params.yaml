@@ -24,14 +24,14 @@ multi_camera_sync:
     # Camera topics to synchronize
     # For raw images, use topics like: ["/camera1/image_raw", "/camera2/image_raw"]
     # For compressed images, use topics like: ["/camera1/image_raw/compressed", "/camera2/image_raw/compressed"]
-    camera_topics: ["/front/image_compressed", "/back/image_compressed", "/port/image_compressed"]
+    camera_topics: ["/camera_lower_sw/image_rect", "/camera_lower_ne/image_rect", "/camera_lower_se/image_rect", "/camera_lower_nw/image_rect", "/camera_pano_ww/image_rect", "/camera_pano_nn/image_rect", "/camera_pano_ee/image_rect", "/camera_pano_se/image_rect", "/camera_pano_ne/image_rect", "/camera_pano_nw/image_rect", "/camera_pano_ss/image_rect", "/camera_pano_sw/image_rect"]
 
     # Optional names for the cameras (if not provided, will auto-generate camera_1, camera_2, etc.)
-    camera_names: ["front", "back", "port"]
+    camera_names: ["camera_lower_sw", "camera_lower_ne", "camera_lower_se", "camera_lower_nw", "camera_pano_ww", "camera_pano_nn", "camera_pano_ee", "camera_pano_se", "camera_pano_ne", "camera_pano_nw", "camera_pano_ss", "camera_pano_sw"]
 
     # Whether to use compressed images (sensor_msgs/CompressedImage) instead of raw (sensor_msgs/Image)
     # Set to true if your camera topics publish compressed images
-    use_compressed: true
+    use_compressed: false
 
     # Maximum time difference in milliseconds for message synchronization
     # Larger values allow more tolerance but may reduce temporal accuracy
@@ -49,6 +49,6 @@ multi_camera_sync:
 
     # QoS settings optimized for camera data with IPC
     qos_depth: 5
-    qos_reliability: "reliable"  # reliable or "best_effort" for higher throughput
+    qos_reliability: "best_effort"  # reliable or "best_effort" for higher throughput
     qos_durability: "volatile"
     qos_history: "keep_last"

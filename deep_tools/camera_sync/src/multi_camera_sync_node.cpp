@@ -76,8 +76,8 @@ void MultiCameraSyncNode::initializeParameters()
   publish_sync_info_ = this->get_parameter("publish_sync_info").as_bool();
 
   // Validate
-  if (camera_topics_.empty() || camera_topics_.size() < 2 || camera_topics_.size() > 6) {
-    throw std::runtime_error("Need 2-6 camera topics");
+  if (camera_topics_.empty() || camera_topics_.size() < 2 || camera_topics_.size() > 12) {
+    throw std::runtime_error("Need 2-12 camera topics");
   }
 
   // Auto-generate names if not provided
@@ -195,6 +195,16 @@ void MultiCameraSyncNode::setupRawSync(size_t num_cameras)
         std::placeholders::_5,
         std::placeholders::_6));
       break;
+    case 12:
+      // For 12 cameras, use manual synchronization via buffers
+      for (size_t i = 0; i < 12; ++i) {
+        raw_image_buffers_.push_back({});
+        image_subscribers_[i]->registerCallback(
+          [this, i](const ImageMsg::ConstSharedPtr & msg) {
+            this->handleRawImageCallback12(i, msg);
+          });
+      }
+      break;
   }
 }
 
@@ -283,18 +293,28 @@ void MultiCameraSyncNode::setupCompressedSync(size_t num_cameras)
         std::placeholders::_5,
         std::placeholders::_6));
       break;
+    case 12:
+      // For 12 cameras, use manual synchronization via buffers
+      for (size_t i = 0; i < 12; ++i) {
+        compressed_image_buffers_.push_back({});
+        compressed_subscribers_[i]->registerCallback(
+          [this, i](const CompressedImageMsg::ConstSharedPtr & msg) {
+            this->handleCompressedImageCallback12(i, msg);
+          });
+      }
+      break;
   }
 }
 
-// Helper function to create multi-image messages
+// Helper function to create multi-image messages (optimized with move semantics)
 template <typename ImageMsgT, typename MultiMsgT>
-MultiMsgT createMultiImageMessage(const std::vector<typename ImageMsgT::ConstSharedPtr> & images)
+MultiMsgT createMultiImageMessage(std::vector<typename ImageMsgT::ConstSharedPtr> images)
 {
   MultiMsgT msg;
   msg.header.stamp = rclcpp::Clock().now();
   msg.images.reserve(images.size());
-  for (const auto & img : images) {
-    msg.images.push_back(*img);  // Deep copy onto new synced message
+  for (auto & img : images) {
+    msg.images.push_back(std::move(*img));  // Move instead of copy
   }
   return msg;
 }
@@ -594,6 +614,250 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn MultiC
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
 #endif
+
+void MultiCameraSyncNode::handleRawImageCallback12(
+  size_t camera_idx, const ImageMsg::ConstSharedPtr & msg)
+{
+  if (camera_idx >= raw_image_buffers_.size()) {
+    RCLCPP_WARN(this->get_logger(), "Camera index %zu out of bounds (size: %zu)", camera_idx, raw_image_buffers_.size());
+    return;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(*raw_image_buffers_[camera_idx].mutex);
+    uint64_t msg_time_ns = msg->header.stamp.sec * 1000000000ULL + msg->header.stamp.nanosec;
+    raw_image_buffers_[camera_idx].buffer[msg_time_ns] = msg;
+    
+    RCLCPP_DEBUG(this->get_logger(), "Camera %zu: received image at time %lu (buffer size: %zu)", 
+                 camera_idx, msg_time_ns, raw_image_buffers_[camera_idx].buffer.size());
+
+    // Clean old messages outside tolerance window
+    auto it = raw_image_buffers_[camera_idx].buffer.begin();
+    while (it != raw_image_buffers_[camera_idx].buffer.end()) {
+      int64_t time_diff_ns = static_cast<int64_t>(msg_time_ns) - static_cast<int64_t>(it->first);
+      if (time_diff_ns > static_cast<int64_t>(sync_tolerance_ms_ * 2 * 1e6)) {
+        it = raw_image_buffers_[camera_idx].buffer.erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
+
+  tryPublishSyncedImages12Raw();
+}
+
+void MultiCameraSyncNode::handleCompressedImageCallback12(
+  size_t camera_idx, const CompressedImageMsg::ConstSharedPtr & msg)
+{
+  if (camera_idx >= compressed_image_buffers_.size()) {
+    RCLCPP_WARN(this->get_logger(), "Camera index %zu out of bounds (size: %zu)", camera_idx, compressed_image_buffers_.size());
+    return;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(*compressed_image_buffers_[camera_idx].mutex);
+    uint64_t msg_time_ns = msg->header.stamp.sec * 1000000000ULL + msg->header.stamp.nanosec;
+    compressed_image_buffers_[camera_idx].buffer[msg_time_ns] = msg;
+    
+    RCLCPP_DEBUG(this->get_logger(), "Camera %zu: received compressed image at time %lu (buffer size: %zu)", 
+                 camera_idx, msg_time_ns, compressed_image_buffers_[camera_idx].buffer.size());
+
+    // Clean old messages outside tolerance window
+    auto it = compressed_image_buffers_[camera_idx].buffer.begin();
+    while (it != compressed_image_buffers_[camera_idx].buffer.end()) {
+      int64_t time_diff_ns = static_cast<int64_t>(msg_time_ns) - static_cast<int64_t>(it->first);
+      if (time_diff_ns > static_cast<int64_t>(sync_tolerance_ms_ * 2 * 1e6)) {
+        it = compressed_image_buffers_[camera_idx].buffer.erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
+
+  tryPublishSyncedImages12Compressed();
+}
+
+void MultiCameraSyncNode::tryPublishSyncedImages12Raw()
+{
+  std::vector<ImageMsg::ConstSharedPtr> synced_images;
+  std::vector<rclcpp::Time> timestamps;
+  uint64_t sync_time_ns;
+
+  // Lock all buffers
+  for (auto & buffer : raw_image_buffers_) {
+    buffer.mutex->lock();
+  }
+
+  if (raw_image_buffers_.empty() || raw_image_buffers_[0].buffer.empty()) {
+    RCLCPP_INFO(this->get_logger(), "No images in buffer yet");
+    for (auto & buffer : raw_image_buffers_) {
+      buffer.mutex->unlock();
+    }
+    return;
+  }
+
+  // Use the most recent timestamp from camera 0 as reference
+  sync_time_ns = raw_image_buffers_[0].buffer.rbegin()->first;
+  
+  RCLCPP_DEBUG(this->get_logger(), "Trying to sync with reference time %lu", sync_time_ns);
+  
+  // Log buffer sizes
+  for (size_t i = 0; i < raw_image_buffers_.size(); ++i) {
+    RCLCPP_DEBUG(this->get_logger(), "  Buffer %zu size: %zu", i, raw_image_buffers_[i].buffer.size());
+  }
+
+  bool all_found = true;
+  for (size_t i = 0; i < raw_image_buffers_.size(); ++i) {
+    auto & buffer = raw_image_buffers_[i].buffer;
+    int64_t tolerance_ns = static_cast<int64_t>(sync_tolerance_ms_ * 1e6);
+    int64_t lower_bound_ns = static_cast<int64_t>(sync_time_ns) - tolerance_ns;
+    int64_t upper_bound_ns = static_cast<int64_t>(sync_time_ns) + tolerance_ns;
+    
+    // Find the closest timestamp within tolerance window
+    auto it = buffer.lower_bound(lower_bound_ns >= 0 ? static_cast<uint64_t>(lower_bound_ns) : 0);
+    
+    ImageMsg::ConstSharedPtr best_match = nullptr;
+    int64_t best_time_diff = INT64_MAX;
+    
+    // Search for the closest match within the tolerance window
+    while (it != buffer.end() && static_cast<int64_t>(it->first) <= upper_bound_ns) {
+      int64_t time_diff_ns = std::abs(static_cast<int64_t>(sync_time_ns) - static_cast<int64_t>(it->first));
+      if (time_diff_ns < best_time_diff) {
+        best_time_diff = time_diff_ns;
+        best_match = it->second;
+      }
+      ++it;
+    }
+    
+    if (best_match != nullptr && best_time_diff <= tolerance_ns) {
+      synced_images.push_back(best_match);
+      // Find the timestamp key for logging
+      for (auto & pair : buffer) {
+        if (pair.second == best_match) {
+          uint32_t sec = pair.first / 1000000000ULL;
+          uint32_t nanosec = pair.first % 1000000000ULL;
+          timestamps.push_back(rclcpp::Time(sec, nanosec));
+          RCLCPP_DEBUG(this->get_logger(), "  Camera %zu: found match (time diff: %ld ns)", i, 
+                      static_cast<int64_t>(sync_time_ns) - static_cast<int64_t>(pair.first));
+          break;
+        }
+      }
+    } else {
+      RCLCPP_DEBUG(this->get_logger(), "  Camera %zu: no match in tolerance window (best diff: %ld ns, tolerance: %ld ns)", 
+                   i, best_time_diff, tolerance_ns);
+      all_found = false;
+      break;
+    }
+  }
+
+  // Unlock all buffers
+  for (auto & buffer : raw_image_buffers_) {
+    buffer.mutex->unlock();
+  }
+
+  if (!all_found || synced_images.size() != raw_image_buffers_.size()) {
+    RCLCPP_DEBUG(this->get_logger(), "Failed to sync: all_found=%d, synced_size=%zu, total_cameras=%zu", 
+                 all_found, synced_images.size(), raw_image_buffers_.size());
+    return;
+  }
+
+  // Publish synced images
+  RCLCPP_DEBUG(this->get_logger(), "Publishing synced raw images (sync count: %ld)", ++sync_count_);
+  processSynchronizedImages(timestamps);
+  auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImageRaw>(synced_images);
+  multi_image_raw_pub_->publish(raw_msg);
+}
+
+void MultiCameraSyncNode::tryPublishSyncedImages12Compressed()
+{
+  std::vector<CompressedImageMsg::ConstSharedPtr> synced_images;
+  std::vector<rclcpp::Time> timestamps;
+  uint64_t sync_time_ns;
+
+  // Lock all buffers
+  for (auto & buffer : compressed_image_buffers_) {
+    buffer.mutex->lock();
+  }
+
+  if (compressed_image_buffers_.empty() || compressed_image_buffers_[0].buffer.empty()) {
+    RCLCPP_DEBUG(this->get_logger(), "No compressed images in buffer yet");
+    for (auto & buffer : compressed_image_buffers_) {
+      buffer.mutex->unlock();
+    }
+    return;
+  }
+
+  // Use the most recent timestamp from camera 0 as reference
+  sync_time_ns = compressed_image_buffers_[0].buffer.rbegin()->first;
+  
+  RCLCPP_DEBUG(this->get_logger(), "Trying to sync compressed with reference time %lu", sync_time_ns);
+  
+  // Log buffer sizes
+  for (size_t i = 0; i < compressed_image_buffers_.size(); ++i) {
+    RCLCPP_DEBUG(this->get_logger(), "  Compressed buffer %zu size: %zu", i, compressed_image_buffers_[i].buffer.size());
+  }
+
+  bool all_found = true;
+  for (size_t i = 0; i < compressed_image_buffers_.size(); ++i) {
+    auto & buffer = compressed_image_buffers_[i].buffer;
+    int64_t tolerance_ns = static_cast<int64_t>(sync_tolerance_ms_ * 1e6);
+    int64_t lower_bound_ns = static_cast<int64_t>(sync_time_ns) - tolerance_ns;
+    int64_t upper_bound_ns = static_cast<int64_t>(sync_time_ns) + tolerance_ns;
+    
+    // Find the closest timestamp within tolerance window
+    auto it = buffer.lower_bound(lower_bound_ns >= 0 ? static_cast<uint64_t>(lower_bound_ns) : 0);
+    
+    CompressedImageMsg::ConstSharedPtr best_match = nullptr;
+    int64_t best_time_diff = INT64_MAX;
+    
+    // Search for the closest match within the tolerance window
+    while (it != buffer.end() && static_cast<int64_t>(it->first) <= upper_bound_ns) {
+      int64_t time_diff_ns = std::abs(static_cast<int64_t>(sync_time_ns) - static_cast<int64_t>(it->first));
+      if (time_diff_ns < best_time_diff) {
+        best_time_diff = time_diff_ns;
+        best_match = it->second;
+      }
+      ++it;
+    }
+    
+    if (best_match != nullptr && best_time_diff <= tolerance_ns) {
+      synced_images.push_back(best_match);
+      // Find the timestamp key for logging
+      for (auto & pair : buffer) {
+        if (pair.second == best_match) {
+          uint32_t sec = pair.first / 1000000000ULL;
+          uint32_t nanosec = pair.first % 1000000000ULL;
+          timestamps.push_back(rclcpp::Time(sec, nanosec));
+          RCLCPP_DEBUG(this->get_logger(), "  Camera %zu: found match (time diff: %ld ns)", i, 
+                      static_cast<int64_t>(sync_time_ns) - static_cast<int64_t>(pair.first));
+          break;
+        }
+      }
+    } else {
+      RCLCPP_DEBUG(this->get_logger(), "  Camera %zu: no match in tolerance window (best diff: %ld ns, tolerance: %ld ns)", 
+                   i, best_time_diff, tolerance_ns);
+      all_found = false;
+      break;
+    }
+  }
+
+  // Unlock all buffers
+  for (auto & buffer : compressed_image_buffers_) {
+    buffer.mutex->unlock();
+  }
+
+  if (!all_found || synced_images.size() != compressed_image_buffers_.size()) {
+    RCLCPP_DEBUG(this->get_logger(), "Failed to sync compressed: all_found=%d, synced_size=%zu, total_cameras=%zu", 
+                 all_found, synced_images.size(), compressed_image_buffers_.size());
+    return;
+  }
+
+  // Publish synced images
+  RCLCPP_DEBUG(this->get_logger(), "Publishing synced compressed images (sync count: %ld)", ++sync_count_);
+  processSynchronizedImages(timestamps);
+  auto compressed_msg = createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImage>(synced_images);
+  multi_image_compressed_pub_->publish(compressed_msg);
+}
 
 }  // namespace camera_sync
 
