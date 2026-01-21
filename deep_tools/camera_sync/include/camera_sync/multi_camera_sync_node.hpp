@@ -243,16 +243,24 @@ private:
   std::chrono::steady_clock::time_point start_time_;
 
   // For 12-camera manual synchronization (message_filters max is 9)
-  struct ImageBuffer {
+  struct ImageBuffer
+  {
     std::map<uint64_t, ImageMsg::ConstSharedPtr> buffer;
     std::shared_ptr<std::mutex> mutex;
-    ImageBuffer() : mutex(std::make_shared<std::mutex>()) {}
+
+    ImageBuffer()
+    : mutex(std::make_shared<std::mutex>())
+    {}
   };
 
-  struct CompressedImageBuffer {
+  struct CompressedImageBuffer
+  {
     std::map<uint64_t, CompressedImageMsg::ConstSharedPtr> buffer;
     std::shared_ptr<std::mutex> mutex;
-    CompressedImageBuffer() : mutex(std::make_shared<std::mutex>()) {}
+
+    CompressedImageBuffer()
+    : mutex(std::make_shared<std::mutex>())
+    {}
   };
 
   std::vector<ImageBuffer> raw_image_buffers_;
