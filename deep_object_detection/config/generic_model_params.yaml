@@ -15,7 +15,7 @@ deep_object_detection_node:
       color_format: "rgb"
 
     postprocessing:
-      score_threshold: 0.25
+      score_threshold: 0.65
       nms_iou_threshold: 0.45
       max_detections: 300
       score_activation: "sigmoid"

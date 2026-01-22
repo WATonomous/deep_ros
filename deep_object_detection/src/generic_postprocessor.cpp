@@ -62,12 +62,9 @@ GenericPostprocessor::OutputLayout GenericPostprocessor::detectLayout(const std:
     size_t dim1 = output_shape[1];
     size_t dim2 = output_shape[2];
 
-    if (dim1 <= 8 && dim2 > 8) {
+    if (dim1 < dim2) {
       layout.detection_dim = 2;
       layout.feature_dim = 1;
-    } else if (dim1 > 8 && dim2 <= 8) {
-      layout.detection_dim = 1;
-      layout.feature_dim = 2;
     } else {
       layout.detection_dim = 1;
       layout.feature_dim = 2;
