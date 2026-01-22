@@ -19,6 +19,7 @@
   <depend>sensor_msgs</depend>
   <depend>cv_bridge</depend>
   <depend>vision_msgs</depend>
+  <depend>visualization_msgs</depend>
   <depend>deep_core</depend>
   <depend>deep_msgs</depend>
   <depend>deep_ort_backend_plugin</depend>

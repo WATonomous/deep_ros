@@ -134,6 +134,7 @@ void DeepObjectDetectionNode::declareAndReadParameters()
   input_topic_ = this->declare_parameter<std::string>("input_topic", "");
   params_.input_qos_reliability = "best_effort";
   params_.output_detections_topic = this->declare_parameter<std::string>("output_detections_topic", "/detections");
+  output_annotations_topic_ = this->declare_parameter<std::string>("output_annotations_topic", "/image_annotations");
 
   params_.max_batch_size = this->declare_parameter<int>("max_batch_size", 3);
   params_.queue_size = this->declare_parameter<int>("queue_size", 10);
@@ -225,6 +226,11 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
     auto pub = this->create_publisher<Detection2DArrayMsg>(params_.output_detections_topic, rclcpp::SensorDataQoS{});
     detection_pub_ = std::static_pointer_cast<rclcpp_lifecycle::LifecyclePublisher<Detection2DArrayMsg>>(pub);
 
+    auto marker_pub =
+      this->create_publisher<visualization_msgs::msg::ImageMarker>(output_annotations_topic_, rclcpp::SensorDataQoS{});
+    image_marker_pub_ =
+      std::static_pointer_cast<rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::ImageMarker>>(marker_pub);
+
     if (input_topic_.empty()) {
       RCLCPP_ERROR(this->get_logger(), "input_topic is empty. Please set input_topic to a valid MultiImage topic.");
       cleanupPartialConfiguration();
@@ -269,6 +275,10 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
       detection_pub_->on_activate();
     }
 
+    if (image_marker_pub_) {
+      image_marker_pub_->on_activate();
+    }
+
     RCLCPP_INFO(this->get_logger(), "Deep object detection node activated and ready to process images");
     return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
   } catch (const std::exception & e) {
@@ -283,6 +293,7 @@ void DeepObjectDetectionNode::cleanupPartialConfiguration()
   backend_manager_.reset();
   preprocessor_.reset();
   detection_pub_.reset();
+  image_marker_pub_.reset();
 }
 
 void DeepObjectDetectionNode::cleanupAllResources()
@@ -293,6 +304,7 @@ void DeepObjectDetectionNode::cleanupAllResources()
   postprocessor_.reset();
   params_.class_names.clear();
   detection_pub_.reset();
+  image_marker_pub_.reset();
 }
 
 void DeepObjectDetectionNode::stopSubscriptionsAndTimer()
@@ -319,6 +331,10 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
   stopSubscriptionsAndTimer();
   if (detection_pub_) {
     detection_pub_->on_deactivate();
+  }
+
+  if (image_marker_pub_) {
+    image_marker_pub_->on_deactivate();
   }
 
   RCLCPP_INFO(this->get_logger(), "Deep object detection node deactivated");
@@ -554,6 +570,19 @@ void DeepObjectDetectionNode::publishDetections(
     postprocessor_->fillDetectionMessage(headers[i], batch_detections[i], metas[i], msg);
     detection_pub_->publish(msg);
     total_published += batch_detections[i].size();
+
+    RCLCPP_DEBUG(
+      this->get_logger(),
+      "  Published [%zu]: frame_id=%s, %zu detections",
+      i,
+      headers[i].frame_id.c_str(),
+      batch_detections[i].size());
+
+    // Also publish ImageMarker annotations if publisher is available
+    if (image_marker_pub_) {
+      auto marker_msg = detectionsToImageMarker(headers[i], batch_detections[i]);
+      image_marker_pub_->publish(marker_msg);
+    }
   }
   RCLCPP_INFO_THROTTLE(
     this->get_logger(),
@@ -587,6 +616,86 @@ void DeepObjectDetectionNode::loadClassNames()
 
   RCLCPP_INFO(
     this->get_logger(), "Loaded %zu class names from %s", params_.class_names.size(), class_names_path.c_str());
+}
+
+visualization_msgs::msg::ImageMarker DeepObjectDetectionNode::detectionsToImageMarker(
+  const std_msgs::msg::Header & header, const std::vector<SimpleDetection> & detections) const
+{
+  visualization_msgs::msg::ImageMarker marker_msg;
+  marker_msg.header = header;
+  marker_msg.ns = "detections";
+  marker_msg.id = 0;
+  marker_msg.type = visualization_msgs::msg::ImageMarker::LINE_LIST;
+  marker_msg.action = visualization_msgs::msg::ImageMarker::ADD;
+
+  // Set marker lifetime
+  marker_msg.lifetime.sec = 0;
+  marker_msg.lifetime.nanosec = 50000000;  // 0.05 seconds - short lifetime to avoid ghosting
+  marker_msg.scale = 2.0;
+
+  // Set outline color to green
+  marker_msg.outline_color.r = 0.0;
+  marker_msg.outline_color.g = 1.0;
+  marker_msg.outline_color.b = 0.0;
+  marker_msg.outline_color.a = 1.0;
+
+  // Iterate through detections and add bounding box line segments
+  for (const auto & det : detections) {
+    // Skip detections with invalid coordinates
+    if (det.width <= 0 || det.height <= 0) {
+      continue;
+    }
+
+    // Calculate bounding box corners
+    float x_min = det.x;
+    float y_min = det.y;
+    float x_max = det.x + det.width;
+    float y_max = det.y + det.height;
+
+    // Add line points for bounding box rectangle (4 line segments = 8 points)
+    // Top-left to top-right
+    geometry_msgs::msg::Point pt1, pt2;
+    pt1.x = x_min;
+    pt1.y = y_min;
+    pt1.z = 0;
+    pt2.x = x_max;
+    pt2.y = y_min;
+    pt2.z = 0;
+    marker_msg.points.push_back(pt1);
+    marker_msg.points.push_back(pt2);
+
+    // Top-right to bottom-right
+    pt1.x = x_max;
+    pt1.y = y_min;
+    pt1.z = 0;
+    pt2.x = x_max;
+    pt2.y = y_max;
+    pt2.z = 0;
+    marker_msg.points.push_back(pt1);
+    marker_msg.points.push_back(pt2);
+
+    // Bottom-right to bottom-left
+    pt1.x = x_max;
+    pt1.y = y_max;
+    pt1.z = 0;
+    pt2.x = x_min;
+    pt2.y = y_max;
+    pt2.z = 0;
+    marker_msg.points.push_back(pt1);
+    marker_msg.points.push_back(pt2);
+
+    // Bottom-left to top-left
+    pt1.x = x_min;
+    pt1.y = y_max;
+    pt1.z = 0;
+    pt2.x = x_min;
+    pt2.y = y_min;
+    pt2.z = 0;
+    marker_msg.points.push_back(pt1);
+    marker_msg.points.push_back(pt2);
+  }
+
+  return marker_msg;
 }
 
 std::shared_ptr<rclcpp_lifecycle::LifecycleNode> createDeepObjectDetectionNode(const rclcpp::NodeOptions & options)

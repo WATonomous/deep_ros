@@ -40,6 +40,7 @@
 #include <rclcpp_lifecycle/state.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
 #include <std_msgs/msg/header.hpp>
+#include <visualization_msgs/msg/image_marker.hpp>
 
 #include "deep_object_detection/backend_manager.hpp"
 #include "deep_object_detection/detection_types.hpp"
@@ -201,6 +202,18 @@ private:
     const std::vector<ImageMeta> & metas);
 
   /**
+   * @brief Convert detections to ImageMarker annotations for Foxglove visualization
+   * @param header ROS header for the message
+   * @param detections Vector of detections for a single image
+   * @return ImageMarker message with bounding box and label annotations
+   *
+   * Converts SimpleDetection objects to visualization_msgs::msg::ImageMarker format
+   * for rendering in Foxglove and other visualization tools.
+   */
+  visualization_msgs::msg::ImageMarker detectionsToImageMarker(
+    const std_msgs::msg::Header & header, const std::vector<SimpleDetection> & detections) const;
+
+  /**
    * @brief Load class names from file
    *
    * Reads class names from class_names_path (one per line) and stores them
@@ -242,6 +255,10 @@ private:
   std::string input_topic_;
   /// Publisher for Detection2DArray messages
   rclcpp_lifecycle::LifecyclePublisher<Detection2DArrayMsg>::SharedPtr detection_pub_;
+  /// Publisher for ImageMarker annotations (for Foxglove visualization)
+  rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::ImageMarker>::SharedPtr image_marker_pub_;
+  /// Output annotations topic name for ImageMarker messages
+  std::string output_annotations_topic_;
   /// Timer for periodic batch processing checks (5ms period)
   rclcpp::TimerBase::SharedPtr batch_timer_;
 

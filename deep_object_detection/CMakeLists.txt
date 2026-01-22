@@ -30,6 +30,7 @@ find_package(rclcpp_lifecycle REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(vision_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(deep_core REQUIRED)
 find_package(deep_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
@@ -60,6 +61,7 @@ target_link_libraries(deep_object_detection_lib
     ${pluginlib_TARGETS}
     ${vision_msgs_TARGETS}
     ${deep_msgs_TARGETS}
+    ${visualization_msgs_TARGETS}
     deep_core::deep_core_lib
   PRIVATE
     ${rclcpp_components_TARGETS}
