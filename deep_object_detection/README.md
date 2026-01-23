@@ -265,32 +265,69 @@ Topic names can be configured either via parameters in the config file or via re
       - from: "$(var config_file)"
 ```
 
-## Batching Behavior
-
-The node supports flexible batching with three parameters:
-
-- **`min_batch_size`**: Minimum number of images required before processing (default: 1)
-- **`max_batch_size`**: Maximum number of images per batch (default: 3)
-- **`max_batch_latency_ms`**: Maximum wait time in milliseconds before processing even if `min_batch_size` is not met (default: 0 = wait indefinitely)
-
-**Use Cases:**
-- **Single camera**: `min_batch_size=1, max_batch_size=1` - process each image immediately
-- **Multi-camera synchronized**: `min_batch_size=N, max_batch_size=N` where N = number of cameras
-- **Best-effort batching**: `min_batch_size=1, max_batch_size=N` with optional `max_batch_latency_ms` timeout
-
 ## Limitations
 
 1. **MultiImage input only**: The node only supports MultiImage messages. Individual camera topics are not supported.
 2. **Compressed images only**: Only compressed images (sensor_msgs/CompressedImage) are supported. Raw images are not supported.
-3. **Fail-fast provider selection**: If the specified execution provider is unavailable, the node fails immediately. No automatic fallback to other providers.
-4. **No dynamic reconfiguration**: Parameters cannot be changed at runtime. Node must be reconfigured to change parameters.
+3. **No dynamic reconfiguration**: Parameters cannot be changed at runtime. Node must be reconfigured to change parameters.
 
-## Troubleshooting
+## Testing
 
-- **"No plugin loaded"**: Check that the backend plugin name is correct in the configuration
-- **"No model loaded"**: Verify the model path exists and is a valid ONNX file
-- **"Provider initialization failed"**: Check that the specified execution provider (tensorrt/cuda) is available and properly configured
-- **Lifecycle errors**: Ensure the node is properly configured before activation
-- **No detections**: Verify that the model output format matches the expected format, or enable auto-detection
-- **Plugin discovery issues**: Check that `deep_ort_backend_plugin` is built and sourced
-- **CUDA/TensorRT errors**: Ensure CUDA libraries and TensorRT (if using) are properly installed and accessible
+The package includes both unit tests (C++) and launch tests (Python) for comprehensive testing.
+
+### Unit Tests (C++)
+
+Fast unit tests using the `deep_test` framework that verify node construction, parameter handling, and lifecycle state management without requiring model files or GPU access.
+
+**Run unit tests:**
+
+```bash
+# Build with tests enabled
+colcon build --packages-select deep_object_detection --cmake-args -DBUILD_TESTING=ON
+
+# Run tests
+source install/setup.bash
+colcon test --packages-select deep_object_detection
+
+# View results
+colcon test-result --verbose
+```
+
+**Run specific test:**
+
+```bash
+./build/deep_object_detection/test_deep_object_detection_node "[node][construction]"
+```
+
+### Launch Tests (Python)
+
+Integration tests that launch the full node with different backends (CPU, CUDA, TensorRT) and verify end-to-end functionality including model loading, inference, and detection output.
+
+**Note:** Launch tests are **disabled by default** to keep test runs fast. They require model loading which is slow (~30-60 seconds per test).
+
+**Run launch tests (opt-in, requires model file):**
+
+```bash
+# Enable launch tests explicitly
+export ENABLE_LAUNCH_TESTS=1
+# Build and run
+colcon build --packages-select deep_object_detection --cmake-args -DBUILD_TESTING=ON
+source install/setup.bash
+colcon test --packages-select deep_object_detection
+
+# View results
+colcon test-result --verbose
+```
+
+**Available launch tests:**
+- `test_deep_object_detection_cpu_backend.py` - CPU backend test
+- `test_deep_object_detection_gpu_backend.py` - CUDA backend test (requires GPU)
+- `test_deep_object_detection_tensorrt_backend.py` - TensorRT backend test (requires GPU + TensorRT)
+
+Launch tests are disabled by default and must be explicitly enabled with `ENABLE_LAUNCH_TESTS=1`.
+
+**Test Requirements:**
+- Model file: `/workspaces/deep_ros/yolov8m.onnx` (for launch tests)
+- Class names file: `/workspaces/deep_ros/deep_object_detection/config/coco_classes.txt`
+- GPU access: Required for GPU and TensorRT backend tests (local only)
+

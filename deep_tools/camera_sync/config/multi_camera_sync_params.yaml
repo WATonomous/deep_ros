@@ -24,10 +24,17 @@ multi_camera_sync:
     # Camera topics to synchronize
     # For raw images, use topics like: ["/camera1/image_raw", "/camera2/image_raw"]
     # For compressed images, use topics like: ["/camera1/image_raw/compressed", "/camera2/image_raw/compressed"]
-    camera_topics: ["/CAM_FRONT/image_rect_compressed", "/CAM_FRONT_LEFT/image_rect_compressed", "/CAM_FRONT_RIGHT/image_rect_compressed"]
+    camera_topics: [
+      "/CAM_FRONT/image_rect_compressed",
+      "/CAM_FRONT_LEFT/image_rect_compressed",
+      "/CAM_FRONT_RIGHT/image_rect_compressed",
+      "/CAM_BACK/image_rect_compressed",
+      "/CAM_BACK_LEFT/image_rect_compressed",
+      "/CAM_BACK_RIGHT/image_rect_compressed"
+    ]
 
     # Optional names for the cameras (if not provided, will auto-generate camera_1, camera_2, etc.)
-    camera_names: ["front", "left", "right"]
+    camera_names: ["front", "front_left", "front_right", "back", "back_left", "back_right"]
 
     # Whether to use compressed images (sensor_msgs/CompressedImage) instead of raw (sensor_msgs/Image)
     # Set to true if your camera topics publish compressed images
