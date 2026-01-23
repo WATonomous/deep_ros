@@ -68,7 +68,6 @@ Example log output:
 - `rclcpp` - ROS2 C++ client library
 - `sensor_msgs` - Standard sensor message types
 - `message_filters` - Time synchronization utilities
-- `cv_bridge` - OpenCV integration (for future extensions)
 - `image_transport` - Efficient image transmission
 
 ## Limitations
