@@ -116,16 +116,12 @@ class TestCPUBackend(unittest.TestCase):
 
     def test_node_activates(self, proc_output):
         """Test that the node activates successfully."""
-        proc_output.assertWaitFor(
-            "Deep object detection node activated", timeout=20
-        )
+        proc_output.assertWaitFor("Deep object detection node activated", timeout=20)
 
     def test_detection_with_dummy_multiimage(self, proc_output):
         """Test end-to-end detection by publishing a dummy MultiImage and verifying output."""
         # Wait for node to be fully activated
-        proc_output.assertWaitFor(
-            "Deep object detection node activated", timeout=20
-        )
+        proc_output.assertWaitFor("Deep object detection node activated", timeout=20)
         time.sleep(1)
 
         # Create publisher for MultiImage messages
@@ -143,7 +139,8 @@ class TestCPUBackend(unittest.TestCase):
             )
 
         # Create subscriber for detection output with matching QoS
-        from rclpy.qos import QoSProfile, SensorDataQoS
+        from rclpy.qos import SensorDataQoS
+
         qos_profile = SensorDataQoS()
         self.detection_sub = self.node.create_subscription(
             Detection2DArray, "/detections", detection_callback, qos_profile
@@ -176,7 +173,9 @@ class TestCPUBackend(unittest.TestCase):
 
         # Publish MultiImage message multiple times to fill batch
         # (max_batch_size=6, but node processes when timer fires with >= max_batch_size)
-        self.node.get_logger().info("Publishing dummy MultiImage for CPU detection test")
+        self.node.get_logger().info(
+            "Publishing dummy MultiImage for CPU detection test"
+        )
         for _ in range(6):
             multi_image_pub.publish(multi_image_msg)
             time.sleep(0.01)  # Small delay between publishes

@@ -330,4 +330,3 @@ Launch tests are disabled by default and must be explicitly enabled with `ENABLE
 - Model file: `/workspaces/deep_ros/yolov8m.onnx` (for launch tests)
 - Class names file: `/workspaces/deep_ros/deep_object_detection/config/coco_classes.txt`
 - GPU access: Required for GPU and TensorRT backend tests (local only)
-

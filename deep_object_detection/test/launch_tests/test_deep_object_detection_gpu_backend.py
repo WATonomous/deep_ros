@@ -111,7 +111,9 @@ class TestGPUBackend(unittest.TestCase):
 
     def test_backend_loads(self, proc_output):
         """Test that GPU backend plugin loads."""
-        proc_output.assertWaitFor("Initialized backend using provider: cuda", timeout=15)
+        proc_output.assertWaitFor(
+            "Initialized backend using provider: cuda", timeout=15
+        )
 
     def test_model_loads(self, proc_output):
         """Test that the model loads successfully with GPU backend."""
@@ -121,9 +123,7 @@ class TestGPUBackend(unittest.TestCase):
 
     def test_node_activates(self, proc_output):
         """Test that the node activates successfully with GPU backend."""
-        proc_output.assertWaitFor(
-            "Deep object detection node activated", timeout=20
-        )
+        proc_output.assertWaitFor("Deep object detection node activated", timeout=20)
 
     def test_no_cuda_errors(self, proc_output):
         """Test that there are no CUDA-related errors."""
@@ -134,9 +134,7 @@ class TestGPUBackend(unittest.TestCase):
     def test_gpu_detection_with_dummy_multiimage(self, proc_output):
         """Test end-to-end GPU detection by publishing a dummy MultiImage and verifying output."""
         # Wait for node to be fully activated
-        proc_output.assertWaitFor(
-            "Deep object detection node activated", timeout=20
-        )
+        proc_output.assertWaitFor("Deep object detection node activated", timeout=20)
         time.sleep(1)
 
         # Create publisher for MultiImage messages
@@ -182,7 +180,9 @@ class TestGPUBackend(unittest.TestCase):
         multi_image_msg.images = [compressed_img]
 
         # Publish MultiImage message
-        self.node.get_logger().info("Publishing dummy MultiImage for GPU detection test")
+        self.node.get_logger().info(
+            "Publishing dummy MultiImage for GPU detection test"
+        )
         multi_image_pub.publish(multi_image_msg)
 
         # Spin to process callbacks

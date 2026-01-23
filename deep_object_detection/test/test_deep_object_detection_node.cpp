@@ -75,8 +75,7 @@ public:
 };
 
 TEST_CASE_METHOD(
-  DeepObjectDetectionNodeTestFixture, "DeepObjectDetectionNode: Construction and Basic State",
-  "[node][construction]")
+  DeepObjectDetectionNodeTestFixture, "DeepObjectDetectionNode: Construction and Basic State", "[node][construction]")
 {
   rclcpp::NodeOptions options;
   auto node = std::make_shared<DeepObjectDetectionNode>(options);
@@ -88,7 +87,8 @@ TEST_CASE_METHOD(
 }
 
 TEST_CASE_METHOD(
-  DeepObjectDetectionNodeTestFixture, "DeepObjectDetectionNode: Parameter Declaration and Defaults",
+  DeepObjectDetectionNodeTestFixture,
+  "DeepObjectDetectionNode: Parameter Declaration and Defaults",
   "[node][parameters]")
 {
   rclcpp::NodeOptions options;
@@ -185,16 +185,15 @@ TEST_CASE_METHOD(
   }
 }
 
-TEST_CASE_METHOD(
-  DeepObjectDetectionNodeTestFixture, "DeepObjectDetectionNode: Topic Configuration", "[node][topics]")
+TEST_CASE_METHOD(DeepObjectDetectionNodeTestFixture, "DeepObjectDetectionNode: Topic Configuration", "[node][topics]")
 {
   rclcpp::NodeOptions options;
   auto node = std::make_shared<DeepObjectDetectionNode>(options);
 
   SECTION("Input topic can be configured")
   {
-    auto params = std::vector<rclcpp::Parameter>{
-      rclcpp::Parameter("input_topic", "/multi_camera_sync/multi_image_compressed")};
+    auto params =
+      std::vector<rclcpp::Parameter>{rclcpp::Parameter("input_topic", "/multi_camera_sync/multi_image_compressed")};
     auto result = node->set_parameters(params);
     REQUIRE(result[0].successful == true);
     REQUIRE(node->get_parameter("input_topic").as_string() == "/multi_camera_sync/multi_image_compressed");
@@ -222,7 +221,8 @@ TEST_CASE_METHOD(
 }
 
 TEST_CASE_METHOD(
-  DeepObjectDetectionNodeTestFixture, "DeepObjectDetectionNode: Preprocessing Parameter Validation",
+  DeepObjectDetectionNodeTestFixture,
+  "DeepObjectDetectionNode: Preprocessing Parameter Validation",
   "[node][preprocessing]")
 {
   rclcpp::NodeOptions options;
@@ -231,8 +231,7 @@ TEST_CASE_METHOD(
   SECTION("Preprocessing dimensions can be configured")
   {
     auto params = std::vector<rclcpp::Parameter>{
-      rclcpp::Parameter("preprocessing.input_width", 1280),
-      rclcpp::Parameter("preprocessing.input_height", 720)};
+      rclcpp::Parameter("preprocessing.input_width", 1280), rclcpp::Parameter("preprocessing.input_height", 720)};
     auto result = node->set_parameters(params);
     REQUIRE(result[0].successful == true);
     REQUIRE(result[1].successful == true);
@@ -242,8 +241,7 @@ TEST_CASE_METHOD(
 
   SECTION("Normalization type can be configured")
   {
-    auto params = std::vector<rclcpp::Parameter>{
-      rclcpp::Parameter("preprocessing.normalization_type", "imagenet")};
+    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("preprocessing.normalization_type", "imagenet")};
     auto result = node->set_parameters(params);
     REQUIRE(result[0].successful == true);
     REQUIRE(node->get_parameter("preprocessing.normalization_type").as_string() == "imagenet");
@@ -259,7 +257,8 @@ TEST_CASE_METHOD(
 }
 
 TEST_CASE_METHOD(
-  DeepObjectDetectionNodeTestFixture, "DeepObjectDetectionNode: Postprocessing Parameter Validation",
+  DeepObjectDetectionNodeTestFixture,
+  "DeepObjectDetectionNode: Postprocessing Parameter Validation",
   "[node][postprocessing]")
 {
   rclcpp::NodeOptions options;
@@ -291,8 +290,7 @@ TEST_CASE_METHOD(
 }
 
 TEST_CASE_METHOD(
-  DeepObjectDetectionNodeTestFixture, "DeepObjectDetectionNode: Execution Provider Configuration",
-  "[node][provider]")
+  DeepObjectDetectionNodeTestFixture, "DeepObjectDetectionNode: Execution Provider Configuration", "[node][provider]")
 {
   rclcpp::NodeOptions options;
   auto node = std::make_shared<DeepObjectDetectionNode>(options);

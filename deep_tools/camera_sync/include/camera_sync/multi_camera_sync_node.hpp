@@ -15,13 +15,6 @@
 #ifndef CAMERA_SYNC__MULTI_CAMERA_SYNC_NODE_HPP_
 #define CAMERA_SYNC__MULTI_CAMERA_SYNC_NODE_HPP_
 
-#if __has_include(<cv_bridge/cv_bridge.hpp>)
-  #include <cv_bridge/cv_bridge.hpp>
-#elif __has_include(<cv_bridge/cv_bridge.h>)
-  #include <cv_bridge/cv_bridge.h>
-#else
-  #error "cv_bridge headers not found"
-#endif
 #include <message_filters/subscriber.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/synchronizer.h>
@@ -31,6 +24,7 @@
 #include <string>
 #include <vector>
 
+#include <cv_bridge/cv_bridge.hpp>
 #include <image_transport/image_transport.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
