@@ -18,7 +18,7 @@
  *
  * This header defines the main DeepObjectDetectionNode class which:
  * - Subscribes to MultiImage messages (synchronized multi-camera input)
- * - Batches images for efficient inference
+ * - Processes MultiImage messages directly without additional batching
  * - Runs preprocessing, inference, and postprocessing
  * - Publishes Detection2DArray messages with bounding boxes and scores
  * - Manages lifecycle states (configure, activate, deactivate, cleanup, shutdown)
@@ -26,9 +26,7 @@
 
 #pragma once
 
-#include <deque>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 
@@ -56,7 +54,7 @@ namespace deep_object_detection
  * This node performs object detection on synchronized multi-camera streams via MultiImage messages.
  * It supports:
  * - MultiImage input: synchronized compressed images from multiple cameras
- * - Batch processing: groups images for efficient inference
+ * - Direct processing: processes MultiImage messages immediately without queuing
  * - Multiple backends: CPU, CUDA, or TensorRT execution providers
  * - Configurable preprocessing: resizing, normalization, color format conversion
  * - Flexible postprocessing: NMS, score thresholds, multiple output formats
@@ -86,11 +84,10 @@ public:
     const rclcpp_lifecycle::State &) override;
 
   /**
-   * @brief Activate the node: start subscriptions and batch processing timer
+   * @brief Activate the node: start subscriptions
    * @return SUCCESS if activation succeeds, FAILURE otherwise
    *
-   * Creates subscriptions (either MultiImage or individual camera topics based on configuration),
-   * starts the batch processing timer, and activates the detection publisher.
+   * Creates MultiImage subscription and activates the detection publisher.
    */
   rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_activate(
     const rclcpp_lifecycle::State &) override;
@@ -129,7 +126,7 @@ private:
    * @brief Declare and read all ROS parameters from the parameter server
    *
    * Reads configuration for model, preprocessing, postprocessing, execution provider,
-   * batching, and topic names. Validates required parameters and sets defaults.
+   * and topic names. Validates required parameters and sets defaults.
    */
   void declareAndReadParameters();
 
@@ -145,47 +142,19 @@ private:
    * @brief Callback for MultiImage messages
    * @param msg Shared pointer to MultiImage message containing synchronized compressed images
    *
-   * Decodes each compressed image in the MultiImage message and enqueues them
-   * for batch processing. Failed decodes are dropped according to decode_failure_policy.
+   * Decodes compressed images in the MultiImage message and processes them directly.
+   * Failed decodes are dropped according to decode_failure_policy.
    */
   void onMultiImage(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg);
 
   /**
-   * @brief Handle a single compressed image from MultiImage message
-   * @param msg Compressed image message to decode and enqueue
+   * @brief Process a MultiImage message through the inference pipeline
+   * @param msg MultiImage message containing synchronized compressed images
    *
-   * Decodes the compressed image using cv::imdecode(). If decoding fails,
-   * the image is dropped according to decode_failure_policy.
+   * Decodes images, runs preprocessing, inference, and postprocessing.
+   * Publishes detection results for each image in the MultiImage.
    */
-  void handleCompressedImage(const sensor_msgs::msg::CompressedImage & msg);
-
-  /**
-   * @brief Enqueue an image for batch processing
-   * @param image Decoded BGR image (OpenCV Mat)
-   * @param header ROS message header with timestamp and frame_id
-   *
-   * Adds the image to the processing queue. If queue is full, drops oldest
-   * image according to queue_overflow_policy. Thread-safe.
-   */
-  void enqueueImage(cv::Mat image, const std_msgs::msg::Header & header);
-
-  /**
-   * @brief Timer callback for batch processing
-   *
-   * Called periodically (5ms) to check if enough images have accumulated
-   * to form a batch. Processes batch if min_batch_size is met or max_batch_latency_ms
-   * timeout has elapsed.
-   */
-  void onBatchTimer();
-
-  /**
-   * @brief Process a batch of images through the inference pipeline
-   * @param batch Vector of queued images to process
-   *
-   * Runs preprocessing, inference, and postprocessing for the batch.
-   * Publishes detection results. Runs asynchronously to avoid blocking timer callback.
-   */
-  void processBatch(const std::vector<QueuedImage> & batch);
+  void processMultiImage(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg);
 
   /**
    * @brief Publish detection results for a batch
@@ -234,17 +203,17 @@ private:
    * @brief Cleanup all node resources
    *
    * Releases backend_manager_, preprocessor_, postprocessor_, and clears
-   * all subscriptions and timers. Called during on_cleanup() and on_shutdown().
+   * all subscriptions. Called during on_cleanup() and on_shutdown().
    */
   void cleanupAllResources();
 
   /**
-   * @brief Stop all subscriptions and cancel batch timer
+   * @brief Stop all subscriptions
    *
    * Called during on_deactivate() to stop processing without full cleanup.
    * Node can be reactivated without reconfiguration.
    */
-  void stopSubscriptionsAndTimer();
+  void stopSubscriptions();
 
   /// Configuration parameters loaded from ROS parameter server
   DetectionParams params_;
@@ -259,18 +228,8 @@ private:
   rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::ImageMarker>::SharedPtr image_marker_pub_;
   /// Output annotations topic name for ImageMarker messages
   std::string output_annotations_topic_;
-  /// Timer for periodic batch processing checks (5ms period)
-  rclcpp::TimerBase::SharedPtr batch_timer_;
-
-  /// Queue of images waiting to be processed (thread-safe)
-  std::deque<QueuedImage> image_queue_;
-  /// Mutex protecting image_queue_ access
-  std::mutex queue_mutex_;
   /// Callback group for subscription (allows concurrent execution)
   rclcpp::CallbackGroup::SharedPtr callback_group_;
-
-  /// Counter for dropped images (queue overflow or decode failures)
-  size_t dropped_images_count_;
 
   /// Image preprocessor (resize, normalize, color conversion)
   std::unique_ptr<ImagePreprocessor> preprocessor_;

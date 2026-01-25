@@ -38,9 +38,6 @@ deep_object_detection_node:
         score_idx: 4
         class_idx: 5
 
-    max_batch_size: 6
-    queue_size: 10
-
     preferred_provider: "tensorrt"
     device_id: 0
     enable_trt_engine_cache: true

@@ -19,7 +19,7 @@
  * This header defines:
  * - Enum types for configuration options (Provider, BboxFormat, NormalizationType, etc.)
  * - Configuration structures (PreprocessingConfig, PostprocessingConfig, DetectionParams)
- * - Data structures (ImageMeta, QueuedImage, PackedInput, SimpleDetection)
+ * - Data structures (ImageMeta, PackedInput, SimpleDetection)
  * - Helper functions for string-to-enum conversion
  * - ROS message type aliases (Detection2DMsg, Detection2DArrayMsg)
  */
@@ -138,16 +138,6 @@ enum class CoordinateSpace
 };
 
 /**
- * @brief Policy for handling queue overflow
- */
-enum class QueueOverflowPolicy
-{
-  DROP_OLDEST,  ///< Drop oldest image when queue is full (default)
-  DROP_NEWEST,  ///< Drop newest image when queue is full
-  THROW  ///< Throw exception when queue is full (not currently used)
-};
-
-/**
  * @brief Policy for handling image decode failures
  */
 enum class DecodeFailurePolicy
@@ -171,15 +161,6 @@ struct ImageMeta
   float scale_y = 1.0f;  ///< Vertical scale factor (original_height / input_height)
   float pad_x = 0.0f;  ///< Horizontal padding offset (for letterbox)
   float pad_y = 0.0f;  ///< Vertical padding offset (for letterbox)
-};
-
-/**
- * @brief Queued image waiting for batch processing
- */
-struct QueuedImage
-{
-  cv::Mat bgr;  ///< Decoded BGR image (OpenCV Mat)
-  std_msgs::msg::Header header;  ///< ROS message header with timestamp and frame_id
 };
 
 /**
@@ -272,9 +253,6 @@ struct DetectionParams
   PostprocessingConfig postprocessing;  ///< Postprocessing configuration
   std::string input_qos_reliability{"best_effort"};  ///< Input topic QoS reliability (always "best_effort")
   std::string output_detections_topic{"/detections"};  ///< Output topic for detections
-  int max_batch_size{3};  ///< Maximum images per batch
-  int queue_size{10};  ///< Maximum queue size (0 = unlimited)
-  QueueOverflowPolicy queue_overflow_policy{QueueOverflowPolicy::DROP_OLDEST};  ///< Queue overflow policy
   DecodeFailurePolicy decode_failure_policy{DecodeFailurePolicy::DROP};  ///< Decode failure policy
   std::string preferred_provider{"tensorrt"};  ///< Preferred execution provider ("tensorrt", "cuda", or "cpu")
   int device_id{0};  ///< GPU device ID (for CUDA/TensorRT)
@@ -394,23 +372,6 @@ inline CoordinateSpace stringToCoordinateSpace(const std::string & space)
     return CoordinateSpace::ORIGINAL;
   }
   return CoordinateSpace::PREPROCESSED;
-}
-
-/**
- * @brief Convert string to QueueOverflowPolicy enum
- * @param policy Policy string ("drop_oldest", "drop_newest", or "throw", case-insensitive)
- * @return QueueOverflowPolicy enum (defaults to DROP_OLDEST if unknown)
- */
-inline QueueOverflowPolicy stringToQueueOverflowPolicy(const std::string & policy)
-{
-  if (policy == "drop_oldest" || policy == "DROP_OLDEST") {
-    return QueueOverflowPolicy::DROP_OLDEST;
-  } else if (policy == "drop_newest" || policy == "DROP_NEWEST") {
-    return QueueOverflowPolicy::DROP_NEWEST;
-  } else if (policy == "throw" || policy == "THROW") {
-    return QueueOverflowPolicy::THROW;
-  }
-  return QueueOverflowPolicy::DROP_OLDEST;
 }
 
 /**

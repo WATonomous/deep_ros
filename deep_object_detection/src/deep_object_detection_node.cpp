@@ -17,16 +17,13 @@
 #include <algorithm>
 #include <chrono>
 #include <cinttypes>
-#include <deque>
 #include <fstream>
 #include <functional>
 #include <iterator>
 #include <memory>
-#include <mutex>
 #include <numeric>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -47,7 +44,6 @@ namespace deep_object_detection
 
 DeepObjectDetectionNode::DeepObjectDetectionNode(const rclcpp::NodeOptions & options)
 : LifecycleNode("deep_object_detection_node", options)
-, dropped_images_count_(0)
 {
   declareAndReadParameters();
   RCLCPP_INFO(this->get_logger(), "Deep object detection node created, waiting for configuration");
@@ -136,17 +132,6 @@ void DeepObjectDetectionNode::declareAndReadParameters()
   params_.output_detections_topic = this->declare_parameter<std::string>("output_detections_topic", "/detections");
   output_annotations_topic_ = this->declare_parameter<std::string>("output_annotations_topic", "/image_annotations");
 
-  params_.max_batch_size = this->declare_parameter<int>("max_batch_size", 3);
-  params_.queue_size = this->declare_parameter<int>("queue_size", 10);
-  if (params_.queue_size < 0) {
-    RCLCPP_WARN(
-      this->get_logger(),
-      "queue_size (%d) is negative, clamping to 0 (unlimited internal queue). "
-      "Note: ROS QoS depth will use minimum of 1.",
-      params_.queue_size);
-    params_.queue_size = 0;
-  }
-  params_.queue_overflow_policy = QueueOverflowPolicy::DROP_OLDEST;
   params_.decode_failure_policy = DecodeFailurePolicy::DROP;
 
   params_.preferred_provider = this->declare_parameter<std::string>("preferred_provider", "tensorrt");
@@ -175,11 +160,12 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
       return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
     }
 
-    const size_t batch = static_cast<size_t>(params_.max_batch_size);
+    // Use a reasonable default batch size for shape detection (model may support variable batch)
     const size_t channels = RGB_CHANNELS;
     const size_t height = static_cast<size_t>(params_.preprocessing.input_height);
     const size_t width = static_cast<size_t>(params_.preprocessing.input_width);
-    std::vector<size_t> input_shape = {batch, channels, height, width};
+    // Use batch size of 1 for shape detection - actual batch size will be determined by MultiImage
+    std::vector<size_t> input_shape = {1, channels, height, width};
     std::vector<size_t> output_shape = backend_manager_->getOutputShape(input_shape);
 
     auto formatShape = [](const std::vector<size_t> & shape) {
@@ -240,12 +226,11 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
 
     RCLCPP_INFO(
       this->get_logger(),
-      "Deep object detection node configured. Model: %s, input size: %dx%d, batch_size: %d, provider: %s, "
+      "Deep object detection node configured. Model: %s, input size: %dx%d, provider: %s, "
       "postprocessor: %s, output shape: [%s]",
       params_.model_path.c_str(),
       params_.preprocessing.input_width,
       params_.preprocessing.input_height,
-      params_.max_batch_size,
       backend_manager_->activeProvider().c_str(),
       postprocessor_->getFormatName().c_str(),
       formatShape(output_shape).c_str());
@@ -267,9 +252,6 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
     callback_group_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant);
 
     setupSubscription();
-
-    batch_timer_ = this->create_wall_timer(
-      std::chrono::milliseconds(5), std::bind(&DeepObjectDetectionNode::onBatchTimer, this), callback_group_);
 
     if (detection_pub_) {
       detection_pub_->on_activate();
@@ -298,7 +280,7 @@ void DeepObjectDetectionNode::cleanupPartialConfiguration()
 
 void DeepObjectDetectionNode::cleanupAllResources()
 {
-  stopSubscriptionsAndTimer();
+  stopSubscriptions();
   backend_manager_.reset();
   preprocessor_.reset();
   postprocessor_.reset();
@@ -307,20 +289,10 @@ void DeepObjectDetectionNode::cleanupAllResources()
   image_marker_pub_.reset();
 }
 
-void DeepObjectDetectionNode::stopSubscriptionsAndTimer()
+void DeepObjectDetectionNode::stopSubscriptions()
 {
-  if (batch_timer_) {
-    batch_timer_->cancel();
-    batch_timer_.reset();
-  }
-
   if (multi_image_sub_) {
     multi_image_sub_.reset();
-  }
-
-  {
-    std::lock_guard<std::mutex> lock(queue_mutex_);
-    image_queue_.clear();
   }
 }
 
@@ -328,7 +300,7 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
   const rclcpp_lifecycle::State &)
 {
   RCLCPP_INFO(this->get_logger(), "Deactivating deep object detection node");
-  stopSubscriptionsAndTimer();
+  stopSubscriptions();
   if (detection_pub_) {
     detection_pub_->on_deactivate();
   }
@@ -361,8 +333,7 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
 
 void DeepObjectDetectionNode::setupSubscription()
 {
-  const size_t qos_depth = std::max(static_cast<size_t>(1), static_cast<size_t>(params_.queue_size));
-  auto qos_profile = rclcpp::QoS(rclcpp::KeepLast(qos_depth));
+  auto qos_profile = rclcpp::QoS(rclcpp::KeepLast(1));
   qos_profile.best_effort();
 
   rclcpp::SubscriptionOptions options;
@@ -385,101 +356,26 @@ void DeepObjectDetectionNode::setupSubscription()
 void DeepObjectDetectionNode::onMultiImage(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg)
 {
   RCLCPP_DEBUG(this->get_logger(), "Received MultiImage message with %zu images", msg->images.size());
-  for (size_t i = 0; i < msg->images.size(); ++i) {
-    const auto & compressed_img = msg->images[i];
-    try {
-      handleCompressedImage(compressed_img);
-    } catch (const std::exception & e) {
-      RCLCPP_ERROR(this->get_logger(), "Exception processing image %zu in MultiImage: %s", i, e.what());
-    }
-  }
-  RCLCPP_DEBUG(this->get_logger(), "Processed MultiImage message with %zu synchronized images", msg->images.size());
-}
-
-void DeepObjectDetectionNode::handleCompressedImage(const sensor_msgs::msg::CompressedImage & msg)
-{
-  cv::Mat decoded = cv::imdecode(msg.data, cv::IMREAD_COLOR);
-  if (decoded.empty()) {
-    RCLCPP_WARN_THROTTLE(
-      this->get_logger(), *this->get_clock(), 1000, "Failed to decode compressed image, dropping frame");
-    return;
-  }
-
-  const int width = decoded.cols;
-  const int height = decoded.rows;
-  enqueueImage(std::move(decoded), msg.header);
-  RCLCPP_DEBUG(
-    this->get_logger(), "Enqueued decoded image (size: %zu bytes, decoded: %dx%d)", msg.data.size(), width, height);
-}
-
-void DeepObjectDetectionNode::enqueueImage(cv::Mat image, const std_msgs::msg::Header & header)
-{
-  size_t queue_size_after = 0;
-  bool dropped = false;
-  {
-    std::lock_guard<std::mutex> lock(queue_mutex_);
-    const size_t limit = static_cast<size_t>(params_.queue_size);
-    if (limit > 0 && image_queue_.size() >= limit) {
-      if (!image_queue_.empty()) {
-        image_queue_.pop_front();
-        dropped = true;
-        dropped_images_count_++;
-      }
-    }
-
-    image_queue_.push_back({std::move(image), header});
-    queue_size_after = image_queue_.size();
-  }
-
-  if (dropped) {
-    RCLCPP_WARN(
-      this->get_logger(),
-      "Queue overflow: dropped oldest image (queue size: %zu, limit: %zu, total dropped: %zu)",
-      queue_size_after,
-      static_cast<size_t>(params_.queue_size),
-      dropped_images_count_);
+  try {
+    processMultiImage(msg);
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(this->get_logger(), "Exception processing MultiImage: %s", e.what());
   }
 }
 
-void DeepObjectDetectionNode::onBatchTimer()
-{
-  if (this->get_current_state().id() != lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
-    return;
-  }
-
-  std::vector<QueuedImage> batch;
-  const size_t batch_size = static_cast<size_t>(params_.max_batch_size);
-
-  {
-    std::lock_guard<std::mutex> lock(queue_mutex_);
-    if (image_queue_.size() < batch_size) {
-      return;
-    }
-
-    batch.reserve(batch_size);
-    for (size_t i = 0; i < batch_size; ++i) {
-      batch.push_back(std::move(image_queue_.front()));
-      image_queue_.pop_front();
-    }
-  }
-
-  if (!batch.empty()) {
-    try {
-      processBatch(batch);
-    } catch (const std::exception & e) {
-      RCLCPP_ERROR(this->get_logger(), "Exception in batch processing: %s", e.what());
-    }
-  }
-}
-
-void DeepObjectDetectionNode::processBatch(const std::vector<QueuedImage> & batch)
+void DeepObjectDetectionNode::processMultiImage(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg)
 {
   if (!backend_manager_ || !backend_manager_->hasExecutor()) {
     RCLCPP_ERROR(
       this->get_logger(),
-      "Cannot process batch: backend not initialized (backend_manager_: %s, hasExecutor: %s)",
+      "Cannot process MultiImage: backend not initialized (backend_manager_: %s, hasExecutor: %s)",
       backend_manager_ ? "exists" : "null",
       (backend_manager_ && backend_manager_->hasExecutor()) ? "true" : "false");
+    return;
+  }
+
+  if (msg->images.empty()) {
+    RCLCPP_WARN(this->get_logger(), "Received empty MultiImage message, skipping");
     return;
   }
 
@@ -487,24 +383,31 @@ void DeepObjectDetectionNode::processBatch(const std::vector<QueuedImage> & batc
   std::vector<cv::Mat> processed;
   std::vector<ImageMeta> metas;
   std::vector<std_msgs::msg::Header> headers;
-  processed.reserve(batch.size());
-  metas.reserve(batch.size());
-  headers.reserve(batch.size());
+  processed.reserve(msg->images.size());
+  metas.reserve(msg->images.size());
+  headers.reserve(msg->images.size());
 
-  for (const auto & item : batch) {
+  // Decode and preprocess all images in the MultiImage message
+  for (const auto & compressed_img : msg->images) {
+    cv::Mat decoded = cv::imdecode(compressed_img.data, cv::IMREAD_COLOR);
+    if (decoded.empty()) {
+      RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Failed to decode compressed image, skipping");
+      continue;
+    }
+
     ImageMeta meta;
-    cv::Mat preprocessed = preprocessor_->preprocess(item.bgr, meta);
+    cv::Mat preprocessed = preprocessor_->preprocess(decoded, meta);
     if (preprocessed.empty()) {
       RCLCPP_WARN(this->get_logger(), "Preprocessing returned empty image, skipping");
       continue;
     }
     processed.push_back(std::move(preprocessed));
     metas.push_back(meta);
-    headers.push_back(item.header);
+    headers.push_back(compressed_img.header);
   }
 
   if (processed.empty()) {
-    RCLCPP_WARN(this->get_logger(), "No valid images after preprocessing, skipping batch");
+    RCLCPP_WARN(this->get_logger(), "No valid images after preprocessing, skipping MultiImage");
     return;
   }
 
@@ -526,25 +429,16 @@ void DeepObjectDetectionNode::processBatch(const std::vector<QueuedImage> & batc
   auto end_time = std::chrono::steady_clock::now();
   auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
 
-  size_t dropped_count = 0;
-  {
-    std::lock_guard<std::mutex> lock(queue_mutex_);
-    dropped_count = dropped_images_count_;
-  }
-
   RCLCPP_INFO_THROTTLE(
     this->get_logger(),
     *this->get_clock(),
     2000,
-    "Batch processing completed: %zu images in %" PRId64 " ms, total detections: %zu, dropped images: %zu",
-    batch.size(),
+    "MultiImage processing completed: %zu images in %" PRId64 " ms, total detections: %zu",
+    processed.size(),
     static_cast<int64_t>(elapsed_ms),
-    std::accumulate(
-      batch_detections.begin(),
-      batch_detections.end(),
-      size_t(0),
-      [](size_t sum, const auto & dets) { return sum + dets.size(); }),
-    dropped_count);
+    std::accumulate(batch_detections.begin(), batch_detections.end(), size_t(0), [](size_t sum, const auto & dets) {
+      return sum + dets.size();
+    }));
 
   publishDetections(batch_detections, headers, metas);
 }

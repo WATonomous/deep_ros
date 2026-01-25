@@ -175,17 +175,18 @@ void BackendManager::warmupTensorShapeCache()
   const size_t width = static_cast<size_t>(params_.preprocessing.input_width);
   const size_t per_image = channels * height * width;
 
-  const int batch = params_.max_batch_size;
+  // Use batch size 1 for warmup - actual batch size will be determined by MultiImage
+  const size_t batch = 1;
   RCLCPP_INFO(
-    node_.get_logger(), "Priming %s backend tensor shapes for batch size %d", active_provider_.c_str(), batch);
+    node_.get_logger(), "Priming %s backend tensor shapes for batch size %zu", active_provider_.c_str(), batch);
 
   PackedInput dummy;
-  dummy.shape = {static_cast<size_t>(batch), channels, height, width};
-  dummy.data.assign(static_cast<size_t>(batch) * per_image, 0.0f);
+  dummy.shape = {batch, channels, height, width};
+  dummy.data.assign(batch * per_image, 0.0f);
 
   auto input_tensor = buildInputTensor(dummy);
   (void)executor_->run_inference(input_tensor);
-  RCLCPP_DEBUG(node_.get_logger(), "Cached tensor shape for batch size %d", batch);
+  RCLCPP_DEBUG(node_.get_logger(), "Cached tensor shape for batch size %zu", batch);
 }
 
 bool BackendManager::isCudaRuntimeAvailable() const

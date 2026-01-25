@@ -118,10 +118,6 @@ TEST_CASE_METHOD(
     REQUIRE(node->has_parameter("postprocessing.max_detections"));
     REQUIRE(node->has_parameter("postprocessing.score_activation"));
 
-    // Batching parameters
-    REQUIRE(node->has_parameter("max_batch_size"));
-    REQUIRE(node->has_parameter("queue_size"));
-
     // Execution provider parameters
     REQUIRE(node->has_parameter("preferred_provider"));
     REQUIRE(node->has_parameter("device_id"));
@@ -151,37 +147,9 @@ TEST_CASE_METHOD(
     REQUIRE(node->get_parameter("postprocessing.max_detections").as_int() == 300);
     REQUIRE(node->get_parameter("postprocessing.score_activation").as_string() == "sigmoid");
 
-    // Batching parameters
-    REQUIRE(node->get_parameter("max_batch_size").as_int() == 3);
-    REQUIRE(node->get_parameter("queue_size").as_int() == 10);
-
     // Execution provider parameters
     REQUIRE(node->get_parameter("preferred_provider").as_string() == "tensorrt");
     REQUIRE(node->get_parameter("device_id").as_int() == 0);
-  }
-
-  SECTION("Batch size parameter can be set")
-  {
-    // Test setting max_batch_size to 6 (as per recent configuration change)
-    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("max_batch_size", 6)};
-    auto result = node->set_parameters(params);
-    REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("max_batch_size").as_int() == 6);
-  }
-
-  SECTION("Queue size parameter validation")
-  {
-    // Test unlimited queue (0)
-    auto params_unlimited = std::vector<rclcpp::Parameter>{rclcpp::Parameter("queue_size", 0)};
-    auto result_unlimited = node->set_parameters(params_unlimited);
-    REQUIRE(result_unlimited[0].successful == true);
-    REQUIRE(node->get_parameter("queue_size").as_int() == 0);
-
-    // Test positive queue size
-    auto params_positive = std::vector<rclcpp::Parameter>{rclcpp::Parameter("queue_size", 20)};
-    auto result_positive = node->set_parameters(params_positive);
-    REQUIRE(result_positive[0].successful == true);
-    REQUIRE(node->get_parameter("queue_size").as_int() == 20);
   }
 }
 
@@ -325,30 +293,6 @@ TEST_CASE_METHOD(
 {
   rclcpp::NodeOptions options;
   auto node = std::make_shared<DeepObjectDetectionNode>(options);
-
-  SECTION("Batch size can be set to 6 (for 6-camera setup)")
-  {
-    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("max_batch_size", 6)};
-    auto result = node->set_parameters(params);
-    REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("max_batch_size").as_int() == 6);
-  }
-
-  SECTION("Batch size can be set to 1 (single camera)")
-  {
-    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("max_batch_size", 1)};
-    auto result = node->set_parameters(params);
-    REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("max_batch_size").as_int() == 1);
-  }
-
-  SECTION("Batch size can be set to larger values")
-  {
-    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("max_batch_size", 8)};
-    auto result = node->set_parameters(params);
-    REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("max_batch_size").as_int() == 8);
-  }
 }
 
 }  // namespace test
