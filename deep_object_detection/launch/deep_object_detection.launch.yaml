@@ -29,6 +29,11 @@ launch:
       description: "Output detections topic (configured via remapping)"
 
   - arg:
+      name: "output_annotations_topic"
+      default: "/image_annotations"
+      description: "Output image annotations topic (configured via remapping)"
+
+  - arg:
       name: "use_lifecycle_manager"
       default: "true"
       description: "Whether to use nav2_lifecycle_manager for automatic lifecycle transitions"
@@ -47,12 +52,10 @@ launch:
               to: "$(var input_topic)"
             - from: "/detections"
               to: "$(var output_detections_topic)"
+            - from: "/image_annotations"
+              to: "$(var output_annotations_topic)"
           param:
             - from: "$(var config_file)"
-            - name: "input_topic"
-              value: "$(var input_topic)"
-            - name: "output_detections_topic"
-              value: "$(var output_detections_topic)"
 
   - node:
       pkg: "nav2_lifecycle_manager"

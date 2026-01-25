@@ -2,9 +2,6 @@ deep_object_detection_node:
   ros__parameters:
     model_path: "/workspaces/deep_ros/yolov8m.onnx"
     class_names_path: "/workspaces/deep_ros/deep_object_detection/config/coco_classes.txt"
-    input_topic: "/multi_camera_sync/multi_image_compressed"
-    output_detections_topic: "/detections"
-    output_annotations_topic: "/image_annotations"
 
     model:
       num_classes: 80

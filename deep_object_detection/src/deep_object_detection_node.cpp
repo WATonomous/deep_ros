@@ -89,7 +89,7 @@ void DeepObjectDetectionNode::declareParameters()
   this->declare_parameter<int>("postprocessing.layout.score_idx", 4);
   this->declare_parameter<int>("postprocessing.layout.class_idx", 5);
 
-  this->declare_parameter<std::string>("input_topic", "");
+  this->declare_parameter<std::string>("input_topic", "/multi_camera_sync/multi_image_compressed");
   this->declare_parameter<std::string>("output_detections_topic", "/detections");
   this->declare_parameter<std::string>("output_annotations_topic", "/image_annotations");
 
