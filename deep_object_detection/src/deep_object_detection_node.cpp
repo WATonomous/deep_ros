@@ -132,8 +132,6 @@ void DeepObjectDetectionNode::declareAndReadParameters()
   params_.output_detections_topic = this->declare_parameter<std::string>("output_detections_topic", "/detections");
   output_annotations_topic_ = this->declare_parameter<std::string>("output_annotations_topic", "/image_annotations");
 
-  params_.decode_failure_policy = DecodeFailurePolicy::DROP;
-
   params_.preferred_provider = this->declare_parameter<std::string>("preferred_provider", "tensorrt");
   params_.device_id = this->declare_parameter<int>("device_id", 0);
   params_.warmup_tensor_shapes = true;

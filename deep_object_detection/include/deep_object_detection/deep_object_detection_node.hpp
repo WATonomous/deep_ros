@@ -143,7 +143,7 @@ private:
    * @param msg Shared pointer to MultiImage message containing synchronized compressed images
    *
    * Decodes compressed images in the MultiImage message and processes them directly.
-   * Failed decodes are dropped according to decode_failure_policy.
+   * Failed decodes are dropped with a warning.
    */
   void onMultiImage(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg);
 

@@ -70,14 +70,6 @@ enum class Provider
 };
 
 /**
- * @brief Postprocessor type (currently only generic is supported)
- */
-enum class PostprocessorType
-{
-  GENERIC  ///< Generic postprocessor (supports various output formats)
-};
-
-/**
  * @brief Bounding box coordinate format
  */
 enum class BboxFormat
@@ -135,15 +127,6 @@ enum class CoordinateSpace
 {
   PREPROCESSED,  ///< Coordinates in preprocessed image space (model input size)
   ORIGINAL  ///< Coordinates in original image space (not currently used)
-};
-
-/**
- * @brief Policy for handling image decode failures
- */
-enum class DecodeFailurePolicy
-{
-  DROP,  ///< Drop failed decode and log warning (default)
-  THROW  ///< Throw exception on decode failure (not currently used)
 };
 
 /**
@@ -253,7 +236,6 @@ struct DetectionParams
   PostprocessingConfig postprocessing;  ///< Postprocessing configuration
   std::string input_qos_reliability{"best_effort"};  ///< Input topic QoS reliability (always "best_effort")
   std::string output_detections_topic{"/detections"};  ///< Output topic for detections
-  DecodeFailurePolicy decode_failure_policy{DecodeFailurePolicy::DROP};  ///< Decode failure policy
   std::string preferred_provider{"tensorrt"};  ///< Preferred execution provider ("tensorrt", "cuda", or "cpu")
   int device_id{0};  ///< GPU device ID (for CUDA/TensorRT)
   bool warmup_tensor_shapes{true};  ///< Warmup tensor shapes (always true, not configurable)
@@ -261,16 +243,6 @@ struct DetectionParams
   std::string trt_engine_cache_path{"/tmp/deep_ros_ort_trt_cache"};  ///< TensorRT engine cache directory
   std::vector<std::string> class_names;  ///< Class name strings (loaded from file or empty)
 };
-
-/**
- * @brief Convert string to PostprocessorType enum
- * @param type Postprocessor type string (currently unused, always returns GENERIC)
- * @return PostprocessorType::GENERIC
- */
-inline PostprocessorType stringToPostprocessorType(const std::string & /*type*/)
-{
-  return PostprocessorType::GENERIC;
-}
 
 /**
  * @brief Convert string to BboxFormat enum
@@ -372,21 +344,6 @@ inline CoordinateSpace stringToCoordinateSpace(const std::string & space)
     return CoordinateSpace::ORIGINAL;
   }
   return CoordinateSpace::PREPROCESSED;
-}
-
-/**
- * @brief Convert string to DecodeFailurePolicy enum
- * @param policy Policy string ("drop" or "throw", case-insensitive)
- * @return DecodeFailurePolicy enum (defaults to DROP if unknown)
- */
-inline DecodeFailurePolicy stringToDecodeFailurePolicy(const std::string & policy)
-{
-  if (policy == "drop" || policy == "DROP") {
-    return DecodeFailurePolicy::DROP;
-  } else if (policy == "throw" || policy == "THROW") {
-    return DecodeFailurePolicy::THROW;
-  }
-  return DecodeFailurePolicy::DROP;
 }
 
 /**

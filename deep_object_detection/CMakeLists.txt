@@ -37,10 +37,6 @@ find_package(pluginlib REQUIRED)
 find_package(rcl_interfaces REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc)
 
-add_executable(deep_object_detection_node
-  src/main.cpp
-)
-
 add_library(deep_object_detection_lib SHARED
   src/backend_manager.cpp
   src/generic_postprocessor.cpp
@@ -75,23 +71,10 @@ target_include_directories(deep_object_detection_lib SYSTEM PUBLIC ${OpenCV_INCL
 
 rclcpp_components_register_nodes(deep_object_detection_lib "deep_object_detection::DeepObjectDetectionNode")
 
-target_link_libraries(deep_object_detection_node
-  deep_object_detection_lib
-)
-
-target_include_directories(deep_object_detection_node PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-
 install(TARGETS deep_object_detection_lib
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
-)
-
-install(TARGETS deep_object_detection_node
-  RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
 install(DIRECTORY include/

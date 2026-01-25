@@ -33,22 +33,26 @@ launch:
       default: "true"
       description: "Whether to use nav2_lifecycle_manager for automatic lifecycle transitions"
 
-  - node:
-      pkg: "deep_object_detection"
-      exec: "deep_object_detection_node"
-      name: "deep_object_detection_node"
+  - node_container:
+      pkg: "rclcpp_components"
+      exec: "component_container"
+      name: "detection_container"
       output: "screen"
-      remap:
-        - from: "/multi_camera_sync/multi_image_compressed"
-          to: "$(var input_topic)"
-        - from: "/detections"
-          to: "$(var output_detections_topic)"
-      param:
-        - from: "$(var config_file)"
-        - name: "input_topic"
-          value: "$(var input_topic)"
-        - name: "output_detections_topic"
-          value: "$(var output_detections_topic)"
+      composable_node:
+        - pkg: "deep_object_detection"
+          plugin: "deep_object_detection::DeepObjectDetectionNode"
+          name: "deep_object_detection_node"
+          remap:
+            - from: "/multi_camera_sync/multi_image_compressed"
+              to: "$(var input_topic)"
+            - from: "/detections"
+              to: "$(var output_detections_topic)"
+          param:
+            - from: "$(var config_file)"
+            - name: "input_topic"
+              value: "$(var input_topic)"
+            - name: "output_detections_topic"
+              value: "$(var output_detections_topic)"
 
   - node:
       pkg: "nav2_lifecycle_manager"
