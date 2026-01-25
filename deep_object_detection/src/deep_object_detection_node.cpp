@@ -45,99 +45,120 @@ namespace deep_object_detection
 DeepObjectDetectionNode::DeepObjectDetectionNode(const rclcpp::NodeOptions & options)
 : LifecycleNode("deep_object_detection_node", options)
 {
-  declareAndReadParameters();
+  declareParameters();
   RCLCPP_INFO(this->get_logger(), "Deep object detection node created, waiting for configuration");
 }
 
-void DeepObjectDetectionNode::declareAndReadParameters()
+void DeepObjectDetectionNode::declareParameters()
 {
-  params_.model_path = this->declare_parameter<std::string>("model_path", "");
+  // Declare parameters
+  this->declare_parameter<std::string>("model_path", "");
+  this->declare_parameter<std::string>("class_names_path", "");
+  this->declare_parameter<int>("model.num_classes", 80);
+  this->declare_parameter<std::string>("model.bbox_format", "cxcywh");
 
-  auto class_names_path = this->declare_parameter<std::string>("class_names_path", "");
-  params_.model_metadata.num_classes = this->declare_parameter<int>("model.num_classes", 80);
-  params_.model_metadata.class_names_file = class_names_path;
-  auto bbox_format_str = this->declare_parameter<std::string>("model.bbox_format", "cxcywh");
-  params_.model_metadata.bbox_format = stringToBboxFormat(bbox_format_str);
+  this->declare_parameter<int>("preprocessing.input_width", 640);
+  this->declare_parameter<int>("preprocessing.input_height", 640);
+  this->declare_parameter<std::string>("preprocessing.normalization_type", "scale_0_1");
+  this->declare_parameter<std::vector<double>>("preprocessing.mean", {0.0, 0.0, 0.0});
+  this->declare_parameter<std::vector<double>>("preprocessing.std", {1.0, 1.0, 1.0});
+  this->declare_parameter<std::string>("preprocessing.resize_method", "letterbox");
+  this->declare_parameter<int>("preprocessing.pad_value", 114);
+  this->declare_parameter<std::string>("preprocessing.color_format", "rgb");
 
-  params_.preprocessing.input_width = this->declare_parameter<int>("preprocessing.input_width", 640);
-  params_.preprocessing.input_height = this->declare_parameter<int>("preprocessing.input_height", 640);
-  auto normalization_type_str = this->declare_parameter<std::string>("preprocessing.normalization_type", "scale_0_1");
-  params_.preprocessing.normalization_type = stringToNormalizationType(normalization_type_str);
-  auto mean_d = this->declare_parameter<std::vector<double>>("preprocessing.mean", {0.0, 0.0, 0.0});
-  auto std_d = this->declare_parameter<std::vector<double>>("preprocessing.std", {1.0, 1.0, 1.0});
-  params_.preprocessing.mean.clear();
-  params_.preprocessing.std.clear();
-  params_.preprocessing.mean.reserve(mean_d.size());
-  params_.preprocessing.std.reserve(std_d.size());
-  std::transform(mean_d.begin(), mean_d.end(), std::back_inserter(params_.preprocessing.mean), [](double v) {
-    return static_cast<float>(v);
-  });
-  std::transform(std_d.begin(), std_d.end(), std::back_inserter(params_.preprocessing.std), [](double v) {
-    return static_cast<float>(v);
-  });
-  auto resize_method_str = this->declare_parameter<std::string>("preprocessing.resize_method", "letterbox");
-  params_.preprocessing.resize_method = stringToResizeMethod(resize_method_str);
-  params_.preprocessing.pad_value = 114;
-  params_.preprocessing.color_format = this->declare_parameter<std::string>("preprocessing.color_format", "rgb");
+  this->declare_parameter<double>("postprocessing.score_threshold", 0.25);
+  this->declare_parameter<double>("postprocessing.nms_iou_threshold", 0.45);
+  this->declare_parameter<int>("postprocessing.max_detections", 300);
+  this->declare_parameter<std::string>("postprocessing.score_activation", "sigmoid");
+  this->declare_parameter<bool>("postprocessing.enable_nms", true);
+  this->declare_parameter<bool>("postprocessing.use_multi_output", false);
+  this->declare_parameter<int>("postprocessing.output_boxes_idx", 0);
+  this->declare_parameter<int>("postprocessing.output_scores_idx", 1);
+  this->declare_parameter<int>("postprocessing.output_classes_idx", 2);
+  this->declare_parameter<std::string>("postprocessing.class_score_mode", "all_classes");
+  this->declare_parameter<int>("postprocessing.class_score_start_idx", -1);
+  this->declare_parameter<int>("postprocessing.class_score_count", -1);
+  this->declare_parameter<std::string>("postprocessing.coordinate_space", "preprocessed");
 
+  this->declare_parameter<bool>("postprocessing.layout.auto_detect", true);
+  this->declare_parameter<int>("postprocessing.layout.batch_dim", 0);
+  this->declare_parameter<int>("postprocessing.layout.detection_dim", 1);
+  this->declare_parameter<int>("postprocessing.layout.feature_dim", 2);
+  this->declare_parameter<int>("postprocessing.layout.bbox_start_idx", 0);
+  this->declare_parameter<int>("postprocessing.layout.bbox_count", 4);
+  this->declare_parameter<int>("postprocessing.layout.score_idx", 4);
+  this->declare_parameter<int>("postprocessing.layout.class_idx", 5);
+
+  this->declare_parameter<std::string>("input_topic", "");
+  this->declare_parameter<std::string>("output_detections_topic", "/detections");
+  this->declare_parameter<std::string>("output_annotations_topic", "/image_annotations");
+
+  this->declare_parameter<std::string>("preferred_provider", "tensorrt");
+  this->declare_parameter<int>("device_id", 0);
+  this->declare_parameter<bool>("warmup_tensor_shapes", true);
+  this->declare_parameter<bool>("enable_trt_engine_cache", false);
+  this->declare_parameter<std::string>("trt_engine_cache_path", "/tmp/deep_ros_ort_trt_cache");
+
+  // Get parameter values
+  input_topic_ = this->get_parameter("input_topic").as_string();
+  output_annotations_topic_ = this->get_parameter("output_annotations_topic").as_string();
+
+  params_.model_path = this->get_parameter("model_path").as_string();
+  params_.model_metadata.num_classes = this->get_parameter("model.num_classes").as_int();
+  params_.model_metadata.class_names_file = this->get_parameter("class_names_path").as_string();
+  params_.model_metadata.bbox_format = stringToBboxFormat(this->get_parameter("model.bbox_format").as_string());
+
+  // Preprocessing parameters
+  params_.preprocessing.input_width = this->get_parameter("preprocessing.input_width").as_int();
+  params_.preprocessing.input_height = this->get_parameter("preprocessing.input_height").as_int();
+  params_.preprocessing.normalization_type =
+    stringToNormalizationType(this->get_parameter("preprocessing.normalization_type").as_string());
+  auto mean_d = this->get_parameter("preprocessing.mean").as_double_array();
+  auto std_d = this->get_parameter("preprocessing.std").as_double_array();
+  params_.preprocessing.mean = {
+    static_cast<float>(mean_d[0]), static_cast<float>(mean_d[1]), static_cast<float>(mean_d[2])};
+  params_.preprocessing.std = {
+    static_cast<float>(std_d[0]), static_cast<float>(std_d[1]), static_cast<float>(std_d[2])};
+  params_.preprocessing.resize_method =
+    stringToResizeMethod(this->get_parameter("preprocessing.resize_method").as_string());
+  params_.preprocessing.pad_value = this->get_parameter("preprocessing.pad_value").as_int();
+  params_.preprocessing.color_format = this->get_parameter("preprocessing.color_format").as_string();
+
+  // Postprocessing parameters
   params_.postprocessing.score_threshold =
-    static_cast<float>(this->declare_parameter<double>("postprocessing.score_threshold", 0.25));
+    static_cast<float>(this->get_parameter("postprocessing.score_threshold").as_double());
   params_.postprocessing.nms_iou_threshold =
-    static_cast<float>(this->declare_parameter<double>("postprocessing.nms_iou_threshold", 0.45));
-  params_.postprocessing.max_detections = this->declare_parameter<int>("postprocessing.max_detections", 300);
-  auto score_activation_str = this->declare_parameter<std::string>("postprocessing.score_activation", "sigmoid");
-  params_.postprocessing.score_activation = stringToScoreActivation(score_activation_str);
-  params_.postprocessing.enable_nms = true;
+    static_cast<float>(this->get_parameter("postprocessing.nms_iou_threshold").as_double());
+  params_.postprocessing.max_detections = this->get_parameter("postprocessing.max_detections").as_int();
+  params_.postprocessing.score_activation =
+    stringToScoreActivation(this->get_parameter("postprocessing.score_activation").as_string());
+  params_.postprocessing.enable_nms = this->get_parameter("postprocessing.enable_nms").as_bool();
+  params_.postprocessing.use_multi_output = this->get_parameter("postprocessing.use_multi_output").as_bool();
+  params_.postprocessing.output_boxes_idx = this->get_parameter("postprocessing.output_boxes_idx").as_int();
+  params_.postprocessing.output_scores_idx = this->get_parameter("postprocessing.output_scores_idx").as_int();
+  params_.postprocessing.output_classes_idx = this->get_parameter("postprocessing.output_classes_idx").as_int();
+  params_.postprocessing.class_score_mode =
+    stringToClassScoreMode(this->get_parameter("postprocessing.class_score_mode").as_string());
+  params_.postprocessing.class_score_start_idx = this->get_parameter("postprocessing.class_score_start_idx").as_int();
+  params_.postprocessing.class_score_count = this->get_parameter("postprocessing.class_score_count").as_int();
+  params_.postprocessing.coordinate_space =
+    stringToCoordinateSpace(this->get_parameter("postprocessing.coordinate_space").as_string());
 
-  auto class_score_mode_str = this->declare_parameter<std::string>("postprocessing.class_score_mode", "all_classes");
-  params_.postprocessing.class_score_mode = stringToClassScoreMode(class_score_mode_str);
-  params_.postprocessing.class_score_start_idx = -1;
-  params_.postprocessing.class_score_count = -1;
-  params_.postprocessing.coordinate_space = CoordinateSpace::PREPROCESSED;
+  params_.postprocessing.layout.auto_detect = this->get_parameter("postprocessing.layout.auto_detect").as_bool();
+  params_.postprocessing.layout.batch_dim = this->get_parameter("postprocessing.layout.batch_dim").as_int();
+  params_.postprocessing.layout.detection_dim = this->get_parameter("postprocessing.layout.detection_dim").as_int();
+  params_.postprocessing.layout.feature_dim = this->get_parameter("postprocessing.layout.feature_dim").as_int();
+  params_.postprocessing.layout.bbox_start_idx = this->get_parameter("postprocessing.layout.bbox_start_idx").as_int();
+  params_.postprocessing.layout.bbox_count = this->get_parameter("postprocessing.layout.bbox_count").as_int();
+  params_.postprocessing.layout.score_idx = this->get_parameter("postprocessing.layout.score_idx").as_int();
+  params_.postprocessing.layout.class_idx = this->get_parameter("postprocessing.layout.class_idx").as_int();
 
-  params_.postprocessing.use_multi_output = this->declare_parameter<bool>("postprocessing.use_multi_output", false);
-  if (params_.postprocessing.use_multi_output) {
-    params_.postprocessing.output_boxes_idx = this->declare_parameter<int>("postprocessing.output_boxes_idx", 0);
-    params_.postprocessing.output_scores_idx = this->declare_parameter<int>("postprocessing.output_scores_idx", 1);
-    params_.postprocessing.output_classes_idx = this->declare_parameter<int>("postprocessing.output_classes_idx", 2);
-  } else {
-    params_.postprocessing.output_boxes_idx = 0;
-    params_.postprocessing.output_scores_idx = 1;
-    params_.postprocessing.output_classes_idx = 2;
-  }
-
-  params_.postprocessing.layout.auto_detect = this->declare_parameter<bool>("postprocessing.layout.auto_detect", true);
-  if (!params_.postprocessing.layout.auto_detect) {
-    params_.postprocessing.layout.batch_dim = this->declare_parameter<int>("postprocessing.layout.batch_dim", 0);
-    params_.postprocessing.layout.detection_dim =
-      this->declare_parameter<int>("postprocessing.layout.detection_dim", 1);
-    params_.postprocessing.layout.feature_dim = this->declare_parameter<int>("postprocessing.layout.feature_dim", 2);
-    params_.postprocessing.layout.bbox_start_idx =
-      this->declare_parameter<int>("postprocessing.layout.bbox_start_idx", 0);
-    params_.postprocessing.layout.bbox_count = this->declare_parameter<int>("postprocessing.layout.bbox_count", 4);
-    params_.postprocessing.layout.score_idx = this->declare_parameter<int>("postprocessing.layout.score_idx", 4);
-    params_.postprocessing.layout.class_idx = this->declare_parameter<int>("postprocessing.layout.class_idx", 5);
-  } else {
-    params_.postprocessing.layout.batch_dim = 0;
-    params_.postprocessing.layout.detection_dim = 1;
-    params_.postprocessing.layout.feature_dim = 2;
-    params_.postprocessing.layout.bbox_start_idx = 0;
-    params_.postprocessing.layout.bbox_count = 4;
-    params_.postprocessing.layout.score_idx = 4;
-    params_.postprocessing.layout.class_idx = 5;
-  }
-
-  input_topic_ = this->declare_parameter<std::string>("input_topic", "");
-  params_.input_qos_reliability = "best_effort";
-  params_.output_detections_topic = this->declare_parameter<std::string>("output_detections_topic", "/detections");
-  output_annotations_topic_ = this->declare_parameter<std::string>("output_annotations_topic", "/image_annotations");
-
-  params_.preferred_provider = this->declare_parameter<std::string>("preferred_provider", "tensorrt");
-  params_.device_id = this->declare_parameter<int>("device_id", 0);
-  params_.warmup_tensor_shapes = true;
-  params_.enable_trt_engine_cache = this->declare_parameter<bool>("enable_trt_engine_cache", false);
-  params_.trt_engine_cache_path =
-    this->declare_parameter<std::string>("trt_engine_cache_path", "/tmp/deep_ros_ort_trt_cache");
+  params_.output_detections_topic = this->get_parameter("output_detections_topic").as_string();
+  params_.preferred_provider = this->get_parameter("preferred_provider").as_string();
+  params_.device_id = this->get_parameter("device_id").as_int();
+  params_.warmup_tensor_shapes = this->get_parameter("warmup_tensor_shapes").as_bool();
+  params_.enable_trt_engine_cache = this->get_parameter("enable_trt_engine_cache").as_bool();
+  params_.trt_engine_cache_path = this->get_parameter("trt_engine_cache_path").as_string();
 }
 
 rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepObjectDetectionNode::on_configure(
@@ -180,8 +201,6 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
       RCLCPP_INFO(this->get_logger(), "Detected model output shape: [%s]", formatShape(output_shape).c_str());
     }
 
-    const auto & config = params_.postprocessing;
-    const auto & model_meta = params_.model_metadata;
     const bool use_letterbox = (params_.preprocessing.resize_method == ResizeMethod::LETTERBOX);
 
     GenericPostprocessor::OutputLayout layout =
@@ -205,7 +224,12 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
     }
 
     postprocessor_ = std::make_unique<GenericPostprocessor>(
-      config, layout, model_meta.bbox_format, model_meta.num_classes, params_.class_names, use_letterbox);
+      params_.postprocessing,
+      layout,
+      params_.model_metadata.bbox_format,
+      params_.model_metadata.num_classes,
+      class_names_,
+      use_letterbox);
 
     auto pub = this->create_publisher<Detection2DArrayMsg>(params_.output_detections_topic, rclcpp::SensorDataQoS{});
     detection_pub_ = std::static_pointer_cast<rclcpp_lifecycle::LifecyclePublisher<Detection2DArrayMsg>>(pub);
@@ -282,7 +306,7 @@ void DeepObjectDetectionNode::cleanupAllResources()
   backend_manager_.reset();
   preprocessor_.reset();
   postprocessor_.reset();
-  params_.class_names.clear();
+  class_names_.clear();
   detection_pub_.reset();
   image_marker_pub_.reset();
 }
@@ -487,12 +511,12 @@ void DeepObjectDetectionNode::publishDetections(
 
 void DeepObjectDetectionNode::loadClassNames()
 {
-  const auto & class_names_path = params_.model_metadata.class_names_file;
+  const auto class_names_path = this->get_parameter("class_names_path").as_string();
   if (class_names_path.empty()) {
     return;
   }
 
-  params_.class_names.clear();
+  class_names_.clear();
 
   std::ifstream file(class_names_path);
   if (!file.is_open()) {
@@ -502,12 +526,11 @@ void DeepObjectDetectionNode::loadClassNames()
   std::string line;
   while (std::getline(file, line)) {
     if (!line.empty()) {
-      params_.class_names.push_back(line);
+      class_names_.push_back(line);
     }
   }
 
-  RCLCPP_INFO(
-    this->get_logger(), "Loaded %zu class names from %s", params_.class_names.size(), class_names_path.c_str());
+  RCLCPP_INFO(this->get_logger(), "Loaded %zu class names from %s", class_names_.size(), class_names_path.c_str());
 }
 
 visualization_msgs::msg::ImageMarker DeepObjectDetectionNode::detectionsToImageMarker(

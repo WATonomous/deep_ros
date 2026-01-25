@@ -125,8 +125,7 @@ enum class ClassScoreMode
  */
 enum class CoordinateSpace
 {
-  PREPROCESSED,  ///< Coordinates in preprocessed image space (model input size)
-  ORIGINAL  ///< Coordinates in original image space (not currently used)
+  PREPROCESSED  ///< Coordinates in preprocessed image space (model input size)
 };
 
 /**
@@ -234,7 +233,6 @@ struct DetectionParams
   ModelMetadata model_metadata;  ///< Model metadata (classes, bbox format)
   PreprocessingConfig preprocessing;  ///< Preprocessing configuration
   PostprocessingConfig postprocessing;  ///< Postprocessing configuration
-  std::string input_qos_reliability{"best_effort"};  ///< Input topic QoS reliability (always "best_effort")
   std::string output_detections_topic{"/detections"};  ///< Output topic for detections
   std::string preferred_provider{"tensorrt"};  ///< Preferred execution provider ("tensorrt", "cuda", or "cpu")
   int device_id{0};  ///< GPU device ID (for CUDA/TensorRT)
@@ -340,8 +338,6 @@ inline CoordinateSpace stringToCoordinateSpace(const std::string & space)
 {
   if (space == "preprocessed" || space == "PREPROCESSED") {
     return CoordinateSpace::PREPROCESSED;
-  } else if (space == "original" || space == "ORIGINAL") {
-    return CoordinateSpace::ORIGINAL;
   }
   return CoordinateSpace::PREPROCESSED;
 }

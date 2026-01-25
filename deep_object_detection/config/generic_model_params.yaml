@@ -3,6 +3,8 @@ deep_object_detection_node:
     model_path: "/workspaces/deep_ros/yolov8m.onnx"
     class_names_path: "/workspaces/deep_ros/deep_object_detection/config/coco_classes.txt"
     input_topic: "/multi_camera_sync/multi_image_compressed"
+    output_detections_topic: "/detections"
+    output_annotations_topic: "/image_annotations"
 
     model:
       num_classes: 80
@@ -12,7 +14,10 @@ deep_object_detection_node:
       input_width: 640
       input_height: 640
       normalization_type: "scale_0_1"
+      mean: [0.0, 0.0, 0.0]
+      std: [1.0, 1.0, 1.0]
       resize_method: "letterbox"
+      pad_value: 114
       color_format: "rgb"
 
     postprocessing:
@@ -20,12 +25,14 @@ deep_object_detection_node:
       nms_iou_threshold: 0.45
       max_detections: 300
       score_activation: "sigmoid"
+      enable_nms: true
       use_multi_output: false
-
+      output_boxes_idx: 0
+      output_scores_idx: 1
+      output_classes_idx: 2
       class_score_mode: "all_classes"
       class_score_start_idx: -1
       class_score_count: -1
-
       coordinate_space: "preprocessed"
 
       layout:
@@ -40,5 +47,6 @@ deep_object_detection_node:
 
     preferred_provider: "tensorrt"
     device_id: 0
+    warmup_tensor_shapes: true
     enable_trt_engine_cache: true
     trt_engine_cache_path: "/tmp/deep_ros_ort_trt_cache"

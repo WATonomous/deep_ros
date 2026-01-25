@@ -123,12 +123,12 @@ public:
 
 private:
   /**
-   * @brief Declare and read all ROS parameters from the parameter server
+   * @brief Declare and load all ROS parameters from the parameter server
    *
-   * Reads configuration for model, preprocessing, postprocessing, execution provider,
-   * and topic names. Validates required parameters and sets defaults.
+   * Declares all parameters with defaults and loads them into params_ struct.
+   * All parameters must exist in the YAML config file.
    */
-  void declareAndReadParameters();
+  void declareParameters();
 
   /**
    * @brief Setup the MultiImage subscription
@@ -185,8 +185,8 @@ private:
   /**
    * @brief Load class names from file
    *
-   * Reads class names from class_names_path (one per line) and stores them
-   * in params_.class_names. If file doesn't exist or is empty, class_names
+   * Reads class names from class_names_path parameter (one per line) and stores them
+   * in class_names_. If file doesn't exist or is empty, class_names_
    * remains empty and class IDs will be used in output messages.
    */
   void loadClassNames();
@@ -215,8 +215,10 @@ private:
    */
   void stopSubscriptions();
 
-  /// Configuration parameters loaded from ROS parameter server
+  /// Configuration parameters loaded from ROS parameter server (only for BackendManager)
   DetectionParams params_;
+  /// Class names loaded from file
+  std::vector<std::string> class_names_;
 
   /// Subscription to MultiImage topic (synchronized multi-camera input)
   rclcpp::Subscription<deep_msgs::msg::MultiImage>::SharedPtr multi_image_sub_;
