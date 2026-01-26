@@ -30,8 +30,11 @@
 #include <string>
 #include <vector>
 
+#include <deep_core/plugin_interfaces/deep_backend_plugin.hpp>
+#include <deep_core/types/tensor.hpp>
 #include <deep_msgs/msg/multi_image.hpp>
 #include <opencv2/core/mat.hpp>
+#include <pluginlib/class_loader.hpp>
 #include <rclcpp/node_options.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
@@ -40,7 +43,6 @@
 #include <std_msgs/msg/header.hpp>
 #include <visualization_msgs/msg/image_marker.hpp>
 
-#include "deep_object_detection/backend_manager.hpp"
 #include "deep_object_detection/detection_types.hpp"
 #include "deep_object_detection/generic_postprocessor.hpp"
 #include "deep_object_detection/image_preprocessor.hpp"
@@ -74,10 +76,10 @@ public:
   explicit DeepObjectDetectionNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
   /**
-   * @brief Configure the node: load model, initialize backends, setup postprocessor
+   * @brief Configure the node: load plugin, model, setup postprocessor
    * @return SUCCESS if configuration succeeds, FAILURE otherwise
    *
-   * Loads class names, initializes image preprocessor, backend manager, and postprocessor.
+   * Loads class names, initializes image preprocessor, backend plugin, and postprocessor.
    * Detects model output shape and configures layout. Does not start subscriptions.
    */
   rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_configure(
@@ -202,7 +204,7 @@ private:
   /**
    * @brief Cleanup all node resources
    *
-   * Releases backend_manager_, preprocessor_, postprocessor_, and clears
+   * Releases plugin_, preprocessor_, postprocessor_, and clears
    * all subscriptions. Called during on_cleanup() and on_shutdown().
    */
   void cleanupAllResources();
@@ -215,7 +217,7 @@ private:
    */
   void stopSubscriptions();
 
-  /// Configuration parameters loaded from ROS parameter server (only for BackendManager)
+  /// Configuration parameters loaded from ROS parameter server
   DetectionParams params_;
   /// Class names loaded from file
   std::vector<std::string> class_names_;
@@ -237,8 +239,14 @@ private:
   std::unique_ptr<ImagePreprocessor> preprocessor_;
   /// Postprocessor (NMS, coordinate transformation, message formatting)
   std::unique_ptr<GenericPostprocessor> postprocessor_;
-  /// Backend manager (handles ONNX Runtime plugin loading and inference)
-  std::unique_ptr<BackendManager> backend_manager_;
+  /// Backend plugin loader
+  std::unique_ptr<pluginlib::ClassLoader<deep_ros::DeepBackendPlugin>> plugin_loader_;
+  /// Backend plugin instance
+  pluginlib::UniquePtr<deep_ros::DeepBackendPlugin> plugin_;
+  /// Backend inference executor
+  std::shared_ptr<deep_ros::BackendInferenceExecutor> executor_;
+  /// Backend memory allocator
+  std::shared_ptr<deep_ros::BackendMemoryAllocator> allocator_;
 };
 
 /**

@@ -98,8 +98,6 @@ TEST_CASE_METHOD(
   {
     // Core parameters
     REQUIRE(node->has_parameter("model_path"));
-    REQUIRE(node->has_parameter("input_topic"));
-    REQUIRE(node->has_parameter("output_detections_topic"));
 
     // Model parameters
     REQUIRE(node->has_parameter("model.num_classes"));
@@ -127,8 +125,6 @@ TEST_CASE_METHOD(
   {
     // Core parameters
     REQUIRE(node->get_parameter("model_path").as_string() == "");
-    REQUIRE(node->get_parameter("input_topic").as_string() == "");
-    REQUIRE(node->get_parameter("output_detections_topic").as_string() == "/detections");
 
     // Model parameters
     REQUIRE(node->get_parameter("model.num_classes").as_int() == 80);
@@ -150,41 +146,6 @@ TEST_CASE_METHOD(
     // Execution provider parameters
     REQUIRE(node->get_parameter("preferred_provider").as_string() == "tensorrt");
     REQUIRE(node->get_parameter("device_id").as_int() == 0);
-  }
-}
-
-TEST_CASE_METHOD(DeepObjectDetectionNodeTestFixture, "DeepObjectDetectionNode: Topic Configuration", "[node][topics]")
-{
-  rclcpp::NodeOptions options;
-  auto node = std::make_shared<DeepObjectDetectionNode>(options);
-
-  SECTION("Input topic can be configured")
-  {
-    auto params =
-      std::vector<rclcpp::Parameter>{rclcpp::Parameter("input_topic", "/multi_camera_sync/multi_image_compressed")};
-    auto result = node->set_parameters(params);
-    REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("input_topic").as_string() == "/multi_camera_sync/multi_image_compressed");
-  }
-
-  SECTION("Output topic can be configured")
-  {
-    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("output_detections_topic", "/custom/detections")};
-    auto result = node->set_parameters(params);
-    REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("output_detections_topic").as_string() == "/custom/detections");
-  }
-
-  SECTION("Topic configuration via NodeOptions")
-  {
-    rclcpp::NodeOptions options_with_topics;
-    options_with_topics.append_parameter_override("input_topic", "/test/input");
-    options_with_topics.append_parameter_override("output_detections_topic", "/test/output");
-
-    auto node_with_topics = std::make_shared<DeepObjectDetectionNode>(options_with_topics);
-
-    REQUIRE(node_with_topics->get_parameter("input_topic").as_string() == "/test/input");
-    REQUIRE(node_with_topics->get_parameter("output_detections_topic").as_string() == "/test/output");
   }
 }
 

@@ -27,15 +27,17 @@
 #include <utility>
 #include <vector>
 
+#include <deep_core/plugin_interfaces/deep_backend_plugin.hpp>
+#include <deep_core/types/tensor.hpp>
 #include <deep_msgs/msg/multi_image.hpp>
 #include <lifecycle_msgs/msg/state.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <pluginlib/class_loader.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <rclcpp_lifecycle/lifecycle_publisher.hpp>
 
-#include "deep_object_detection/backend_manager.hpp"
 #include "deep_object_detection/detection_types.hpp"
 #include "deep_object_detection/generic_postprocessor.hpp"
 
@@ -78,7 +80,6 @@ void DeepObjectDetectionNode::declareParameters()
   this->declare_parameter<std::string>("postprocessing.class_score_mode", "all_classes");
   this->declare_parameter<int>("postprocessing.class_score_start_idx", -1);
   this->declare_parameter<int>("postprocessing.class_score_count", -1);
-  this->declare_parameter<std::string>("postprocessing.coordinate_space", "preprocessed");
 
   this->declare_parameter<bool>("postprocessing.layout.auto_detect", true);
   this->declare_parameter<int>("postprocessing.layout.batch_dim", 0);
@@ -89,38 +90,64 @@ void DeepObjectDetectionNode::declareParameters()
   this->declare_parameter<int>("postprocessing.layout.score_idx", 4);
   this->declare_parameter<int>("postprocessing.layout.class_idx", 5);
 
-  this->declare_parameter<std::string>("input_topic", "/multi_camera_sync/multi_image_compressed");
-  this->declare_parameter<std::string>("output_detections_topic", "/detections");
-  this->declare_parameter<std::string>("output_annotations_topic", "/image_annotations");
+  // Backend plugin parameters
+  this->declare_parameter<std::string>("Backend.plugin", "");
+  this->declare_parameter<std::string>("Backend.execution_provider", "tensorrt");
+  this->declare_parameter<int>("Backend.device_id", 0);
+  this->declare_parameter<bool>("Backend.trt_engine_cache_enable", false);
+  this->declare_parameter<std::string>("Backend.trt_engine_cache_path", "/tmp/deep_ros_ort_trt_cache");
 
-  this->declare_parameter<std::string>("preferred_provider", "tensorrt");
-  this->declare_parameter<int>("device_id", 0);
-  this->declare_parameter<bool>("warmup_tensor_shapes", true);
-  this->declare_parameter<bool>("enable_trt_engine_cache", false);
-  this->declare_parameter<std::string>("trt_engine_cache_path", "/tmp/deep_ros_ort_trt_cache");
-
-  // Get parameter values
-  input_topic_ = this->get_parameter("input_topic").as_string();
-  output_annotations_topic_ = this->get_parameter("output_annotations_topic").as_string();
+  // get the parameter values, changed via topic remaps
+  input_topic_ = "/multi_camera_sync/multi_image_compressed";
+  output_annotations_topic_ = "/image_annotations";
 
   params_.model_path = this->get_parameter("model_path").as_string();
   params_.model_metadata.num_classes = this->get_parameter("model.num_classes").as_int();
   params_.model_metadata.class_names_file = this->get_parameter("class_names_path").as_string();
-  params_.model_metadata.bbox_format = stringToBboxFormat(this->get_parameter("model.bbox_format").as_string());
+  {
+    const std::string format = this->get_parameter("model.bbox_format").as_string();
+    if (format == "xyxy") {
+      params_.model_metadata.bbox_format = BboxFormat::XYXY;
+    } else if (format == "xywh") {
+      params_.model_metadata.bbox_format = BboxFormat::XYWH;
+    } else {
+      params_.model_metadata.bbox_format = BboxFormat::CXCYWH;  // default
+    }
+  }
 
   // Preprocessing parameters
   params_.preprocessing.input_width = this->get_parameter("preprocessing.input_width").as_int();
   params_.preprocessing.input_height = this->get_parameter("preprocessing.input_height").as_int();
-  params_.preprocessing.normalization_type =
-    stringToNormalizationType(this->get_parameter("preprocessing.normalization_type").as_string());
+  {
+    const std::string type = this->get_parameter("preprocessing.normalization_type").as_string();
+    if (type == "imagenet") {
+      params_.preprocessing.normalization_type = NormalizationType::IMAGENET;
+    } else if (type == "custom") {
+      params_.preprocessing.normalization_type = NormalizationType::CUSTOM;
+    } else if (type == "none") {
+      params_.preprocessing.normalization_type = NormalizationType::NONE;
+    } else {
+      params_.preprocessing.normalization_type = NormalizationType::SCALE_0_1;  // default
+    }
+  }
   auto mean_d = this->get_parameter("preprocessing.mean").as_double_array();
   auto std_d = this->get_parameter("preprocessing.std").as_double_array();
   params_.preprocessing.mean = {
     static_cast<float>(mean_d[0]), static_cast<float>(mean_d[1]), static_cast<float>(mean_d[2])};
   params_.preprocessing.std = {
     static_cast<float>(std_d[0]), static_cast<float>(std_d[1]), static_cast<float>(std_d[2])};
-  params_.preprocessing.resize_method =
-    stringToResizeMethod(this->get_parameter("preprocessing.resize_method").as_string());
+  {
+    const std::string method = this->get_parameter("preprocessing.resize_method").as_string();
+    if (method == "resize") {
+      params_.preprocessing.resize_method = ResizeMethod::RESIZE;
+    } else if (method == "crop") {
+      params_.preprocessing.resize_method = ResizeMethod::CROP;
+    } else if (method == "pad") {
+      params_.preprocessing.resize_method = ResizeMethod::PAD;
+    } else {
+      params_.preprocessing.resize_method = ResizeMethod::LETTERBOX;  // default
+    }
+  }
   params_.preprocessing.pad_value = this->get_parameter("preprocessing.pad_value").as_int();
   params_.preprocessing.color_format = this->get_parameter("preprocessing.color_format").as_string();
 
@@ -130,19 +157,31 @@ void DeepObjectDetectionNode::declareParameters()
   params_.postprocessing.nms_iou_threshold =
     static_cast<float>(this->get_parameter("postprocessing.nms_iou_threshold").as_double());
   params_.postprocessing.max_detections = this->get_parameter("postprocessing.max_detections").as_int();
-  params_.postprocessing.score_activation =
-    stringToScoreActivation(this->get_parameter("postprocessing.score_activation").as_string());
+  {
+    const std::string activation = this->get_parameter("postprocessing.score_activation").as_string();
+    if (activation == "softmax") {
+      params_.postprocessing.score_activation = ScoreActivation::SOFTMAX;
+    } else if (activation == "none") {
+      params_.postprocessing.score_activation = ScoreActivation::NONE;
+    } else {
+      params_.postprocessing.score_activation = ScoreActivation::SIGMOID;  // default
+    }
+  }
   params_.postprocessing.enable_nms = this->get_parameter("postprocessing.enable_nms").as_bool();
   params_.postprocessing.use_multi_output = this->get_parameter("postprocessing.use_multi_output").as_bool();
   params_.postprocessing.output_boxes_idx = this->get_parameter("postprocessing.output_boxes_idx").as_int();
   params_.postprocessing.output_scores_idx = this->get_parameter("postprocessing.output_scores_idx").as_int();
   params_.postprocessing.output_classes_idx = this->get_parameter("postprocessing.output_classes_idx").as_int();
-  params_.postprocessing.class_score_mode =
-    stringToClassScoreMode(this->get_parameter("postprocessing.class_score_mode").as_string());
+  {
+    const std::string mode = this->get_parameter("postprocessing.class_score_mode").as_string();
+    if (mode == "single_confidence") {
+      params_.postprocessing.class_score_mode = ClassScoreMode::SINGLE_CONFIDENCE;
+    } else {
+      params_.postprocessing.class_score_mode = ClassScoreMode::ALL_CLASSES;  // default
+    }
+  }
   params_.postprocessing.class_score_start_idx = this->get_parameter("postprocessing.class_score_start_idx").as_int();
   params_.postprocessing.class_score_count = this->get_parameter("postprocessing.class_score_count").as_int();
-  params_.postprocessing.coordinate_space =
-    stringToCoordinateSpace(this->get_parameter("postprocessing.coordinate_space").as_string());
 
   params_.postprocessing.layout.auto_detect = this->get_parameter("postprocessing.layout.auto_detect").as_bool();
   params_.postprocessing.layout.batch_dim = this->get_parameter("postprocessing.layout.batch_dim").as_int();
@@ -153,12 +192,12 @@ void DeepObjectDetectionNode::declareParameters()
   params_.postprocessing.layout.score_idx = this->get_parameter("postprocessing.layout.score_idx").as_int();
   params_.postprocessing.layout.class_idx = this->get_parameter("postprocessing.layout.class_idx").as_int();
 
-  params_.output_detections_topic = this->get_parameter("output_detections_topic").as_string();
-  params_.preferred_provider = this->get_parameter("preferred_provider").as_string();
-  params_.device_id = this->get_parameter("device_id").as_int();
-  params_.warmup_tensor_shapes = this->get_parameter("warmup_tensor_shapes").as_bool();
-  params_.enable_trt_engine_cache = this->get_parameter("enable_trt_engine_cache").as_bool();
-  params_.trt_engine_cache_path = this->get_parameter("trt_engine_cache_path").as_string();
+  // Backend parameters
+  params_.backend.plugin = this->get_parameter("Backend.plugin").as_string();
+  params_.backend.execution_provider = this->get_parameter("Backend.execution_provider").as_string();
+  params_.backend.device_id = this->get_parameter("Backend.device_id").as_int();
+  params_.backend.trt_engine_cache_enable = this->get_parameter("Backend.trt_engine_cache_enable").as_bool();
+  params_.backend.trt_engine_cache_path = this->get_parameter("Backend.trt_engine_cache_path").as_string();
 }
 
 rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepObjectDetectionNode::on_configure(
@@ -169,23 +208,68 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
   try {
     loadClassNames();
     preprocessor_ = std::make_unique<ImagePreprocessor>(params_.preprocessing);
-    backend_manager_ = std::make_unique<BackendManager>(*this, params_);
 
-    try {
-      backend_manager_->initialize();
-    } catch (const std::exception & e) {
-      RCLCPP_ERROR(this->get_logger(), "Backend initialization failed: %s", e.what());
+    // Load backend plugin
+    if (params_.backend.plugin.empty()) {
+      RCLCPP_ERROR(this->get_logger(), "Backend.plugin parameter is required but not set");
       cleanupPartialConfiguration();
       return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
     }
 
-    // Use a reasonable default batch size for shape detection (model may support variable batch)
-    const size_t channels = RGB_CHANNELS;
-    const size_t height = static_cast<size_t>(params_.preprocessing.input_height);
-    const size_t width = static_cast<size_t>(params_.preprocessing.input_width);
-    // Use batch size of 1 for shape detection - actual batch size will be determined by MultiImage
-    std::vector<size_t> input_shape = {1, channels, height, width};
-    std::vector<size_t> output_shape = backend_manager_->getOutputShape(input_shape);
+    try {
+      plugin_loader_ = std::make_unique<pluginlib::ClassLoader<deep_ros::DeepBackendPlugin>>(
+        "deep_core", "deep_ros::DeepBackendPlugin");
+      plugin_ = plugin_loader_->createUniqueInstance(params_.backend.plugin);
+      plugin_->initialize(this->shared_from_this());
+      allocator_ = plugin_->get_allocator();
+      executor_ = plugin_->get_inference_executor();
+
+      if (!executor_ || !allocator_) {
+        throw std::runtime_error("Plugin did not provide executor or allocator");
+      }
+
+      // Load model
+      if (params_.model_path.empty()) {
+        throw std::runtime_error("Model path is not set");
+      }
+
+      if (!executor_->load_model(params_.model_path)) {
+        throw std::runtime_error("Failed to load model: " + params_.model_path);
+      }
+
+      RCLCPP_INFO(this->get_logger(), "Loaded backend plugin: %s", plugin_->backend_name().c_str());
+    } catch (const std::exception & e) {
+      RCLCPP_ERROR(this->get_logger(), "Backend plugin initialization failed: %s", e.what());
+      cleanupPartialConfiguration();
+      return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
+    }
+
+    // dynamically get the output shape by running a dummy inference
+    std::vector<size_t> input_shape = {
+      1,
+      RGB_CHANNELS,
+      static_cast<size_t>(params_.preprocessing.input_height),
+      static_cast<size_t>(params_.preprocessing.input_width)};
+    std::vector<size_t> output_shape;
+    try {
+      PackedInput dummy;
+      dummy.shape = input_shape;
+      size_t total_elements = 1;
+      for (size_t dim : input_shape) {
+        total_elements *= dim;
+      }
+      dummy.data.assign(total_elements, 0.0f);
+
+      deep_ros::Tensor input_tensor(dummy.shape, deep_ros::DataType::FLOAT32, allocator_);
+      const size_t bytes = dummy.data.size() * sizeof(float);
+      allocator_->copy_from_host(input_tensor.data(), dummy.data.data(), bytes);
+
+      auto output_tensor = executor_->run_inference(input_tensor);
+      output_shape = output_tensor.shape();
+    } catch (const std::exception & e) {
+      RCLCPP_WARN(this->get_logger(), "Could not determine output shape: %s", e.what());
+      output_shape.clear();
+    }
 
     auto formatShape = [](const std::vector<size_t> & shape) {
       if (shape.empty()) return std::string("auto-detect");
@@ -239,21 +323,16 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
     image_marker_pub_ =
       std::static_pointer_cast<rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::ImageMarker>>(marker_pub);
 
-    if (input_topic_.empty()) {
-      RCLCPP_ERROR(this->get_logger(), "input_topic is empty. Please set input_topic to a valid MultiImage topic.");
-      cleanupPartialConfiguration();
-      return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
-    }
     RCLCPP_INFO(this->get_logger(), "Will subscribe to MultiImage topic: %s", input_topic_.c_str());
 
     RCLCPP_INFO(
       this->get_logger(),
-      "Deep object detection node configured. Model: %s, input size: %dx%d, provider: %s, "
+      "Deep object detection node configured. Model: %s, input size: %dx%d, backend: %s, "
       "postprocessor: %s, output shape: [%s]",
       params_.model_path.c_str(),
       params_.preprocessing.input_width,
       params_.preprocessing.input_height,
-      backend_manager_->activeProvider().c_str(),
+      plugin_->backend_name().c_str(),
       postprocessor_->getFormatName().c_str(),
       formatShape(output_shape).c_str());
 
@@ -270,11 +349,19 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
 {
   RCLCPP_INFO(this->get_logger(), "Activating deep object detection node");
 
+  // Check if backend is initialized
+  if (!plugin_ || !executor_) {
+    RCLCPP_ERROR(this->get_logger(), "Backend plugin not initialized - cannot activate");
+    return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
+  }
+
   try {
     callback_group_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant);
 
+    // Create subscription
     setupSubscription();
 
+    // Activate publishers
     if (detection_pub_) {
       detection_pub_->on_activate();
     }
@@ -283,7 +370,8 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
       image_marker_pub_->on_activate();
     }
 
-    RCLCPP_INFO(this->get_logger(), "Deep object detection node activated and ready to process images");
+    RCLCPP_INFO(
+      this->get_logger(), "Deep object detection node activated with backend: %s", plugin_->backend_name().c_str());
     return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
   } catch (const std::exception & e) {
     RCLCPP_ERROR(this->get_logger(), "Failed to activate: %s", e.what());
@@ -294,7 +382,10 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
 void DeepObjectDetectionNode::cleanupPartialConfiguration()
 {
   postprocessor_.reset();
-  backend_manager_.reset();
+  executor_.reset();
+  allocator_.reset();
+  plugin_.reset();
+  plugin_loader_.reset();
   preprocessor_.reset();
   detection_pub_.reset();
   image_marker_pub_.reset();
@@ -303,7 +394,13 @@ void DeepObjectDetectionNode::cleanupPartialConfiguration()
 void DeepObjectDetectionNode::cleanupAllResources()
 {
   stopSubscriptions();
-  backend_manager_.reset();
+  if (executor_) {
+    executor_->unload_model();
+  }
+  executor_.reset();
+  allocator_.reset();
+  plugin_.reset();
+  plugin_loader_.reset();
   preprocessor_.reset();
   postprocessor_.reset();
   class_names_.clear();
@@ -322,7 +419,11 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
   const rclcpp_lifecycle::State &)
 {
   RCLCPP_INFO(this->get_logger(), "Deactivating deep object detection node");
+
+  // Reset subscription
   stopSubscriptions();
+
+  // Deactivate publishers
   if (detection_pub_) {
     detection_pub_->on_deactivate();
   }
@@ -331,7 +432,6 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
     image_marker_pub_->on_deactivate();
   }
 
-  RCLCPP_INFO(this->get_logger(), "Deep object detection node deactivated");
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
 
@@ -339,8 +439,22 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
   const rclcpp_lifecycle::State &)
 {
   RCLCPP_INFO(this->get_logger(), "Cleaning up deep object detection node");
-  cleanupAllResources();
-  RCLCPP_INFO(this->get_logger(), "Deep object detection node cleaned up");
+
+  // Reset all resources
+  stopSubscriptions();
+  detection_pub_.reset();
+  image_marker_pub_.reset();
+  if (executor_) {
+    executor_->unload_model();
+  }
+  executor_.reset();
+  allocator_.reset();
+  plugin_.reset();
+  plugin_loader_.reset();
+  preprocessor_.reset();
+  postprocessor_.reset();
+  class_names_.clear();
+
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
 
@@ -348,8 +462,22 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn DeepOb
   const rclcpp_lifecycle::State &)
 {
   RCLCPP_INFO(this->get_logger(), "Shutting down deep object detection node");
-  cleanupAllResources();
-  RCLCPP_INFO(this->get_logger(), "Deep object detection node shut down");
+
+  // Reset all resources
+  stopSubscriptions();
+  detection_pub_.reset();
+  image_marker_pub_.reset();
+  if (executor_) {
+    executor_->unload_model();
+  }
+  executor_.reset();
+  allocator_.reset();
+  plugin_.reset();
+  plugin_loader_.reset();
+  preprocessor_.reset();
+  postprocessor_.reset();
+  class_names_.clear();
+
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
 
@@ -387,12 +515,12 @@ void DeepObjectDetectionNode::onMultiImage(const deep_msgs::msg::MultiImage::Con
 
 void DeepObjectDetectionNode::processMultiImage(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg)
 {
-  if (!backend_manager_ || !backend_manager_->hasExecutor()) {
+  if (!executor_ || !allocator_) {
     RCLCPP_ERROR(
       this->get_logger(),
-      "Cannot process MultiImage: backend not initialized (backend_manager_: %s, hasExecutor: %s)",
-      backend_manager_ ? "exists" : "null",
-      (backend_manager_ && backend_manager_->hasExecutor()) ? "true" : "false");
+      "Cannot process MultiImage: backend not initialized (executor: %s, allocator: %s)",
+      executor_ ? "exists" : "null",
+      allocator_ ? "exists" : "null");
     return;
   }
 
@@ -439,12 +567,18 @@ void DeepObjectDetectionNode::processMultiImage(const deep_msgs::msg::MultiImage
     return;
   }
 
+  // Build input tensor
+  deep_ros::Tensor input_tensor(packed_input.shape, deep_ros::DataType::FLOAT32, allocator_);
+  const size_t bytes = packed_input.data.size() * sizeof(float);
+  allocator_->copy_from_host(input_tensor.data(), packed_input.data.data(), bytes);
+
+  // Run inference
   std::vector<std::vector<SimpleDetection>> batch_detections;
   if (params_.postprocessing.use_multi_output) {
-    auto output_tensors = backend_manager_->inferAllOutputs(packed_input);
-    batch_detections = postprocessor_->decodeMultiOutput(output_tensors, metas);
+    auto output_tensor = executor_->run_inference(input_tensor);
+    batch_detections = postprocessor_->decodeMultiOutput({output_tensor}, metas);
   } else {
-    auto output_tensor = backend_manager_->infer(packed_input);
+    auto output_tensor = executor_->run_inference(input_tensor);
     batch_detections = postprocessor_->decode(output_tensor, metas);
   }
 

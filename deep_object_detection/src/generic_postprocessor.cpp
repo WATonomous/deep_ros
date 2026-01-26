@@ -304,9 +304,7 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decode(
       det.score = score;
       det.class_id = class_id;
 
-      if (config_.coordinate_space == CoordinateSpace::PREPROCESSED) {
-        adjustToOriginal(det, metas[b], use_letterbox_);
-      }
+      adjustToOriginal(det, metas[b], use_letterbox_);
       dets.push_back(det);
     }
 
@@ -459,9 +457,7 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decodeMultiOutpu
       det.score = score;
       det.class_id = class_id;
 
-      if (config_.coordinate_space == CoordinateSpace::PREPROCESSED) {
-        adjustToOriginal(det, metas[b], use_letterbox_);
-      }
+      adjustToOriginal(det, metas[b], use_letterbox_);
       dets.push_back(det);
     }
 

@@ -9,10 +9,81 @@ The `deep_object_detection` package provides:
 - Automatic output format detection and adaptation
 - Multi-camera support via MultiImage messages with flexible batching
 - Configurable preprocessing and postprocessing pipelines
-- Explicit execution provider selection (TensorRT, CUDA, CPU) with fail-fast behavior
+- Plugin-based backend architecture (CPU, CUDA, TensorRT)
 - Full ROS 2 lifecycle node support
 
-## Package Contents
+```
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│                                      ROS 2 Topics                                  │
+│                                                                                    │
+│  ┌──────────────────────────────────┐       ┌──────────────────────────────┐       │
+│  │ MultiImage Topic                 │       │ Detection2DArray Topic       │       │
+│  │ (compressed images)              │       └──────────────────────────────┘       │
+│  └───────────────┬──────────────────┘       ┌──────────────────────────────┐       │
+│                  │                          │ ImageMarker Topic            │       │
+│                  │                          └──────────────────────────────┘       │
+└──────────────────┼───────────────────────────────────────────────┬────────────────┘
+                   │                                               │
+                   ▼                                               ▼
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│          DeepObjectDetectionNode  (rclcpp_lifecycle::LifecycleNode)                │
+│                                                                                    │
+│  ┌──────────────────────────────────────────────────────────────────────────────┐  │
+│  │                               Processing Pipeline                            │  │
+│  │                                                                              │  │
+│  │  ┌──────────────────────────┐      ┌──────────────────────────┐              │  │
+│  │  │ ImagePreprocessor        │      │ Backend Plugin           │              │  │
+│  │  │  • decode images         │ ────▶│  • plugin loader        │              │  │
+│  │  │  • resize                │      │  • memory allocation     │              │  │
+│  │  │  • normalize             │      │  • inference execution   │              │  │
+│  │  │  • pack tensor           │      └─────────────┬────────────┘              │  │
+│  │  └──────────────────────────┘                    │                           │  │
+│  │                                                  ▼                           │  │
+│  │  ┌────────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │ GenericPostprocessor                                                   │  │  │
+│  │  │  • decode outputs                                                      │  │  │
+│  │  │  • NMS filtering                                                       │  │  │
+│  │  │  • coordinate transforms                                               │  │  │
+│  │  └────────────────────────────────────────────────────────────────────────┘  │  │
+│  └──────────────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────┬─────────────────┘
+                                                                   │
+                                                                   ▼
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│                           Backend Plugins  (pluginlib)                             │
+│                                                                                    │
+│  ┌──────────────────────────────────────────────────────────────────────────────┐  │
+│  │ ClassLoader<DeepBackendPlugin>                                               │  │
+│  │                                                                              │  │
+│  │  ┌──────────────────────────┐      ┌──────────────────────────┐              │  │
+│  │  │ onnxruntime_cpu          │      │ onnxruntime_gpu          │              │  │
+│  │  │ (CPU Backend)            │      │ (CUDA / TensorRT)        │              │  │
+│  │  └─────────────┬────────────┘      └─────────────┬────────────┘              │  │
+│  │                └───────────────┬──────────────────┘                          │  │
+│  │                                ▼                                             │  │
+│  │  ┌────────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │ BackendMemoryAllocator                                                 │  │  │
+│  │  │ (CPU/GPU memory management)                                            │  │  │
+│  │  └────────────────────────────────────────────────────────────────────────┘  │  │
+│  │  ┌────────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │ BackendInferenceExecutor                                               │  │  │
+│  │  │ (ONNX Runtime inference)                                               │  │  │
+│  │  └────────────────────────────────────────────────────────────────────────┘  │  │
+│  └──────────────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────┬─────────────────┘
+                                                                   │
+                                                                   ▼
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│                               Model & Configuration                                │
+│                                                                                    │
+│  ┌──────────────────────────┐        ┌──────────────────────────────────────────┐  │
+│  │ ONNX Model File (.onnx)  │        │ YAML Config                              │  │
+│  └──────────────────────────┘        │  • preprocessing                         │  │
+│                                      │  • postprocessing                        │  │
+│                                      │  • execution provider                    │  │
+│                                      └──────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────────────────┘
+```
 
 ### Nodes
 
@@ -185,14 +256,17 @@ deep_object_detection_node:
     output_detections_topic: "/detections"
 ```
 
-### Execution Provider Selection
+### Backend Plugin Selection
 
-The node supports explicit provider selection with fail-fast behavior. If the specified provider is unavailable or fails to initialize, the node will immediately throw an error (no silent fallbacks).
+The node uses a plugin-based architecture for backend selection. You must specify which backend plugin to use via the `Backend.plugin` parameter.
 
-**Available Providers:**
-- `tensorrt` - TensorRT execution provider (requires CUDA and TensorRT)
-- `cuda` - CUDA execution provider (requires CUDA)
-- `cpu` - CPU execution provider (always available)
+**Available Plugins:**
+- `onnxruntime_cpu` - CPU backend (always available)
+- `onnxruntime_gpu` - GPU backend supporting CUDA and TensorRT (requires CUDA)
+
+For GPU plugin, you can specify the execution provider via `Backend.execution_provider`:
+- `cuda` - CUDA execution provider
+- `tensorrt` - TensorRT execution provider (requires TensorRT)
 
 ## Expected Model Format
 
@@ -210,6 +284,15 @@ The node automatically detects and adapts to various ONNX model output formats:
 
 ## Parameters
 
+**Important:** All string parameters must be specified in **lowercase**. The node performs direct string comparisons and does not normalize case. For example:
+- `model.bbox_format` must be `"cxcywh"`, `"xyxy"`, or `"xywh"` (not `"CXCYWH"`)
+- `preprocessing.normalization_type` must be `"imagenet"`, `"scale_0_1"`, `"custom"`, or `"none"`
+- `preprocessing.resize_method` must be `"letterbox"`, `"resize"`, `"crop"`, or `"pad"`
+- `postprocessing.score_activation` must be `"sigmoid"`, `"softmax"`, or `"none"`
+- `postprocessing.class_score_mode` must be `"all_classes"` or `"single_confidence"`
+- `Backend.plugin` must be `"onnxruntime_cpu"` or `"onnxruntime_gpu"`
+- `Backend.execution_provider` must be `"cuda"` or `"tensorrt"` (for GPU plugin)
+
 ### Required Parameters
 - **`model_path`** (string): Absolute path to ONNX model file (e.g., `/workspaces/deep_ros/yolov8m.onnx`).
 - **`input_topic`** (string): MultiImage topic name to subscribe to.
@@ -223,9 +306,11 @@ The node automatically detects and adapts to various ONNX model output formats:
 - **`preprocessing.resize_method`** (string, default: "letterbox"): Image resizing method.
 - **`postprocessing.score_threshold`** (float, default: 0.25): Minimum confidence score.
 - **`postprocessing.nms_iou_threshold`** (float, default: 0.45): IoU threshold for NMS.
-- **`preferred_provider`** (string, default: "tensorrt"): Execution provider (tensorrt, cuda, or cpu).
-- **`min_batch_size`** (int, default: 1): Minimum images before processing.
-- **`max_batch_size`** (int, default: 3): Maximum images per batch.
+- **`Backend.plugin`** (string, required): Backend plugin name (`"onnxruntime_cpu"` or `"onnxruntime_gpu"`).
+- **`Backend.execution_provider`** (string, default: "tensorrt"): Execution provider for GPU plugin (`"cuda"` or `"tensorrt"`). Only used with `onnxruntime_gpu` plugin.
+- **`Backend.device_id`** (int, default: 0): GPU device ID (for CUDA/TensorRT).
+- **`Backend.trt_engine_cache_enable`** (bool, default: false): Enable TensorRT engine caching.
+- **`Backend.trt_engine_cache_path`** (string, default: "/tmp/deep_ros_ort_trt_cache"): TensorRT engine cache directory.
 
 See `config/generic_model_params.yaml` for a complete parameter reference.
 

@@ -30,7 +30,6 @@ deep_object_detection_node:
       class_score_mode: "all_classes"
       class_score_start_idx: -1
       class_score_count: -1
-      coordinate_space: "preprocessed"
 
       layout:
         auto_detect: true
@@ -42,8 +41,9 @@ deep_object_detection_node:
         score_idx: 4
         class_idx: 5
 
-    preferred_provider: "tensorrt"
-    device_id: 0
-    warmup_tensor_shapes: true
-    enable_trt_engine_cache: true
-    trt_engine_cache_path: "/tmp/deep_ros_ort_trt_cache"
+    Backend:
+      plugin: "onnxruntime_gpu"  # Options: "onnxruntime_cpu" or "onnxruntime_gpu"
+      execution_provider: "tensorrt"  # For onnxruntime_gpu: "cuda" or "tensorrt"
+      device_id: 0
+      trt_engine_cache_enable: true
+      trt_engine_cache_path: "/tmp/deep_ros_ort_trt_cache"

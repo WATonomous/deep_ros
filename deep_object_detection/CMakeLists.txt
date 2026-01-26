@@ -38,7 +38,6 @@ find_package(rcl_interfaces REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc)
 
 add_library(deep_object_detection_lib SHARED
-  src/backend_manager.cpp
   src/generic_postprocessor.cpp
   src/image_preprocessor.cpp
   src/deep_object_detection_node.cpp

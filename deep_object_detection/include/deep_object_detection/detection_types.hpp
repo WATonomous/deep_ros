@@ -17,7 +17,7 @@
  * @brief Type definitions and enums for deep object detection
  *
  * This header defines:
- * - Enum types for configuration options (Provider, BboxFormat, NormalizationType, etc.)
+ * - Enum types for configuration options (BboxFormat, NormalizationType, etc.)
  * - Configuration structures (PreprocessingConfig, PostprocessingConfig, DetectionParams)
  * - Data structures (ImageMeta, PackedInput, SimpleDetection)
  * - Helper functions for string-to-enum conversion
@@ -58,16 +58,6 @@ namespace deep_object_detection
 
 /// Number of RGB color channels
 constexpr size_t RGB_CHANNELS = 3;
-
-/**
- * @brief Execution provider for ONNX Runtime inference
- */
-enum class Provider
-{
-  TENSORRT,  ///< TensorRT execution provider (requires CUDA and TensorRT)
-  CUDA,  ///< CUDA execution provider (requires CUDA)
-  CPU  ///< CPU execution provider (always available)
-};
 
 /**
  * @brief Bounding box coordinate format
@@ -121,14 +111,6 @@ enum class ClassScoreMode
 };
 
 /**
- * @brief Coordinate space for bounding boxes
- */
-enum class CoordinateSpace
-{
-  PREPROCESSED  ///< Coordinates in preprocessed image space (model input size)
-};
-
-/**
  * @brief Image metadata for coordinate transformation
  *
  * Stores information about preprocessing transformations needed to
@@ -162,14 +144,14 @@ struct PackedInput
  */
 struct PreprocessingConfig
 {
-  int input_width = 640;  ///< Model input image width in pixels
-  int input_height = 640;  ///< Model input image height in pixels
-  NormalizationType normalization_type = NormalizationType::SCALE_0_1;  ///< Normalization method
-  std::vector<float> mean = {0.0f, 0.0f, 0.0f};  ///< Mean values for custom normalization (RGB order)
-  std::vector<float> std = {1.0f, 1.0f, 1.0f};  ///< Std values for custom normalization (RGB order)
-  ResizeMethod resize_method = ResizeMethod::LETTERBOX;  ///< Image resizing method
-  int pad_value = 114;  ///< Padding value for letterbox (gray, YOLO standard)
-  std::string color_format = "bgr";  ///< Input color format ("bgr" or "rgb")
+  int input_width;  ///< Model input image width in pixels
+  int input_height;  ///< Model input image height in pixels
+  NormalizationType normalization_type;  ///< Normalization method
+  std::vector<float> mean;  ///< Mean values for custom normalization (RGB order)
+  std::vector<float> std;  ///< Std values for custom normalization (RGB order)
+  ResizeMethod resize_method;  ///< Image resizing method
+  int pad_value;  ///< Padding value for letterbox (gray, YOLO standard)
+  std::string color_format;  ///< Input color format ("bgr" or "rgb")
 };
 
 /**
@@ -177,9 +159,9 @@ struct PreprocessingConfig
  */
 struct ModelMetadata
 {
-  int num_classes = 80;  ///< Number of detection classes
+  int num_classes;  ///< Number of detection classes
   std::string class_names_file;  ///< Path to class names file (one per line, optional)
-  BboxFormat bbox_format = BboxFormat::CXCYWH;  ///< Bounding box format used by model
+  BboxFormat bbox_format;  ///< Bounding box format used by model
 };
 
 /**
@@ -190,14 +172,14 @@ struct ModelMetadata
  */
 struct OutputLayoutConfig
 {
-  bool auto_detect = true;  ///< True to auto-detect layout, false to use manual config
-  int batch_dim = 0;  ///< Batch dimension index
-  int detection_dim = 1;  ///< Detection dimension index
-  int feature_dim = 2;  ///< Feature dimension index
-  int bbox_start_idx = 0;  ///< Starting index for bbox coordinates in feature dimension
-  int bbox_count = 4;  ///< Number of bbox coordinates (always 4)
-  int score_idx = 4;  ///< Index for confidence score in feature dimension
-  int class_idx = 5;  ///< Index for class ID in feature dimension
+  bool auto_detect;  ///< True to auto-detect layout, false to use manual config
+  int batch_dim;  ///< Batch dimension index
+  int detection_dim;  ///< Detection dimension index
+  int feature_dim;  ///< Feature dimension index
+  int bbox_start_idx;  ///< Starting index for bbox coordinates in feature dimension
+  int bbox_count;  ///< Number of bbox coordinates (always 4)
+  int score_idx;  ///< Index for confidence score in feature dimension
+  int class_idx;  ///< Index for class ID in feature dimension
 };
 
 /**
@@ -205,20 +187,31 @@ struct OutputLayoutConfig
  */
 struct PostprocessingConfig
 {
-  float score_threshold = 0.25f;  ///< Minimum confidence score (detections below are filtered)
-  float nms_iou_threshold = 0.45f;  ///< IoU threshold for Non-Maximum Suppression
-  int max_detections = 300;  ///< Maximum number of detections per image (after NMS)
-  ScoreActivation score_activation = ScoreActivation::SIGMOID;  ///< Score activation function
-  bool enable_nms = true;  ///< Enable Non-Maximum Suppression (always true, not configurable)
-  bool use_multi_output = false;  ///< True if model has separate outputs for boxes, scores, classes
-  int output_boxes_idx = 0;  ///< Output index for bounding boxes (if use_multi_output)
-  int output_scores_idx = 1;  ///< Output index for scores (if use_multi_output)
-  int output_classes_idx = 2;  ///< Output index for class IDs (if use_multi_output)
-  ClassScoreMode class_score_mode = ClassScoreMode::ALL_CLASSES;  ///< How class scores are extracted
-  int class_score_start_idx = -1;  ///< Start index for class scores (-1 = use all)
-  int class_score_count = -1;  ///< Count of class scores (-1 = use all)
-  CoordinateSpace coordinate_space = CoordinateSpace::PREPROCESSED;  ///< Coordinate space (always PREPROCESSED)
+  float score_threshold;  ///< Minimum confidence score (detections below are filtered)
+  float nms_iou_threshold;  ///< IoU threshold for Non-Maximum Suppression
+  int max_detections;  ///< Maximum number of detections per image (after NMS)
+  ScoreActivation score_activation;  ///< Score activation function
+  bool enable_nms;  ///< Enable Non-Maximum Suppression
+  bool use_multi_output;  ///< True if model has separate outputs for boxes, scores, classes
+  int output_boxes_idx;  ///< Output index for bounding boxes (if use_multi_output)
+  int output_scores_idx;  ///< Output index for scores (if use_multi_output)
+  int output_classes_idx;  ///< Output index for class IDs (if use_multi_output)
+  ClassScoreMode class_score_mode;  ///< How class scores are extracted
+  int class_score_start_idx;  ///< Start index for class scores (-1 = use all)
+  int class_score_count;  ///< Count of class scores (-1 = use all)
   OutputLayoutConfig layout;  ///< Output layout configuration
+};
+
+/**
+ * @brief Backend configuration parameters
+ */
+struct BackendConfig
+{
+  std::string plugin;  ///< Backend plugin name (e.g., "onnxruntime_cpu" or "onnxruntime_gpu")
+  std::string execution_provider;  ///< Execution provider for GPU plugins ("cuda" or "tensorrt")
+  int device_id;  ///< GPU device ID (for CUDA/TensorRT)
+  bool trt_engine_cache_enable;  ///< Enable TensorRT engine caching
+  std::string trt_engine_cache_path;  ///< TensorRT engine cache directory
 };
 
 /**
@@ -233,114 +226,10 @@ struct DetectionParams
   ModelMetadata model_metadata;  ///< Model metadata (classes, bbox format)
   PreprocessingConfig preprocessing;  ///< Preprocessing configuration
   PostprocessingConfig postprocessing;  ///< Postprocessing configuration
-  std::string output_detections_topic{"/detections"};  ///< Output topic for detections
-  std::string preferred_provider{"tensorrt"};  ///< Preferred execution provider ("tensorrt", "cuda", or "cpu")
-  int device_id{0};  ///< GPU device ID (for CUDA/TensorRT)
-  bool warmup_tensor_shapes{true};  ///< Warmup tensor shapes (always true, not configurable)
-  bool enable_trt_engine_cache{false};  ///< Enable TensorRT engine caching
-  std::string trt_engine_cache_path{"/tmp/deep_ros_ort_trt_cache"};  ///< TensorRT engine cache directory
+  BackendConfig backend;  ///< Backend configuration
+  std::string output_detections_topic;  ///< Output topic for detections
   std::vector<std::string> class_names;  ///< Class name strings (loaded from file or empty)
 };
-
-/**
- * @brief Convert string to BboxFormat enum
- * @param format Format string ("cxcywh", "xyxy", or "xywh", case-insensitive)
- * @return BboxFormat enum (defaults to CXCYWH if unknown)
- */
-inline BboxFormat stringToBboxFormat(const std::string & format)
-{
-  if (format == "cxcywh" || format == "CXCYWH") {
-    return BboxFormat::CXCYWH;
-  } else if (format == "xyxy" || format == "XYXY") {
-    return BboxFormat::XYXY;
-  } else if (format == "xywh" || format == "XYWH") {
-    return BboxFormat::XYWH;
-  }
-  return BboxFormat::CXCYWH;
-}
-
-/**
- * @brief Convert string to NormalizationType enum
- * @param type Normalization type string ("imagenet", "scale_0_1", "yolo", "custom", or "none", case-insensitive)
- * @return NormalizationType enum (defaults to SCALE_0_1 if unknown)
- */
-inline NormalizationType stringToNormalizationType(const std::string & type)
-{
-  if (type == "imagenet" || type == "IMAGENET") {
-    return NormalizationType::IMAGENET;
-  } else if (type == "scale_0_1" || type == "SCALE_0_1" || type == "yolo" || type == "YOLO") {
-    return NormalizationType::SCALE_0_1;
-  } else if (type == "custom" || type == "CUSTOM") {
-    return NormalizationType::CUSTOM;
-  } else if (type == "none" || type == "NONE") {
-    return NormalizationType::NONE;
-  }
-  return NormalizationType::SCALE_0_1;
-}
-
-/**
- * @brief Convert string to ResizeMethod enum
- * @param method Resize method string ("letterbox", "resize", "crop", or "pad", case-insensitive)
- * @return ResizeMethod enum (defaults to LETTERBOX if unknown)
- */
-inline ResizeMethod stringToResizeMethod(const std::string & method)
-{
-  if (method == "letterbox" || method == "LETTERBOX") {
-    return ResizeMethod::LETTERBOX;
-  } else if (method == "resize" || method == "RESIZE") {
-    return ResizeMethod::RESIZE;
-  } else if (method == "crop" || method == "CROP") {
-    return ResizeMethod::CROP;
-  } else if (method == "pad" || method == "PAD") {
-    return ResizeMethod::PAD;
-  }
-  return ResizeMethod::LETTERBOX;
-}
-
-/**
- * @brief Convert string to ScoreActivation enum
- * @param activation Activation string ("sigmoid", "softmax", or "none", case-insensitive)
- * @return ScoreActivation enum (defaults to SIGMOID if unknown)
- */
-inline ScoreActivation stringToScoreActivation(const std::string & activation)
-{
-  if (activation == "sigmoid" || activation == "SIGMOID") {
-    return ScoreActivation::SIGMOID;
-  } else if (activation == "softmax" || activation == "SOFTMAX") {
-    return ScoreActivation::SOFTMAX;
-  } else if (activation == "none" || activation == "NONE") {
-    return ScoreActivation::NONE;
-  }
-  return ScoreActivation::SIGMOID;
-}
-
-/**
- * @brief Convert string to ClassScoreMode enum
- * @param mode Mode string ("all_classes" or "single_confidence", case-insensitive)
- * @return ClassScoreMode enum (defaults to ALL_CLASSES if unknown)
- */
-inline ClassScoreMode stringToClassScoreMode(const std::string & mode)
-{
-  if (mode == "all_classes" || mode == "ALL_CLASSES") {
-    return ClassScoreMode::ALL_CLASSES;
-  } else if (mode == "single_confidence" || mode == "SINGLE_CONFIDENCE") {
-    return ClassScoreMode::SINGLE_CONFIDENCE;
-  }
-  return ClassScoreMode::ALL_CLASSES;
-}
-
-/**
- * @brief Convert string to CoordinateSpace enum
- * @param space Space string ("preprocessed" or "original", case-insensitive)
- * @return CoordinateSpace enum (defaults to PREPROCESSED if unknown)
- */
-inline CoordinateSpace stringToCoordinateSpace(const std::string & space)
-{
-  if (space == "preprocessed" || space == "PREPROCESSED") {
-    return CoordinateSpace::PREPROCESSED;
-  }
-  return CoordinateSpace::PREPROCESSED;
-}
 
 /**
  * @brief Simple detection structure (internal representation)
