@@ -91,7 +91,7 @@ public:
   GenericPostprocessor(
     const PostprocessingConfig & config,
     const OutputLayout & layout,
-    BboxFormat bbox_format,
+    const std::string & bbox_format,
     int num_classes,
     const std::vector<std::string> & class_names,
     bool use_letterbox);
@@ -144,15 +144,6 @@ public:
    */
   std::vector<std::vector<SimpleDetection>> decodeMultiOutput(
     const std::vector<deep_ros::Tensor> & outputs, const std::vector<ImageMeta> & metas) const;
-
-  /**
-   * @brief Get postprocessor format name
-   * @return Format name string ("generic")
-   */
-  std::string getFormatName() const
-  {
-    return "generic";
-  }
 
   /**
    * @brief Fill ROS Detection2DArray message with detections
@@ -265,7 +256,7 @@ private:
   /// Output tensor layout configuration
   OutputLayout layout_;
   /// Bounding box format (cxcywh, xyxy, or xywh)
-  BboxFormat bbox_format_;
+  std::string bbox_format_;
   /// Number of detection classes
   int num_classes_;
   /// Class name strings (empty if using class IDs)

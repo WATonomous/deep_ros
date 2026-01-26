@@ -41,20 +41,14 @@ cv::Mat ImagePreprocessor::preprocess(const cv::Mat & bgr, ImageMeta & meta) con
 
   cv::Mat resized;
 
-  switch (config_.resize_method) {
-    case ResizeMethod::LETTERBOX:
-      resized = applyLetterbox(bgr, meta);
-      break;
-    case ResizeMethod::CROP:
-      resized = applyCrop(bgr, meta);
-      break;
-    case ResizeMethod::PAD:
-      resized = applyPad(bgr, meta);
-      break;
-    case ResizeMethod::RESIZE:
-    default:
-      resized = applyResize(bgr, meta);
-      break;
+  if (config_.resize_method == "letterbox") {
+    resized = applyLetterbox(bgr, meta);
+  } else if (config_.resize_method == "crop") {
+    resized = applyCrop(bgr, meta);
+  } else if (config_.resize_method == "pad") {
+    resized = applyPad(bgr, meta);
+  } else {
+    resized = applyResize(bgr, meta);
   }
 
   cv::Mat float_image;
@@ -185,37 +179,29 @@ cv::Mat ImagePreprocessor::applyPad(const cv::Mat & bgr, ImageMeta & meta) const
 
 void ImagePreprocessor::applyNormalization(cv::Mat & image) const
 {
-  switch (config_.normalization_type) {
-    case NormalizationType::IMAGENET: {
-      static const std::array<float, RGB_CHANNELS> imagenet_mean = {0.485f, 0.456f, 0.406f};
-      static const std::array<float, RGB_CHANNELS> imagenet_std = {0.229f, 0.224f, 0.225f};
+  if (config_.normalization_type == "imagenet") {
+    static const std::array<float, RGB_CHANNELS> imagenet_mean = {0.485f, 0.456f, 0.406f};
+    static const std::array<float, RGB_CHANNELS> imagenet_std = {0.229f, 0.224f, 0.225f};
 
+    std::vector<cv::Mat> channels;
+    cv::split(image, channels);
+    channels[0] = (channels[0] - imagenet_mean[2]) / imagenet_std[2];
+    channels[1] = (channels[1] - imagenet_mean[1]) / imagenet_std[1];
+    channels[2] = (channels[2] - imagenet_mean[0]) / imagenet_std[0];
+
+    cv::merge(channels, image);
+  } else if (config_.normalization_type == "custom") {
+    if (config_.mean.size() >= RGB_CHANNELS && config_.std.size() >= RGB_CHANNELS) {
       std::vector<cv::Mat> channels;
       cv::split(image, channels);
-      channels[0] = (channels[0] - imagenet_mean[2]) / imagenet_std[2];
-      channels[1] = (channels[1] - imagenet_mean[1]) / imagenet_std[1];
-      channels[2] = (channels[2] - imagenet_mean[0]) / imagenet_std[0];
+      for (size_t i = 0; i < RGB_CHANNELS; ++i) {
+        channels[i] = (channels[i] - config_.mean[i]) / config_.std[i];
+      }
 
       cv::merge(channels, image);
-      break;
     }
-    case NormalizationType::CUSTOM: {
-      if (config_.mean.size() >= RGB_CHANNELS && config_.std.size() >= RGB_CHANNELS) {
-        std::vector<cv::Mat> channels;
-        cv::split(image, channels);
-        for (size_t i = 0; i < RGB_CHANNELS; ++i) {
-          channels[i] = (channels[i] - config_.mean[i]) / config_.std[i];
-        }
-
-        cv::merge(channels, image);
-      }
-      break;
-    }
-    case NormalizationType::SCALE_0_1:
-    case NormalizationType::NONE:
-    default:
-      break;
   }
+  // "scale_0_1" and "none" require no additional processing (already scaled to [0,1] or no normalization)
 }
 
 void ImagePreprocessor::applyColorConversion(cv::Mat & image) const

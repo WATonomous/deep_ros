@@ -27,7 +27,7 @@ namespace deep_object_detection
 GenericPostprocessor::GenericPostprocessor(
   const PostprocessingConfig & config,
   const OutputLayout & layout,
-  BboxFormat bbox_format,
+  const std::string & bbox_format,
   int num_classes,
   const std::vector<std::string> & class_names,
   bool use_letterbox)
@@ -114,15 +114,11 @@ GenericPostprocessor::OutputLayout GenericPostprocessor::autoConfigure(
 
 float GenericPostprocessor::applyActivation(float raw_score) const
 {
-  switch (config_.score_activation) {
-    case ScoreActivation::SIGMOID:
-      return 1.0f / (1.0f + std::exp(-raw_score));
-    case ScoreActivation::SOFTMAX:
-      return raw_score;
-    case ScoreActivation::NONE:
-    default:
-      return raw_score;
+  if (config_.score_activation == "sigmoid") {
+    return 1.0f / (1.0f + std::exp(-raw_score));
   }
+  // "softmax" and "none" return raw score
+  return raw_score;
 }
 
 float GenericPostprocessor::extractValue(
@@ -172,29 +168,22 @@ void GenericPostprocessor::convertBbox(
     coords[i] = extractValue(bbox_data, batch_idx, detection_idx, layout_.bbox_start_idx + i, shape);
   }
 
-  switch (bbox_format_) {
-    case BboxFormat::XYXY: {
-      det.x = (coords[0] + coords[2]) * 0.5f;
-      det.y = (coords[1] + coords[3]) * 0.5f;
-      det.width = coords[2] - coords[0];
-      det.height = coords[3] - coords[1];
-      break;
-    }
-    case BboxFormat::XYWH: {
-      det.x = coords[0] + coords[2] * 0.5f;
-      det.y = coords[1] + coords[3] * 0.5f;
-      det.width = coords[2];
-      det.height = coords[3];
-      break;
-    }
-    case BboxFormat::CXCYWH:
-    default: {
-      det.x = coords[0];
-      det.y = coords[1];
-      det.width = coords[2];
-      det.height = coords[3];
-      break;
-    }
+  if (bbox_format_ == "xyxy") {
+    det.x = (coords[0] + coords[2]) * 0.5f;
+    det.y = (coords[1] + coords[3]) * 0.5f;
+    det.width = coords[2] - coords[0];
+    det.height = coords[3] - coords[1];
+  } else if (bbox_format_ == "xywh") {
+    det.x = coords[0] + coords[2] * 0.5f;
+    det.y = coords[1] + coords[3] * 0.5f;
+    det.width = coords[2];
+    det.height = coords[3];
+  } else {
+    // Default: cxcywh format
+    det.x = coords[0];
+    det.y = coords[1];
+    det.width = coords[2];
+    det.height = coords[3];
   }
 }
 
@@ -237,7 +226,7 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decode(
       size_t class_count = (config_.class_score_count > 0) ? static_cast<size_t>(config_.class_score_count)
                                                            : static_cast<size_t>(num_classes_);
 
-      if (config_.class_score_mode == ClassScoreMode::ALL_CLASSES && num_features > class_start_idx) {
+      if (config_.class_score_mode == "all_classes" && num_features > class_start_idx) {
         size_t class_end = std::min(num_features, class_start_idx + class_count);
         std::vector<float> class_logits;
         class_logits.reserve(class_end - class_start_idx);
@@ -247,7 +236,7 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decode(
           class_logits.push_back(cls_logit);
         }
 
-        if (config_.score_activation == ScoreActivation::SOFTMAX) {
+        if (config_.score_activation == "softmax") {
           float max_logit = *std::max_element(class_logits.begin(), class_logits.end());
           float sum_exp = 0.0f;
           for (float & logit : class_logits) {
@@ -279,7 +268,7 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decode(
           score = max_score;
           class_id = static_cast<int32_t>(best_class);
         }
-      } else if (config_.class_score_mode == ClassScoreMode::SINGLE_CONFIDENCE) {
+      } else if (config_.class_score_mode == "single_confidence") {
         if (layout.score_idx < num_features) {
           float raw_score = extractValue(data, b, d, layout.score_idx, shape);
           score = applyActivation(raw_score);
@@ -437,17 +426,17 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decodeMultiOutpu
       }
 
       SimpleDetection det;
-      if (bbox_format_ == BboxFormat::CXCYWH) {
+      if (bbox_format_ == "cxcywh") {
         det.x = x;
         det.y = y;
         det.width = w;
         det.height = h;
-      } else if (bbox_format_ == BboxFormat::XYXY) {
+      } else if (bbox_format_ == "xyxy") {
         det.x = x;
         det.y = y;
         det.width = w - x;
         det.height = h - y;
-      } else if (bbox_format_ == BboxFormat::XYWH) {
+      } else if (bbox_format_ == "xywh") {
         det.x = x;
         det.y = y;
         det.width = w;
@@ -573,23 +562,8 @@ void GenericPostprocessor::fillDetectionMessage(
   Detection2DArrayMsg & out_msg) const
 {
   out_msg.header = header;
-
-#if __has_include(<deep_msgs/msg/detection2_d_array.hpp>)
-  out_msg.detections.clear();
-  out_msg.detections.reserve(detections.size());
-  for (const auto & det : detections) {
-    Detection2DMsg d;
-    d.x = det.x;
-    d.y = det.y;
-    d.width = det.width;
-    d.height = det.height;
-    d.score = det.score;
-    d.class_id = det.class_id;
-    d.label = classLabel(det.class_id, class_names_);
-    out_msg.detections.push_back(d);
-  }
-#else
   (void)meta;
+
   out_msg.detections.clear();
   out_msg.detections.reserve(detections.size());
   for (const auto & det : detections) {
@@ -606,7 +580,6 @@ void GenericPostprocessor::fillDetectionMessage(
     d.results.push_back(hyp);
     out_msg.detections.push_back(d);
   }
-#endif
 }
 
 }  // namespace deep_object_detection

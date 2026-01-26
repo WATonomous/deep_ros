@@ -39,14 +39,16 @@ launch:
       description: "Whether to use nav2_lifecycle_manager for automatic lifecycle transitions"
 
   - node_container:
-      pkg: "rclcpp_components"
-      exec: "component_container"
-      name: "detection_container"
-      output: "screen"
+      pkg: rclcpp_components
+      exec: component_container
+      name: detection_container
+      namespace: ''
+      output: screen
       composable_node:
-        - pkg: "deep_object_detection"
-          plugin: "deep_object_detection::DeepObjectDetectionNode"
-          name: "deep_object_detection_node"
+        - pkg: deep_object_detection
+          plugin: deep_object_detection::DeepObjectDetectionNode
+          name: deep_object_detection_node
+          namespace: ''
           remap:
             - from: "/multi_camera_sync/multi_image_compressed"
               to: "$(var input_topic)"

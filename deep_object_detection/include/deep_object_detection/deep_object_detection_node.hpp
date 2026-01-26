@@ -30,16 +30,16 @@
 #include <string>
 #include <vector>
 
-#include <deep_core/plugin_interfaces/deep_backend_plugin.hpp>
+#include <deep_core/deep_node_base.hpp>
 #include <deep_core/types/tensor.hpp>
 #include <deep_msgs/msg/multi_image.hpp>
+#include <deep_msgs/msg/multi_image_raw.hpp>
 #include <opencv2/core/mat.hpp>
-#include <pluginlib/class_loader.hpp>
 #include <rclcpp/node_options.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <rclcpp_lifecycle/state.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
+#include <sensor_msgs/msg/image.hpp>
 #include <std_msgs/msg/header.hpp>
 #include <visualization_msgs/msg/image_marker.hpp>
 
@@ -66,7 +66,7 @@ namespace deep_object_detection
  * - Can be deactivated/activated without full cleanup
  * - Subscriptions and publishers are only active when the node is in the active state
  */
-class DeepObjectDetectionNode : public rclcpp_lifecycle::LifecycleNode
+class DeepObjectDetectionNode : public deep_ros::DeepNodeBase
 {
 public:
   /**
@@ -76,14 +76,20 @@ public:
   explicit DeepObjectDetectionNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
   /**
-   * @brief Configure the node: load plugin, model, setup postprocessor
+   * @brief Destructor
+   */
+  ~DeepObjectDetectionNode() override = default;
+
+protected:
+  /**
+   * @brief Configure the node: setup postprocessor
    * @return SUCCESS if configuration succeeds, FAILURE otherwise
    *
-   * Loads class names, initializes image preprocessor, backend plugin, and postprocessor.
+   * Loads class names, initializes image preprocessor, and postprocessor.
    * Detects model output shape and configures layout. Does not start subscriptions.
+   * Plugin and model loading are handled by DeepNodeBase.
    */
-  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_configure(
-    const rclcpp_lifecycle::State &) override;
+  deep_ros::CallbackReturn on_configure_impl(const rclcpp_lifecycle::State & /*state*/) override;
 
   /**
    * @brief Activate the node: start subscriptions
@@ -91,37 +97,35 @@ public:
    *
    * Creates MultiImage subscription and activates the detection publisher.
    */
-  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_activate(
-    const rclcpp_lifecycle::State &) override;
+  deep_ros::CallbackReturn on_activate_impl(const rclcpp_lifecycle::State & /*state*/) override;
 
   /**
-   * @brief Deactivate the node: stop subscriptions and timer
+   * @brief Deactivate the node: stop subscriptions
    * @return SUCCESS
    *
-   * Stops all subscriptions, cancels the batch timer, and deactivates the publisher.
+   * Stops all subscriptions and deactivates the publisher.
    * Node can be reactivated without full cleanup.
    */
-  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_deactivate(
-    const rclcpp_lifecycle::State &) override;
+  deep_ros::CallbackReturn on_deactivate_impl(const rclcpp_lifecycle::State & /*state*/) override;
 
   /**
    * @brief Cleanup the node: release all resources
    * @return SUCCESS
    *
-   * Releases backend manager, preprocessor, postprocessor, and clears all data.
+   * Releases preprocessor, postprocessor, and clears all data.
+   * Plugin and model cleanup are handled by DeepNodeBase.
    * Node must be reconfigured before reactivation.
    */
-  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_cleanup(
-    const rclcpp_lifecycle::State &) override;
+  deep_ros::CallbackReturn on_cleanup_impl(const rclcpp_lifecycle::State & /*state*/) override;
 
   /**
    * @brief Shutdown the node: final cleanup
    * @return SUCCESS
    *
-   * Performs final cleanup. Node cannot be reactivated after shutdown.
+   * Performs final cleanup. Plugin and model cleanup are handled by DeepNodeBase.
+   * Node cannot be reactivated after shutdown.
    */
-  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn on_shutdown(
-    const rclcpp_lifecycle::State &) override;
+  deep_ros::CallbackReturn on_shutdown_impl(const rclcpp_lifecycle::State & /*state*/) override;
 
 private:
   /**
@@ -135,28 +139,50 @@ private:
   /**
    * @brief Setup the MultiImage subscription
    *
-   * Creates a subscription to the input_topic_ with best_effort QoS.
-   * Subscription is only active when node is in active state.
+   * Creates subscriptions to both compressed and uncompressed MultiImage topics with best_effort QoS.
+   * Subscriptions are only active when node is in active state.
    */
   void setupSubscription();
 
   /**
-   * @brief Callback for MultiImage messages
+   * @brief Callback for MultiImage messages (compressed)
    * @param msg Shared pointer to MultiImage message containing synchronized compressed images
    *
-   * Decodes compressed images in the MultiImage message and processes them directly.
-   * Failed decodes are dropped with a warning.
+   * Converts compressed images to cv::Mat and processes them.
    */
   void onMultiImage(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg);
 
   /**
-   * @brief Process a MultiImage message through the inference pipeline
-   * @param msg MultiImage message containing synchronized compressed images
+   * @brief Callback for MultiImageRaw messages (uncompressed)
+   * @param msg Shared pointer to MultiImageRaw message containing synchronized uncompressed images
    *
-   * Decodes images, runs preprocessing, inference, and postprocessing.
-   * Publishes detection results for each image in the MultiImage.
+   * Converts uncompressed images to cv::Mat and processes them.
    */
-  void processMultiImage(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg);
+  void onMultiImageRaw(const deep_msgs::msg::MultiImageRaw::ConstSharedPtr & msg);
+
+  /**
+   * @brief Process images through the inference pipeline
+   * @param images Vector of cv::Mat images to process
+   * @param headers ROS headers for each image (for timestamp and frame_id)
+   *
+   * Runs preprocessing, inference, and postprocessing.
+   * Publishes detection results for each image.
+   */
+  void processImages(const std::vector<cv::Mat> & images, const std::vector<std_msgs::msg::Header> & headers);
+
+  /**
+   * @brief Convert CompressedImage to cv::Mat
+   * @param compressed_img Compressed image message
+   * @return Decoded cv::Mat image, or empty Mat if decoding fails
+   */
+  cv::Mat decodeCompressedImage(const sensor_msgs::msg::CompressedImage & compressed_img);
+
+  /**
+   * @brief Convert Image to cv::Mat
+   * @param img Uncompressed image message
+   * @return cv::Mat image, or empty Mat if conversion fails
+   */
+  cv::Mat decodeImage(const sensor_msgs::msg::Image & img);
 
   /**
    * @brief Publish detection results for a batch
@@ -194,22 +220,6 @@ private:
   void loadClassNames();
 
   /**
-   * @brief Cleanup resources if configuration partially fails
-   *
-   * Releases resources that were allocated during on_configure() if an error
-   * occurs partway through configuration. Ensures no resource leaks.
-   */
-  void cleanupPartialConfiguration();
-
-  /**
-   * @brief Cleanup all node resources
-   *
-   * Releases plugin_, preprocessor_, postprocessor_, and clears
-   * all subscriptions. Called during on_cleanup() and on_shutdown().
-   */
-  void cleanupAllResources();
-
-  /**
    * @brief Stop all subscriptions
    *
    * Called during on_deactivate() to stop processing without full cleanup.
@@ -222,10 +232,16 @@ private:
   /// Class names loaded from file
   std::vector<std::string> class_names_;
 
-  /// Subscription to MultiImage topic (synchronized multi-camera input)
+  /// Subscription to MultiImage topic (synchronized multi-camera compressed input)
   rclcpp::Subscription<deep_msgs::msg::MultiImage>::SharedPtr multi_image_sub_;
+  /// Subscription to MultiImageRaw topic (synchronized multi-camera uncompressed input)
+  rclcpp::Subscription<deep_msgs::msg::MultiImageRaw>::SharedPtr multi_image_raw_sub_;
   /// Input topic name (can be set via parameter or remapping)
   std::string input_topic_;
+  /// Input topic name for uncompressed images (can be set via remapping)
+  std::string input_topic_raw_;
+  /// Whether to use compressed images (true) or uncompressed images (false)
+  bool use_compressed_images_;
   /// Publisher for Detection2DArray messages
   rclcpp_lifecycle::LifecyclePublisher<Detection2DArrayMsg>::SharedPtr detection_pub_;
   /// Publisher for ImageMarker annotations (for Foxglove visualization)
@@ -239,14 +255,6 @@ private:
   std::unique_ptr<ImagePreprocessor> preprocessor_;
   /// Postprocessor (NMS, coordinate transformation, message formatting)
   std::unique_ptr<GenericPostprocessor> postprocessor_;
-  /// Backend plugin loader
-  std::unique_ptr<pluginlib::ClassLoader<deep_ros::DeepBackendPlugin>> plugin_loader_;
-  /// Backend plugin instance
-  pluginlib::UniquePtr<deep_ros::DeepBackendPlugin> plugin_;
-  /// Backend inference executor
-  std::shared_ptr<deep_ros::BackendInferenceExecutor> executor_;
-  /// Backend memory allocator
-  std::shared_ptr<deep_ros::BackendMemoryAllocator> allocator_;
 };
 
 /**
@@ -257,7 +265,7 @@ private:
  * Used by rclcpp_components for composable node loading.
  * Allows the node to be loaded as a component in a component container.
  */
-std::shared_ptr<rclcpp_lifecycle::LifecycleNode> createDeepObjectDetectionNode(
+std::shared_ptr<deep_ros::DeepNodeBase> createDeepObjectDetectionNode(
   const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
 }  // namespace deep_object_detection

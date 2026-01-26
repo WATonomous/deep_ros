@@ -100,25 +100,24 @@ TEST_CASE_METHOD(
     REQUIRE(node->has_parameter("model_path"));
 
     // Model parameters
-    REQUIRE(node->has_parameter("model.num_classes"));
-    REQUIRE(node->has_parameter("model.bbox_format"));
+    REQUIRE(node->has_parameter("Model.num_classes"));
+    REQUIRE(node->has_parameter("Model.bbox_format"));
 
     // Preprocessing parameters
-    REQUIRE(node->has_parameter("preprocessing.input_width"));
-    REQUIRE(node->has_parameter("preprocessing.input_height"));
-    REQUIRE(node->has_parameter("preprocessing.normalization_type"));
-    REQUIRE(node->has_parameter("preprocessing.resize_method"));
-    REQUIRE(node->has_parameter("preprocessing.color_format"));
+    REQUIRE(node->has_parameter("Preprocessing.input_width"));
+    REQUIRE(node->has_parameter("Preprocessing.input_height"));
+    REQUIRE(node->has_parameter("Preprocessing.normalization_type"));
+    REQUIRE(node->has_parameter("Preprocessing.resize_method"));
+    REQUIRE(node->has_parameter("Preprocessing.color_format"));
 
     // Postprocessing parameters
-    REQUIRE(node->has_parameter("postprocessing.score_threshold"));
-    REQUIRE(node->has_parameter("postprocessing.nms_iou_threshold"));
-    REQUIRE(node->has_parameter("postprocessing.max_detections"));
-    REQUIRE(node->has_parameter("postprocessing.score_activation"));
+    REQUIRE(node->has_parameter("Postprocessing.score_threshold"));
+    REQUIRE(node->has_parameter("Postprocessing.nms_iou_threshold"));
+    REQUIRE(node->has_parameter("Postprocessing.score_activation"));
 
     // Execution provider parameters
-    REQUIRE(node->has_parameter("preferred_provider"));
-    REQUIRE(node->has_parameter("device_id"));
+    REQUIRE(node->has_parameter("Backend.execution_provider"));
+    REQUIRE(node->has_parameter("Backend.device_id"));
   }
 
   SECTION("Parameters have sensible defaults")
@@ -127,25 +126,24 @@ TEST_CASE_METHOD(
     REQUIRE(node->get_parameter("model_path").as_string() == "");
 
     // Model parameters
-    REQUIRE(node->get_parameter("model.num_classes").as_int() == 80);
-    REQUIRE(node->get_parameter("model.bbox_format").as_string() == "cxcywh");
+    REQUIRE(node->get_parameter("Model.num_classes").as_int() == 80);
+    REQUIRE(node->get_parameter("Model.bbox_format").as_string() == "cxcywh");
 
     // Preprocessing parameters
-    REQUIRE(node->get_parameter("preprocessing.input_width").as_int() == 640);
-    REQUIRE(node->get_parameter("preprocessing.input_height").as_int() == 640);
-    REQUIRE(node->get_parameter("preprocessing.normalization_type").as_string() == "scale_0_1");
-    REQUIRE(node->get_parameter("preprocessing.resize_method").as_string() == "letterbox");
-    REQUIRE(node->get_parameter("preprocessing.color_format").as_string() == "rgb");
+    REQUIRE(node->get_parameter("Preprocessing.input_width").as_int() == 640);
+    REQUIRE(node->get_parameter("Preprocessing.input_height").as_int() == 640);
+    REQUIRE(node->get_parameter("Preprocessing.normalization_type").as_string() == "scale_0_1");
+    REQUIRE(node->get_parameter("Preprocessing.resize_method").as_string() == "letterbox");
+    REQUIRE(node->get_parameter("Preprocessing.color_format").as_string() == "rgb");
 
     // Postprocessing parameters
-    REQUIRE(node->get_parameter("postprocessing.score_threshold").as_double() == Approx(0.25));
-    REQUIRE(node->get_parameter("postprocessing.nms_iou_threshold").as_double() == Approx(0.45));
-    REQUIRE(node->get_parameter("postprocessing.max_detections").as_int() == 300);
-    REQUIRE(node->get_parameter("postprocessing.score_activation").as_string() == "sigmoid");
+    REQUIRE(node->get_parameter("Postprocessing.score_threshold").as_double() == Approx(0.25));
+    REQUIRE(node->get_parameter("Postprocessing.nms_iou_threshold").as_double() == Approx(0.45));
+    REQUIRE(node->get_parameter("Postprocessing.score_activation").as_string() == "sigmoid");
 
     // Execution provider parameters
-    REQUIRE(node->get_parameter("preferred_provider").as_string() == "tensorrt");
-    REQUIRE(node->get_parameter("device_id").as_int() == 0);
+    REQUIRE(node->get_parameter("Backend.execution_provider").as_string() == "tensorrt");
+    REQUIRE(node->get_parameter("Backend.device_id").as_int() == 0);
   }
 }
 
@@ -160,28 +158,28 @@ TEST_CASE_METHOD(
   SECTION("Preprocessing dimensions can be configured")
   {
     auto params = std::vector<rclcpp::Parameter>{
-      rclcpp::Parameter("preprocessing.input_width", 1280), rclcpp::Parameter("preprocessing.input_height", 720)};
+      rclcpp::Parameter("Preprocessing.input_width", 1280), rclcpp::Parameter("Preprocessing.input_height", 720)};
     auto result = node->set_parameters(params);
     REQUIRE(result[0].successful == true);
     REQUIRE(result[1].successful == true);
-    REQUIRE(node->get_parameter("preprocessing.input_width").as_int() == 1280);
-    REQUIRE(node->get_parameter("preprocessing.input_height").as_int() == 720);
+    REQUIRE(node->get_parameter("Preprocessing.input_width").as_int() == 1280);
+    REQUIRE(node->get_parameter("Preprocessing.input_height").as_int() == 720);
   }
 
   SECTION("Normalization type can be configured")
   {
-    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("preprocessing.normalization_type", "imagenet")};
+    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("Preprocessing.normalization_type", "imagenet")};
     auto result = node->set_parameters(params);
     REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("preprocessing.normalization_type").as_string() == "imagenet");
+    REQUIRE(node->get_parameter("Preprocessing.normalization_type").as_string() == "imagenet");
   }
 
   SECTION("Resize method can be configured")
   {
-    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("preprocessing.resize_method", "resize")};
+    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("Preprocessing.resize_method", "resize")};
     auto result = node->set_parameters(params);
     REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("preprocessing.resize_method").as_string() == "resize");
+    REQUIRE(node->get_parameter("Preprocessing.resize_method").as_string() == "resize");
   }
 }
 
@@ -195,26 +193,18 @@ TEST_CASE_METHOD(
 
   SECTION("Score threshold can be configured")
   {
-    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("postprocessing.score_threshold", 0.5)};
+    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("Postprocessing.score_threshold", 0.5)};
     auto result = node->set_parameters(params);
     REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("postprocessing.score_threshold").as_double() == Approx(0.5));
+    REQUIRE(node->get_parameter("Postprocessing.score_threshold").as_double() == Approx(0.5));
   }
 
   SECTION("NMS IoU threshold can be configured")
   {
-    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("postprocessing.nms_iou_threshold", 0.6)};
+    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("Postprocessing.nms_iou_threshold", 0.6)};
     auto result = node->set_parameters(params);
     REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("postprocessing.nms_iou_threshold").as_double() == Approx(0.6));
-  }
-
-  SECTION("Max detections can be configured")
-  {
-    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("postprocessing.max_detections", 100)};
-    auto result = node->set_parameters(params);
-    REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("postprocessing.max_detections").as_int() == 100);
+    REQUIRE(node->get_parameter("Postprocessing.nms_iou_threshold").as_double() == Approx(0.6));
   }
 }
 

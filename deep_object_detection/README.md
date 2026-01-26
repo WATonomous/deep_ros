@@ -7,7 +7,7 @@ A deep learning object detection node for ROS 2. Simply provide any ONNX-compati
 The `deep_object_detection` package provides:
 - Model-agnostic object detection using ONNX models
 - Automatic output format detection and adaptation
-- Multi-camera support via MultiImage messages with flexible batching
+- Multi-camera support via MultiImage messages (immediate batch processing)
 - Configurable preprocessing and postprocessing pipelines
 - Plugin-based backend architecture (CPU, CUDA, TensorRT)
 - Full ROS 2 lifecycle node support
@@ -18,9 +18,11 @@ The `deep_object_detection` package provides:
 │                                                                                    │
 │  ┌──────────────────────────────────┐       ┌──────────────────────────────┐       │
 │  │ MultiImage Topic                 │       │ Detection2DArray Topic       │       │
-│  │ (compressed images)              │       └──────────────────────────────┘       │
-│  └───────────────┬──────────────────┘       ┌──────────────────────────────┐       │
-│                  │                          │ ImageMarker Topic            │       │
+│  │ (synchronized multi-camera)       │       │ (one per image in batch)     │       │
+│  │ • KeepLast(1) QoS                │       └──────────────────────────────┘       │
+│  │ • Immediate processing           │       ┌──────────────────────────────┐       │
+│  └───────────────┬──────────────────┘       │ ImageMarker Topic            │       │
+│                  │                          │ (visualization annotations)  │       │
 │                  │                          └──────────────────────────────┘       │
 └──────────────────┼───────────────────────────────────────────────┬────────────────┘
                    │                                               │
@@ -29,22 +31,52 @@ The `deep_object_detection` package provides:
 │          DeepObjectDetectionNode  (rclcpp_lifecycle::LifecycleNode)                │
 │                                                                                    │
 │  ┌──────────────────────────────────────────────────────────────────────────────┐  │
-│  │                               Processing Pipeline                            │  │
+│  │                         Processing Pipeline (Per MultiImage Message)         │  │
 │  │                                                                              │  │
-│  │  ┌──────────────────────────┐      ┌──────────────────────────┐              │  │
-│  │  │ ImagePreprocessor        │      │ Backend Plugin           │              │  │
-│  │  │  • decode images         │ ────▶│  • plugin loader        │              │  │
-│  │  │  • resize                │      │  • memory allocation     │              │  │
-│  │  │  • normalize             │      │  • inference execution   │              │  │
-│  │  │  • pack tensor           │      └─────────────┬────────────┘              │  │
-│  │  └──────────────────────────┘                    │                           │  │
-│  │                                                  ▼                           │  │
-│  │  ┌────────────────────────────────────────────────────────────────────────┐  │  │
-│  │  │ GenericPostprocessor                                                   │  │  │
-│  │  │  • decode outputs                                                      │  │  │
-│  │  │  • NMS filtering                                                       │  │  │
-│  │  │  • coordinate transforms                                               │  │  │
-│  │  └────────────────────────────────────────────────────────────────────────┘  │  │
+│  │  MultiImage Message                                                          │  │
+│  │  ┌──────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │ 1. Decode Images (sequential)                                         │  │  │
+│  │  │    • Extract all CompressedImage from MultiImage                      │  │  │
+│  │  │    • Decode each to cv::Mat                                           │  │  │
+│  │  └────────────────────┬───────────────────────────────────────────────────┘  │  │
+│  │                       │                                                      │  │
+│  │                       ▼                                                      │  │
+│  │  ┌──────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │ 2. ImagePreprocessor (sequential preprocessing)                      │  │  │
+│  │  │    • Resize each image (letterbox/resize/crop)                      │  │  │
+│  │  │    • Normalize pixel values                                          │  │  │
+│  │  │    • Convert color format (RGB/BGR)                                  │  │  │
+│  │  └────────────────────┬───────────────────────────────────────────────────┘  │  │
+│  │                       │                                                      │  │
+│  │                       ▼                                                      │  │
+│  │  ┌──────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │ 3. Pack Batch Tensor                                                 │  │  │
+│  │  │    • Stack all preprocessed images into single tensor               │  │  │
+│  │  │    • Shape: [batch_size, channels, height, width]                   │  │  │
+│  │  └────────────────────┬───────────────────────────────────────────────────┘  │  │
+│  │                       │                                                      │  │
+│  │                       ▼                                                      │  │
+│  │  ┌──────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │ 4. Backend Plugin (batch inference)                                  │  │  │
+│  │  │    • Memory allocation (CPU/GPU)                                    │  │  │
+│  │  │    • Single inference call on entire batch                           │  │  │
+│  │  │    • Returns batch output tensor                                     │  │  │
+│  │  └────────────────────┬───────────────────────────────────────────────────┘  │  │
+│  │                       │                                                      │  │
+│  │                       ▼                                                      │  │
+│  │  ┌──────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │ 5. GenericPostprocessor (batch postprocessing)                       │  │  │
+│  │  │    • Decode batch outputs to detections                               │  │  │
+│  │  │    • Apply NMS per image                                              │  │  │
+│  │  │    • Transform coordinates (model → image space)                     │  │  │
+│  │  └────────────────────┬───────────────────────────────────────────────────┘  │  │
+│  │                       │                                                      │  │
+│  │                       ▼                                                      │  │
+│  │  ┌──────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │ 6. Publish Results                                                    │  │  │
+│  │  │    • One Detection2DArray per image in batch                          │  │  │
+│  │  │    • One ImageMarker per image (optional)                            │  │  │
+│  │  └──────────────────────────────────────────────────────────────────────┘  │  │
 │  └──────────────────────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────┬─────────────────┘
                                                                    │
@@ -67,7 +99,7 @@ The `deep_object_detection` package provides:
 │  │  └────────────────────────────────────────────────────────────────────────┘  │  │
 │  │  ┌────────────────────────────────────────────────────────────────────────┐  │  │
 │  │  │ BackendInferenceExecutor                                               │  │  │
-│  │  │ (ONNX Runtime inference)                                               │  │  │
+│  │  │ (ONNX Runtime batch inference)                                         │  │  │
 │  │  └────────────────────────────────────────────────────────────────────────┘  │  │
 │  └──────────────────────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────┬─────────────────┘
@@ -78,11 +110,16 @@ The `deep_object_detection` package provides:
 │                                                                                    │
 │  ┌──────────────────────────┐        ┌──────────────────────────────────────────┐  │
 │  │ ONNX Model File (.onnx)  │        │ YAML Config                              │  │
-│  └──────────────────────────┘        │  • preprocessing                         │  │
-│                                      │  • postprocessing                        │  │
-│                                      │  • execution provider                    │  │
-│                                      └──────────────────────────────────────────┘  │
+│  │                          │        │  • Model.*                              │  │
+│  │                          │        │  • Preprocessing.*                      │  │
+│  │                          │        │  • Postprocessing.*                     │  │
+│  │                          │        │  • Backend.*                            │  │
+│  └──────────────────────────┘        └──────────────────────────────────────────┘  │
 └────────────────────────────────────────────────────────────────────────────────────┘
+
+Note: Each MultiImage message is processed immediately. All images within a MultiImage
+message are processed as a single batch through inference. No queuing or batching of
+multiple MultiImage messages occurs.
 ```
 
 ### Nodes
@@ -165,12 +202,9 @@ The object detection node requires the `camera_sync` node for synchronized multi
    - **Remapping** (recommended): `input_topic:=/multi_camera_sync/multi_image_compressed` in launch command
    - **Parameter**: Set `input_topic: "/multi_camera_sync/multi_image_compressed"` in config file
 
-   Also configure batching to match number of cameras:
-
-   ```yaml
-   min_batch_size: 3    # Minimum images before processing (match number of cameras)
-   max_batch_size: 3    # Maximum images per batch
-   ```
+   The node processes all images in each MultiImage message as a batch. The batch size
+   is determined by the number of images in the MultiImage message (typically equal to
+   the number of synchronized cameras).
 
 ### Zero-Copy Component Container (High Performance)
 
@@ -233,38 +267,34 @@ deep_object_detection_node:
     postprocessing:
       score_threshold: 0.25
       nms_iou_threshold: 0.45
-      max_detections: 300
       score_activation: "sigmoid"  # sigmoid, softmax, none
       class_score_mode: "all_classes"  # all_classes or single_confidence
       use_multi_output: false
       layout:
         auto_detect: true
 
-    # Execution provider
-    preferred_provider: "tensorrt"  # tensorrt, cuda, or cpu
-    device_id: 0
-    enable_trt_engine_cache: false
-    trt_engine_cache_path: "/tmp/deep_ros_ort_trt_cache"
+    # Backend configuration
+    Backend:
+      plugin: "onnxruntime_gpu"  # onnxruntime_cpu or onnxruntime_gpu
+      execution_provider: "tensorrt"  # tensorrt or cuda (for GPU plugin)
+      device_id: 0
+      trt_engine_cache_enable: false
+      trt_engine_cache_path: "/tmp/deep_ros_ort_trt_cache"
 
-    # Batching
-    min_batch_size: 1
-    max_batch_size: 3
-    max_batch_latency_ms: 0  # 0 = wait for min_batch_size
-    queue_size: 10  # 0 = unlimited
-
-    # Output
+    # Input/Output configuration
+    use_compressed_images: true  # true for compressed, false for uncompressed
     output_detections_topic: "/detections"
 ```
 
 ### Backend Plugin Selection
 
-The node uses a plugin-based architecture for backend selection. You must specify which backend plugin to use via the `Backend.plugin` parameter.
+The node uses a plugin-based architecture for backend selection. You must specify which backend plugin to use via the `backend.plugin` parameter.
 
 **Available Plugins:**
 - `onnxruntime_cpu` - CPU backend (always available)
 - `onnxruntime_gpu` - GPU backend supporting CUDA and TensorRT (requires CUDA)
 
-For GPU plugin, you can specify the execution provider via `Backend.execution_provider`:
+For GPU plugin, you can specify the execution provider via `backend.execution_provider`:
 - `cuda` - CUDA execution provider
 - `tensorrt` - TensorRT execution provider (requires TensorRT)
 
@@ -290,8 +320,8 @@ The node automatically detects and adapts to various ONNX model output formats:
 - `preprocessing.resize_method` must be `"letterbox"`, `"resize"`, `"crop"`, or `"pad"`
 - `postprocessing.score_activation` must be `"sigmoid"`, `"softmax"`, or `"none"`
 - `postprocessing.class_score_mode` must be `"all_classes"` or `"single_confidence"`
-- `Backend.plugin` must be `"onnxruntime_cpu"` or `"onnxruntime_gpu"`
-- `Backend.execution_provider` must be `"cuda"` or `"tensorrt"` (for GPU plugin)
+- `backend.plugin` must be `"onnxruntime_cpu"` or `"onnxruntime_gpu"`
+- `backend.execution_provider` must be `"cuda"` or `"tensorrt"` (for GPU plugin)
 
 ### Required Parameters
 - **`model_path`** (string): Absolute path to ONNX model file (e.g., `/workspaces/deep_ros/yolov8m.onnx`).
@@ -306,11 +336,11 @@ The node automatically detects and adapts to various ONNX model output formats:
 - **`preprocessing.resize_method`** (string, default: "letterbox"): Image resizing method.
 - **`postprocessing.score_threshold`** (float, default: 0.25): Minimum confidence score.
 - **`postprocessing.nms_iou_threshold`** (float, default: 0.45): IoU threshold for NMS.
-- **`Backend.plugin`** (string, required): Backend plugin name (`"onnxruntime_cpu"` or `"onnxruntime_gpu"`).
-- **`Backend.execution_provider`** (string, default: "tensorrt"): Execution provider for GPU plugin (`"cuda"` or `"tensorrt"`). Only used with `onnxruntime_gpu` plugin.
-- **`Backend.device_id`** (int, default: 0): GPU device ID (for CUDA/TensorRT).
-- **`Backend.trt_engine_cache_enable`** (bool, default: false): Enable TensorRT engine caching.
-- **`Backend.trt_engine_cache_path`** (string, default: "/tmp/deep_ros_ort_trt_cache"): TensorRT engine cache directory.
+- **`backend.plugin`** (string, required): Backend plugin name (`"onnxruntime_cpu"` or `"onnxruntime_gpu"`).
+- **`backend.execution_provider`** (string, default: "tensorrt"): Execution provider for GPU plugin (`"cuda"` or `"tensorrt"`). Only used with `onnxruntime_gpu` plugin.
+- **`backend.device_id`** (int, default: 0): GPU device ID (for CUDA/TensorRT).
+- **`backend.trt_engine_cache_enable`** (bool, default: false): Enable TensorRT engine caching.
+- **`backend.trt_engine_cache_path`** (string, default: "/tmp/deep_ros_ort_trt_cache"): TensorRT engine cache directory.
 
 See `config/generic_model_params.yaml` for a complete parameter reference.
 
@@ -353,7 +383,7 @@ Topic names can be configured either via parameters in the config file or via re
 ## Limitations
 
 1. **MultiImage input only**: The node only supports MultiImage messages. Individual camera topics are not supported.
-2. **Compressed images only**: Only compressed images (sensor_msgs/CompressedImage) are supported. Raw images are not supported.
+2. **MultiImage input format**: The node processes MultiImage messages immediately upon receipt. All images within a MultiImage message are processed as a single batch. No queuing or accumulation of multiple MultiImage messages occurs.
 3. **No dynamic reconfiguration**: Parameters cannot be changed at runtime. Node must be reconfigured to change parameters.
 
 ## Testing

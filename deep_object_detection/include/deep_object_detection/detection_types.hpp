@@ -14,13 +14,11 @@
 
 /**
  * @file detection_types.hpp
- * @brief Type definitions and enums for deep object detection
+ * @brief Type definitions for deep object detection
  *
  * This header defines:
- * - Enum types for configuration options (BboxFormat, NormalizationType, etc.)
  * - Configuration structures (PreprocessingConfig, PostprocessingConfig, DetectionParams)
  * - Data structures (ImageMeta, PackedInput, SimpleDetection)
- * - Helper functions for string-to-enum conversion
  * - ROS message type aliases (Detection2DMsg, Detection2DArrayMsg)
  */
 
@@ -31,84 +29,17 @@
 
 #include <opencv2/core/mat.hpp>
 #include <std_msgs/msg/header.hpp>
-
-#if __has_include(<deep_msgs/msg/detection2_d_array.hpp>)
-  #include <deep_msgs/msg/detection2_d.hpp>
-  #include <deep_msgs/msg/detection2_d_array.hpp>
-
-namespace deep_object_detection
-{
-using Detection2DMsg = deep_msgs::msg::Detection2D;
-using Detection2DArrayMsg = deep_msgs::msg::Detection2DArray;
-}  // namespace deep_object_detection
-#else
-  #include <vision_msgs/msg/detection2_d.hpp>
-  #include <vision_msgs/msg/detection2_d_array.hpp>
-  #include <vision_msgs/msg/object_hypothesis_with_pose.hpp>
+#include <vision_msgs/msg/detection2_d.hpp>
+#include <vision_msgs/msg/detection2_d_array.hpp>
+#include <vision_msgs/msg/object_hypothesis_with_pose.hpp>
 
 namespace deep_object_detection
 {
 using Detection2DMsg = vision_msgs::msg::Detection2D;
 using Detection2DArrayMsg = vision_msgs::msg::Detection2DArray;
-}  // namespace deep_object_detection
-#endif
-
-namespace deep_object_detection
-{
 
 /// Number of RGB color channels
 constexpr size_t RGB_CHANNELS = 3;
-
-/**
- * @brief Bounding box coordinate format
- */
-enum class BboxFormat
-{
-  CXCYWH,  ///< Center x, center y, width, height (YOLO format)
-  XYXY,  ///< Top-left x, top-left y, bottom-right x, bottom-right y
-  XYWH  ///< Top-left x, top-left y, width, height
-};
-
-/**
- * @brief Image normalization method
- */
-enum class NormalizationType
-{
-  IMAGENET,  ///< ImageNet normalization (mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-  SCALE_0_1,  ///< Scale to [0, 1] range (divide by 255.0)
-  CUSTOM,  ///< Custom mean and std values
-  NONE  ///< No normalization
-};
-
-/**
- * @brief Image resizing method
- */
-enum class ResizeMethod
-{
-  LETTERBOX,  ///< Maintain aspect ratio, pad with gray (114) to fit input size
-  RESIZE,  ///< Stretch to input size (may distort aspect ratio)
-  CROP,  ///< Center crop to input size
-  PAD  ///< Pad to input size
-};
-
-/**
- * @brief Score activation function for raw model outputs
- */
-enum class ScoreActivation
-{
-  SIGMOID,  ///< Sigmoid activation: 1 / (1 + exp(-x))
-  SOFTMAX,  ///< Softmax activation (not fully implemented, returns raw)
-  NONE  ///< No activation (use raw scores)
-};
-
-/**
- * @brief How class scores are extracted from model output
- */
-enum class ClassScoreMode
-{
-  ALL_CLASSES,  ///< Extract class scores from all class logits (multi-class)
-  SINGLE_CONFIDENCE  ///< Use a single confidence score (single-class models)
-};
 
 /**
  * @brief Image metadata for coordinate transformation
@@ -146,10 +77,10 @@ struct PreprocessingConfig
 {
   int input_width;  ///< Model input image width in pixels
   int input_height;  ///< Model input image height in pixels
-  NormalizationType normalization_type;  ///< Normalization method
+  std::string normalization_type;  ///< Normalization method ("imagenet", "scale_0_1", "custom", "none")
   std::vector<float> mean;  ///< Mean values for custom normalization (RGB order)
   std::vector<float> std;  ///< Std values for custom normalization (RGB order)
-  ResizeMethod resize_method;  ///< Image resizing method
+  std::string resize_method;  ///< Image resizing method ("letterbox", "resize", "crop", "pad")
   int pad_value;  ///< Padding value for letterbox (gray, YOLO standard)
   std::string color_format;  ///< Input color format ("bgr" or "rgb")
 };
@@ -161,7 +92,7 @@ struct ModelMetadata
 {
   int num_classes;  ///< Number of detection classes
   std::string class_names_file;  ///< Path to class names file (one per line, optional)
-  BboxFormat bbox_format;  ///< Bounding box format used by model
+  std::string bbox_format;  ///< Bounding box format used by model ("cxcywh", "xyxy", "xywh")
 };
 
 /**
@@ -189,14 +120,13 @@ struct PostprocessingConfig
 {
   float score_threshold;  ///< Minimum confidence score (detections below are filtered)
   float nms_iou_threshold;  ///< IoU threshold for Non-Maximum Suppression
-  int max_detections;  ///< Maximum number of detections per image (after NMS)
-  ScoreActivation score_activation;  ///< Score activation function
+  std::string score_activation;  ///< Score activation function ("sigmoid", "softmax", "none")
   bool enable_nms;  ///< Enable Non-Maximum Suppression
   bool use_multi_output;  ///< True if model has separate outputs for boxes, scores, classes
   int output_boxes_idx;  ///< Output index for bounding boxes (if use_multi_output)
   int output_scores_idx;  ///< Output index for scores (if use_multi_output)
   int output_classes_idx;  ///< Output index for class IDs (if use_multi_output)
-  ClassScoreMode class_score_mode;  ///< How class scores are extracted
+  std::string class_score_mode;  ///< How class scores are extracted ("all_classes", "single_confidence")
   int class_score_start_idx;  ///< Start index for class scores (-1 = use all)
   int class_score_count;  ///< Count of class scores (-1 = use all)
   OutputLayoutConfig layout;  ///< Output layout configuration
