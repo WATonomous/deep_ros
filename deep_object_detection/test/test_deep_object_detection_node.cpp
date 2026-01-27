@@ -98,32 +98,55 @@ TEST_CASE_METHOD(
   {
     // Core parameters
     REQUIRE(node->has_parameter("model_path"));
+    REQUIRE(node->has_parameter("class_names_path"));
 
     // Model parameters
     REQUIRE(node->has_parameter("Model.num_classes"));
     REQUIRE(node->has_parameter("Model.bbox_format"));
+    REQUIRE(node->has_parameter("Model.output_shape"));
 
     // Preprocessing parameters
     REQUIRE(node->has_parameter("Preprocessing.input_width"));
     REQUIRE(node->has_parameter("Preprocessing.input_height"));
     REQUIRE(node->has_parameter("Preprocessing.normalization_type"));
+    REQUIRE(node->has_parameter("Preprocessing.mean"));
+    REQUIRE(node->has_parameter("Preprocessing.std"));
     REQUIRE(node->has_parameter("Preprocessing.resize_method"));
+    REQUIRE(node->has_parameter("Preprocessing.pad_value"));
     REQUIRE(node->has_parameter("Preprocessing.color_format"));
 
     // Postprocessing parameters
     REQUIRE(node->has_parameter("Postprocessing.score_threshold"));
     REQUIRE(node->has_parameter("Postprocessing.nms_iou_threshold"));
     REQUIRE(node->has_parameter("Postprocessing.score_activation"));
+    REQUIRE(node->has_parameter("Postprocessing.enable_nms"));
+    REQUIRE(node->has_parameter("Postprocessing.class_score_mode"));
+    REQUIRE(node->has_parameter("Postprocessing.class_score_start_idx"));
+    REQUIRE(node->has_parameter("Postprocessing.class_score_count"));
+    REQUIRE(node->has_parameter("Postprocessing.layout.batch_dim"));
+    REQUIRE(node->has_parameter("Postprocessing.layout.detection_dim"));
+    REQUIRE(node->has_parameter("Postprocessing.layout.feature_dim"));
+    REQUIRE(node->has_parameter("Postprocessing.layout.bbox_start_idx"));
+    REQUIRE(node->has_parameter("Postprocessing.layout.bbox_count"));
+    REQUIRE(node->has_parameter("Postprocessing.layout.score_idx"));
+    REQUIRE(node->has_parameter("Postprocessing.layout.class_idx"));
 
     // Execution provider parameters
     REQUIRE(node->has_parameter("Backend.execution_provider"));
     REQUIRE(node->has_parameter("Backend.device_id"));
+    REQUIRE(node->has_parameter("Backend.trt_engine_cache_enable"));
+    REQUIRE(node->has_parameter("Backend.trt_engine_cache_path"));
+
+    // Input/Output configuration
+    REQUIRE(node->has_parameter("use_compressed_images"));
+    REQUIRE(node->has_parameter("output_detections_topic"));
   }
 
   SECTION("Parameters have sensible defaults")
   {
     // Core parameters
     REQUIRE(node->get_parameter("model_path").as_string() == "");
+    REQUIRE(node->get_parameter("class_names_path").as_string() == "");
 
     // Model parameters
     REQUIRE(node->get_parameter("Model.num_classes").as_int() == 80);
@@ -134,16 +157,27 @@ TEST_CASE_METHOD(
     REQUIRE(node->get_parameter("Preprocessing.input_height").as_int() == 640);
     REQUIRE(node->get_parameter("Preprocessing.normalization_type").as_string() == "scale_0_1");
     REQUIRE(node->get_parameter("Preprocessing.resize_method").as_string() == "letterbox");
+    REQUIRE(node->get_parameter("Preprocessing.pad_value").as_int() == 114);
     REQUIRE(node->get_parameter("Preprocessing.color_format").as_string() == "rgb");
 
     // Postprocessing parameters
     REQUIRE(node->get_parameter("Postprocessing.score_threshold").as_double() == Approx(0.25));
     REQUIRE(node->get_parameter("Postprocessing.nms_iou_threshold").as_double() == Approx(0.45));
     REQUIRE(node->get_parameter("Postprocessing.score_activation").as_string() == "sigmoid");
+    REQUIRE(node->get_parameter("Postprocessing.enable_nms").as_bool() == true);
+    REQUIRE(node->get_parameter("Postprocessing.class_score_mode").as_string() == "all_classes");
+    REQUIRE(node->get_parameter("Postprocessing.class_score_start_idx").as_int() == -1);
+    REQUIRE(node->get_parameter("Postprocessing.class_score_count").as_int() == -1);
 
     // Execution provider parameters
     REQUIRE(node->get_parameter("Backend.execution_provider").as_string() == "tensorrt");
     REQUIRE(node->get_parameter("Backend.device_id").as_int() == 0);
+    REQUIRE(node->get_parameter("Backend.trt_engine_cache_enable").as_bool() == false);
+    REQUIRE(node->get_parameter("Backend.trt_engine_cache_path").as_string() == "/tmp/deep_ros_ort_trt_cache");
+
+    // Input/Output configuration
+    REQUIRE(node->get_parameter("use_compressed_images").as_bool() == true);
+    REQUIRE(node->get_parameter("output_detections_topic").as_string() == "/detections");
   }
 }
 
@@ -216,34 +250,68 @@ TEST_CASE_METHOD(
 
   SECTION("Provider can be set to CPU")
   {
-    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("preferred_provider", "cpu")};
+    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("Backend.execution_provider", "cpu")};
     auto result = node->set_parameters(params);
     REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("preferred_provider").as_string() == "cpu");
+    REQUIRE(node->get_parameter("Backend.execution_provider").as_string() == "cpu");
   }
 
   SECTION("Provider can be set to CUDA")
   {
-    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("preferred_provider", "cuda")};
+    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("Backend.execution_provider", "cuda")};
     auto result = node->set_parameters(params);
     REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("preferred_provider").as_string() == "cuda");
+    REQUIRE(node->get_parameter("Backend.execution_provider").as_string() == "cuda");
   }
 
   SECTION("Device ID can be configured")
   {
-    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("device_id", 1)};
+    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("Backend.device_id", 1)};
     auto result = node->set_parameters(params);
     REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("device_id").as_int() == 1);
+    REQUIRE(node->get_parameter("Backend.device_id").as_int() == 1);
   }
 }
 
 TEST_CASE_METHOD(
-  DeepObjectDetectionNodeTestFixture, "DeepObjectDetectionNode: Batch Size Configuration", "[node][batching]")
+  DeepObjectDetectionNodeTestFixture,
+  "DeepObjectDetectionNode: Additional Parameter Configuration",
+  "[node][additional]")
 {
   rclcpp::NodeOptions options;
   auto node = std::make_shared<DeepObjectDetectionNode>(options);
+
+  SECTION("Class names path can be configured")
+  {
+    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("class_names_path", "/path/to/classes.txt")};
+    auto result = node->set_parameters(params);
+    REQUIRE(result[0].successful == true);
+    REQUIRE(node->get_parameter("class_names_path").as_string() == "/path/to/classes.txt");
+  }
+
+  SECTION("Use compressed images can be configured")
+  {
+    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("use_compressed_images", false)};
+    auto result = node->set_parameters(params);
+    REQUIRE(result[0].successful == true);
+    REQUIRE(node->get_parameter("use_compressed_images").as_bool() == false);
+  }
+
+  SECTION("Output detections topic can be configured")
+  {
+    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("output_detections_topic", "/custom/detections")};
+    auto result = node->set_parameters(params);
+    REQUIRE(result[0].successful == true);
+    REQUIRE(node->get_parameter("output_detections_topic").as_string() == "/custom/detections");
+  }
+
+  SECTION("Postprocessing enable_nms can be configured")
+  {
+    auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("Postprocessing.enable_nms", false)};
+    auto result = node->set_parameters(params);
+    REQUIRE(result[0].successful == true);
+    REQUIRE(node->get_parameter("Postprocessing.enable_nms").as_bool() == false);
+  }
 }
 
 }  // namespace test
