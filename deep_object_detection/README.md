@@ -1,16 +1,92 @@
 # Deep Object Detection Node
 
-A deep learning object detection node for ROS 2. Simply provide any ONNX-compatible object detection model, and the node will automatically detect and adapt to its output format.
+ROS 2 node for deep learning object detection using ONNX-compatible models.
 
-## Overview
+This node provides model-agnostic object detection for ROS 2, supporting any ONNX-compatible detection model with configurable preprocessing, postprocessing, and multi-camera batch processing. All processing is lifecycle-managed for clean startup/shutdown.
 
-The `deep_object_detection` package provides:
-- Model-agnostic object detection using ONNX models
-- Automatic output format detection and adaptation
-- Multi-camera support via MultiImage/MultiImageCompressed messages (immediate batch processing)
-- Configurable preprocessing and postprocessing pipelines
-- Plugin-based backend architecture (CPU, CUDA, TensorRT)
-- Full ROS 2 lifecycle node support
+## Motivation
+
+This node extends ROS 2 object detection capabilities with features that deep learning developers commonly need:
+
+- **Model-agnostic** - Works with any ONNX-compatible object detection model (YOLO, DETR, etc.) by manually configuring output tensor layout
+- **Multi-camera batch processing** - Processes synchronized MultiImage/MultiImageCompressed messages as batches for efficient GPU utilization
+- **Plugin-based backends** - Supports CPU (ONNX Runtime), CUDA, and TensorRT execution providers via plugin architecture
+- **Configurable pipelines** - Flexible preprocessing (letterbox/resize/crop, normalization) and postprocessing (NMS, score thresholds, coordinate transforms)
+- **Lifecycle management** - Full ROS 2 lifecycle node support for coordinated startup/shutdown
+- **Zero-copy support** - Compatible with intra-process communication for high-performance deployments
+
+## Getting Started
+
+### Building the Package
+
+```bash
+cd /path/to/your/ros2_workspace
+colcon build --packages-select deep_object_detection
+source install/setup.bash
+```
+
+### Launching the Node
+
+```bash
+ros2 launch deep_object_detection deep_object_detection.launch.yaml \
+  config_file:=/path/to/generic_model_params.yaml
+```
+
+See [Configuration](#configuration) for parameter options.
+
+### Running with Camera Sync Node
+
+The object detection node requires the `camera_sync` node for synchronized multi-camera processing:
+
+1. **Launch camera sync node**:
+
+   ```bash
+   ros2 launch camera_sync multi_camera_sync.launch.yaml
+   ```
+
+2. **Launch object detection node**:
+
+   ```bash
+   ros2 launch deep_object_detection deep_object_detection.launch.yaml \
+     config_file:=/path/to/config.yaml \
+     input_topic:=/multi_camera_sync/multi_image_compressed
+   ```
+
+   Configure the detection node to subscribe to the MultiImage/MultiImageCompressed topic either via:
+   - **Remapping** (recommended): `input_topic:=/multi_camera_sync/multi_image_compressed` in launch command
+   - **Parameter**: Set `input_topic: "/multi_camera_sync/multi_image_compressed"` in config file
+
+   The node processes all images in each MultiImage/MultiImageCompressed message as a batch. The batch size is determined by the number of images in the message (typically equal to the number of synchronized cameras).
+
+### Zero-Copy Component Container (High Performance)
+
+For maximum performance, run both `multi_camera_sync` and `deep_object_detection` nodes in a single component container with intra-process communication:
+
+```yaml
+launch:
+  - node_container:
+      pkg: rclcpp_components
+      exec: component_container_mt
+      name: detection_container
+      param:
+        - name: use_intra_process_comms
+          value: true
+      composable_node:
+        - pkg: camera_sync
+          plugin: camera_sync::MultiCameraSyncNode
+          name: multi_camera_sync
+          extra_arg:
+            - name: use_intra_process_comms
+              value: "true"
+        - pkg: deep_object_detection
+          plugin: deep_object_detection::DeepObjectDetectionNode
+          name: deep_object_detection_node
+          extra_arg:
+            - name: use_intra_process_comms
+              value: "true"
+```
+
+## Architecture
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────┐
@@ -120,117 +196,50 @@ The `deep_object_detection` package provides:
 Note: Each MultiImage/MultiImageCompressed message is processed immediately. All images within a message are processed as a single batch through inference. No queuing or batching of multiple messages occurs.
 ```
 
-### Nodes
+## Workflow
 
-- **`deep_object_detection_node`**: A lifecycle node that subscribes to MultiImage/MultiImageCompressed messages (synchronized multi-camera input), runs object detection inference, and publishes detection results.
+Once the node is running, it automatically processes MultiImage/MultiImageCompressed messages as they arrive. Each message is processed as a batch through the full pipeline.
 
-### Configuration
+### Manual Lifecycle Transitions
 
-- **`config/generic_model_params.yaml`**: Example configuration showing the parameter structure for model, preprocessing, postprocessing, and execution provider settings.
-
-### Launch Files
-
-- **`launch/deep_object_detection.launch.yaml`**: Launch file for the object detection node with lifecycle management.
-
-## Usage
-
-### Building the Package
+If not using a lifecycle manager, manually transition the node:
 
 ```bash
-cd /path/to/your/ros2_workspace
-colcon build --packages-select deep_object_detection
-source install/setup.bash
+# Configure the node
+ros2 lifecycle set /deep_object_detection_node configure
+
+# Activate the node
+ros2 lifecycle set /deep_object_detection_node activate
 ```
 
-### Running the Node
+### Topic Remapping
 
-1. **Basic usage**:
+Topic names can be configured either via parameters in the config file or via remappings in the launch file. Remappings take precedence over parameter values.
 
-   ```bash
-   ros2 launch deep_object_detection deep_object_detection.launch.yaml \
-     config_file:=/path/to/generic_model_params.yaml
-   ```
-
-2. **With topic remappings**:
-
-   ```bash
-   ros2 launch deep_object_detection deep_object_detection.launch.yaml \
-     config_file:=/path/to/config.yaml \
-     input_topic:=/my_camera/multi_image \
-     output_detections_topic:=/my_detections
-   ```
-
-3. **With specific model path**:
-
-   ```bash
-   ros2 launch deep_object_detection deep_object_detection.launch.yaml \
-     config_file:=/path/to/config.yaml \
-     preferred_provider:=tensorrt
-   ```
-
-4. **Manual lifecycle transitions** (if not using lifecycle manager):
-
-   ```bash
-   # Configure the node
-   ros2 lifecycle set /deep_object_detection_node configure
-
-   # Activate the node
-   ros2 lifecycle set /deep_object_detection_node activate
-   ```
-
-### Running with Camera Sync Node
-
-The object detection node requires the `camera_sync` node for synchronized multi-camera processing.
-
-1. **Launch camera sync node**:
-
-   ```bash
-   ros2 launch camera_sync multi_camera_sync.launch.yaml
-   ```
-
-2. **Launch object detection node**:
-
-   ```bash
-   ros2 launch deep_object_detection deep_object_detection.launch.yaml \
-     config_file:=/path/to/config.yaml \
-     input_topic:=/multi_camera_sync/multi_image_compressed
-   ```
-
-   Configure the detection node to subscribe to the MultiImage/MultiImageCompressed topic either via:
-   - **Remapping** (recommended): `input_topic:=/multi_camera_sync/multi_image_compressed` in launch command
-   - **Parameter**: Set `input_topic: "/multi_camera_sync/multi_image_compressed"` in config file
-
-   The node processes all images in each MultiImage/MultiImageCompressed message as a batch. The batch size
-   is determined by the number of images in the message (typically equal to
-   the number of synchronized cameras).
-
-### Zero-Copy Component Container (High Performance)
-
-For maximum performance, run both `multi_camera_sync` and `deep_object_detection` nodes in a single component container with intra-process communication:
+**Example launch file with remappings:**
 
 ```yaml
-launch:
-  - node_container:
-      pkg: rclcpp_components
-      exec: component_container_mt
-      name: detection_container
-      param:
-        - name: use_intra_process_comms
-          value: true
-      composable_node:
-        - pkg: camera_sync
-          plugin: camera_sync::MultiCameraSyncNode
-          name: multi_camera_sync
-          extra_arg:
-            - name: use_intra_process_comms
-              value: "true"
-        - pkg: deep_object_detection
-          plugin: deep_object_detection::DeepObjectDetectionNode
-          name: deep_object_detection_node
-          extra_arg:
-            - name: use_intra_process_comms
-              value: "true"
+- node:
+    pkg: "deep_object_detection"
+    exec: "deep_object_detection_node"
+    name: "deep_object_detection_node"
+    remap:
+      - from: "/multi_camera_sync/multi_image_compressed"
+        to: "/my_camera/multi_image"
+      - from: "/detections"
+        to: "/my_detections"
+    param:
+      - from: "$(var config_file)"
 ```
+
+### Key Topics
+
+| Topic | Type | Description |
+|-------|------|-------------|
+| `input_topic` | `deep_msgs/MultiImage` or `deep_msgs/MultiImageCompressed` | Synchronized multi-camera input (compressed or uncompressed) |
+| `output_detections_topic` | `vision_msgs/Detection2DArray` | Detection results (one per image in batch) |
+
+**Note:** The node only supports MultiImage/MultiImageCompressed messages. Individual camera topics are not supported.
 
 ## Configuration
 
@@ -267,9 +276,14 @@ deep_object_detection_node:
       nms_iou_threshold: 0.45
       score_activation: "sigmoid"  # sigmoid, softmax, none
       class_score_mode: "all_classes"  # all_classes or single_confidence
-      use_multi_output: false
       layout:
-        auto_detect: true
+        batch_dim: 0
+        detection_dim: 1
+        feature_dim: 2
+        bbox_start_idx: 0
+        bbox_count: 4
+        score_idx: 4
+        class_idx: 5
 
     # Backend configuration
     Backend:
@@ -296,36 +310,13 @@ For GPU plugin, you can specify the execution provider via `backend.execution_pr
 - `cuda` - CUDA execution provider
 - `tensorrt` - TensorRT execution provider (requires TensorRT)
 
-## Expected Model Format
-
-The node automatically detects and adapts to various ONNX model output formats:
-
-- `[batch, detections, features]` - standard format
-- `[batch, features, detections]` - transposed format
-- `[batch, queries, 4+classes]` - query-based models (e.g., DETR)
-- `[batch, channels, anchors]` - anchor-based models
-- Any other layout - automatically detected and handled
-
-**Input:** The node expects MultiImageCompressed messages (deep_msgs/MultiImageCompressed) containing synchronized compressed images, or MultiImage messages (deep_msgs/MultiImage) containing synchronized uncompressed images from multiple cameras.
-
-**Output:** Detection2DArray messages containing bounding boxes, scores, and class IDs for each image in the batch.
-
-## Parameters
-
-**Important:** All string parameters must be specified in **lowercase**. The node performs direct string comparisons and does not normalize case. For example:
-- `model.bbox_format` must be `"cxcywh"`, `"xyxy"`, or `"xywh"` (not `"CXCYWH"`)
-- `preprocessing.normalization_type` must be `"imagenet"`, `"scale_0_1"`, `"custom"`, or `"none"`
-- `preprocessing.resize_method` must be `"letterbox"`, `"resize"`, `"crop"`, or `"pad"`
-- `postprocessing.score_activation` must be `"sigmoid"`, `"softmax"`, or `"none"`
-- `postprocessing.class_score_mode` must be `"all_classes"` or `"single_confidence"`
-- `backend.plugin` must be `"onnxruntime_cpu"` or `"onnxruntime_gpu"`
-- `backend.execution_provider` must be `"cuda"` or `"tensorrt"` (for GPU plugin)
-
 ### Required Parameters
+
 - **`model_path`** (string): Absolute path to ONNX model file (e.g., `/workspaces/deep_ros/yolov8m.onnx`).
 - **`input_topic`** (string): MultiImage/MultiImageCompressed topic name to subscribe to.
 
 ### Key Parameters
+
 - **`class_names_path`** (string, optional): Absolute path to text file with class names, one per line (e.g., `/workspaces/deep_ros/deep_object_detection/config/coco_classes.txt`). If not provided, class IDs will be used in output messages.
 - **`model.num_classes`** (int, default: 80): Number of detection classes.
 - **`model.bbox_format`** (string, default: "cxcywh"): Bounding box format (cxcywh, xyxy, or xywh).
@@ -340,43 +331,30 @@ The node automatically detects and adapts to various ONNX model output formats:
 - **`backend.trt_engine_cache_enable`** (bool, default: false): Enable TensorRT engine caching.
 - **`backend.trt_engine_cache_path`** (string, default: "/tmp/deep_ros_ort_trt_cache"): TensorRT engine cache directory.
 
+**Important:** All string parameters must be specified in **lowercase**. The node performs direct string comparisons and does not normalize case. For example:
+- `model.bbox_format` must be `"cxcywh"`, `"xyxy"`, or `"xywh"` (not `"CXCYWH"`)
+- `preprocessing.normalization_type` must be `"imagenet"`, `"scale_0_1"`, `"custom"`, or `"none"`
+- `preprocessing.resize_method` must be `"letterbox"`, `"resize"`, `"crop"`, or `"pad"`
+- `postprocessing.score_activation` must be `"sigmoid"`, `"softmax"`, or `"none"`
+- `postprocessing.class_score_mode` must be `"all_classes"` or `"single_confidence"`
+- `backend.plugin` must be `"onnxruntime_cpu"` or `"onnxruntime_gpu"`
+- `backend.execution_provider` must be `"cuda"` or `"tensorrt"` (for GPU plugin)
+
 See `config/generic_model_params.yaml` for a complete parameter reference.
 
-## Topics
+## Expected Model Format
 
-Topic names can be configured either via parameters in the config file or via remappings in the launch file. Remappings take precedence over parameter values.
+The node supports various ONNX model output formats, but the layout must be manually configured in the YAML config file:
 
-### Input Topics
-- **`input_topic`**: MultiImageCompressed messages (deep_msgs/MultiImageCompressed) containing synchronized compressed images, or MultiImage messages (deep_msgs/MultiImage) containing synchronized uncompressed images from multiple cameras.
+- `[batch, detections, features]` - standard format (e.g., YOLOv8: [1, 8400, 84])
+- `[batch, features, detections]` - transposed format
+- `[batch, queries, 4+classes]` - query-based models (e.g., DETR)
+- `[batch, channels, anchors]` - anchor-based models
+- Any other layout - configure `Postprocessing.layout.*` parameters accordingly
 
-**Note:** The node only supports MultiImage/MultiImageCompressed messages. Individual camera topics are not supported.
+**Input:** The node expects MultiImageCompressed messages (deep_msgs/MultiImageCompressed) containing synchronized compressed images, or MultiImage messages (deep_msgs/MultiImage) containing synchronized uncompressed images from multiple cameras.
 
-**Configuration:**
-- Via parameter: Set `input_topic` in the config file
-- Via remapping: Use `input_topic:=/your/topic/name` in the launch command or add remapping in launch file
-
-### Output Topics
-- **`output_detections_topic`**: Detection2DArray messages (default: "/detections") containing bounding boxes, scores, and class IDs for each image in the batch.
-
-**Configuration:**
-- Via parameter: Set `output_detections_topic` in the config file
-- Via remapping: Use `output_detections_topic:=/your/topic/name` in the launch command or add remapping in launch file
-
-**Example launch file with remappings:**
-
-```yaml
-- node:
-    pkg: "deep_object_detection"
-    exec: "deep_object_detection_node"
-    name: "deep_object_detection_node"
-    remap:
-      - from: "/multi_camera_sync/multi_image_compressed"
-        to: "/my_camera/multi_image"
-      - from: "/detections"
-        to: "/my_detections"
-    param:
-      - from: "$(var config_file)"
-```
+**Output:** Detection2DArray messages containing bounding boxes, scores, and class IDs for each image in the batch.
 
 ## Limitations
 

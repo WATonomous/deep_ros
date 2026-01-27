@@ -93,17 +93,17 @@ struct ModelMetadata
   int num_classes;  ///< Number of detection classes
   std::string class_names_file;  ///< Path to class names file (one per line, optional)
   std::string bbox_format;  ///< Bounding box format used by model ("cxcywh", "xyxy", "xywh")
+  std::vector<size_t> output_shape;  ///< Model output tensor shape (optional, for logging/validation)
 };
 
 /**
  * @brief Output tensor layout configuration
  *
- * Describes the structure of model output tensors for manual layout specification.
- * Only used when auto_detect is false.
+ * Describes the structure of model output tensors.
+ * All layout parameters must be manually specified in the config file.
  */
 struct OutputLayoutConfig
 {
-  bool auto_detect;  ///< True to auto-detect layout, false to use manual config
   int batch_dim;  ///< Batch dimension index
   int detection_dim;  ///< Detection dimension index
   int feature_dim;  ///< Feature dimension index
@@ -122,10 +122,6 @@ struct PostprocessingConfig
   float nms_iou_threshold;  ///< IoU threshold for Non-Maximum Suppression
   std::string score_activation;  ///< Score activation function ("sigmoid", "softmax", "none")
   bool enable_nms;  ///< Enable Non-Maximum Suppression
-  bool use_multi_output;  ///< True if model has separate outputs for boxes, scores, classes
-  int output_boxes_idx;  ///< Output index for bounding boxes (if use_multi_output)
-  int output_scores_idx;  ///< Output index for scores (if use_multi_output)
-  int output_classes_idx;  ///< Output index for class IDs (if use_multi_output)
   std::string class_score_mode;  ///< How class scores are extracted ("all_classes", "single_confidence")
   int class_score_start_idx;  ///< Start index for class scores (-1 = use all)
   int class_score_count;  ///< Count of class scores (-1 = use all)

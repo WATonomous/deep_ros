@@ -61,6 +61,7 @@ void DeepObjectDetectionNode::declareParameters()
   this->declare_parameter<std::string>("class_names_path", "");
   this->declare_parameter<int>("Model.num_classes", 80);
   this->declare_parameter<std::string>("Model.bbox_format", "cxcywh");
+  this->declare_parameter<std::vector<int64_t>>("Model.output_shape", std::vector<int64_t>());
 
   this->declare_parameter<int>("Preprocessing.input_width", 640);
   this->declare_parameter<int>("Preprocessing.input_height", 640);
@@ -75,15 +76,10 @@ void DeepObjectDetectionNode::declareParameters()
   this->declare_parameter<double>("Postprocessing.nms_iou_threshold", 0.45);
   this->declare_parameter<std::string>("Postprocessing.score_activation", "sigmoid");
   this->declare_parameter<bool>("Postprocessing.enable_nms", true);
-  this->declare_parameter<bool>("Postprocessing.use_multi_output", false);
-  this->declare_parameter<int>("Postprocessing.output_boxes_idx", 0);
-  this->declare_parameter<int>("Postprocessing.output_scores_idx", 1);
-  this->declare_parameter<int>("Postprocessing.output_classes_idx", 2);
   this->declare_parameter<std::string>("Postprocessing.class_score_mode", "all_classes");
   this->declare_parameter<int>("Postprocessing.class_score_start_idx", -1);
   this->declare_parameter<int>("Postprocessing.class_score_count", -1);
 
-  this->declare_parameter<bool>("Postprocessing.layout.auto_detect", true);
   this->declare_parameter<int>("Postprocessing.layout.batch_dim", 0);
   this->declare_parameter<int>("Postprocessing.layout.detection_dim", 1);
   this->declare_parameter<int>("Postprocessing.layout.feature_dim", 2);
@@ -114,6 +110,11 @@ void DeepObjectDetectionNode::declareParameters()
   params_.model_metadata.num_classes = this->get_parameter("Model.num_classes").as_int();
   params_.model_metadata.class_names_file = this->get_parameter("class_names_path").as_string();
   params_.model_metadata.bbox_format = this->get_parameter("Model.bbox_format").as_string();
+  auto output_shape_int = this->get_parameter("Model.output_shape").as_integer_array();
+  params_.model_metadata.output_shape.clear();
+  for (auto dim : output_shape_int) {
+    params_.model_metadata.output_shape.push_back(static_cast<size_t>(dim));
+  }
 
   // Preprocessing parameters
   params_.preprocessing.input_width = this->get_parameter("Preprocessing.input_width").as_int();
@@ -136,15 +137,10 @@ void DeepObjectDetectionNode::declareParameters()
     static_cast<float>(this->get_parameter("Postprocessing.nms_iou_threshold").as_double());
   params_.postprocessing.score_activation = this->get_parameter("Postprocessing.score_activation").as_string();
   params_.postprocessing.enable_nms = this->get_parameter("Postprocessing.enable_nms").as_bool();
-  params_.postprocessing.use_multi_output = this->get_parameter("Postprocessing.use_multi_output").as_bool();
-  params_.postprocessing.output_boxes_idx = this->get_parameter("Postprocessing.output_boxes_idx").as_int();
-  params_.postprocessing.output_scores_idx = this->get_parameter("Postprocessing.output_scores_idx").as_int();
-  params_.postprocessing.output_classes_idx = this->get_parameter("Postprocessing.output_classes_idx").as_int();
   params_.postprocessing.class_score_mode = this->get_parameter("Postprocessing.class_score_mode").as_string();
   params_.postprocessing.class_score_start_idx = this->get_parameter("Postprocessing.class_score_start_idx").as_int();
   params_.postprocessing.class_score_count = this->get_parameter("Postprocessing.class_score_count").as_int();
 
-  params_.postprocessing.layout.auto_detect = this->get_parameter("Postprocessing.layout.auto_detect").as_bool();
   params_.postprocessing.layout.batch_dim = this->get_parameter("Postprocessing.layout.batch_dim").as_int();
   params_.postprocessing.layout.detection_dim = this->get_parameter("Postprocessing.layout.detection_dim").as_int();
   params_.postprocessing.layout.feature_dim = this->get_parameter("Postprocessing.layout.feature_dim").as_int();
@@ -182,42 +178,11 @@ deep_ros::CallbackReturn DeepObjectDetectionNode::on_configure_impl(const rclcpp
     loadClassNames();
     preprocessor_ = std::make_unique<ImagePreprocessor>(params_.preprocessing);
 
-    // Get allocator from base class
-    auto allocator = get_current_allocator();
-    if (!allocator) {
-      RCLCPP_ERROR(this->get_logger(), "Plugin did not provide allocator");
-      return deep_ros::CallbackReturn::FAILURE;
-    }
-
-    // dynamically get the output shape by running a dummy inference
-    std::vector<size_t> input_shape = {
-      1,
-      RGB_CHANNELS,
-      static_cast<size_t>(params_.preprocessing.input_height),
-      static_cast<size_t>(params_.preprocessing.input_width)};
-    std::vector<size_t> output_shape;
-    try {
-      PackedInput dummy;
-      dummy.shape = input_shape;
-      size_t total_elements = 1;
-      for (size_t dim : input_shape) {
-        total_elements *= dim;
-      }
-      dummy.data.assign(total_elements, 0.0f);
-
-      deep_ros::Tensor input_tensor(dummy.shape, deep_ros::DataType::FLOAT32, allocator);
-      const size_t bytes = dummy.data.size() * sizeof(float);
-      allocator->copy_from_host(input_tensor.data(), dummy.data.data(), bytes);
-
-      auto output_tensor = run_inference(input_tensor);
-      output_shape = output_tensor.shape();
-    } catch (const std::exception & e) {
-      RCLCPP_WARN(this->get_logger(), "Could not determine output shape: %s", e.what());
-      output_shape.clear();
-    }
+    // Get output shape from config (optional, for logging/validation)
+    const std::vector<size_t> & output_shape = params_.model_metadata.output_shape;
 
     auto formatShape = [](const std::vector<size_t> & shape) {
-      if (shape.empty()) return std::string("auto-detect");
+      if (shape.empty()) return std::string("not specified");
       std::string result;
       for (size_t i = 0; i < shape.size(); ++i) {
         result += std::to_string(shape[i]);
@@ -227,30 +192,19 @@ deep_ros::CallbackReturn DeepObjectDetectionNode::on_configure_impl(const rclcpp
     };
 
     if (!output_shape.empty()) {
-      RCLCPP_INFO(this->get_logger(), "Detected model output shape: [%s]", formatShape(output_shape).c_str());
+      RCLCPP_INFO(this->get_logger(), "Configured model output shape: [%s]", formatShape(output_shape).c_str());
     }
 
     const bool use_letterbox = (params_.preprocessing.resize_method == "letterbox");
 
     GenericPostprocessor::OutputLayout layout =
-      GenericPostprocessor::autoConfigure(output_shape, params_.postprocessing.layout);
-    if (layout.auto_detect && !output_shape.empty()) {
-      RCLCPP_INFO(
-        this->get_logger(),
-        "Auto-detected layout: batch_dim=%zu, detection_dim=%zu, feature_dim=%zu",
-        layout.batch_dim,
-        layout.detection_dim,
-        layout.feature_dim);
-    } else if (!layout.auto_detect) {
-      RCLCPP_INFO(
-        this->get_logger(),
-        "Using manual layout: batch_dim=%zu, detection_dim=%zu, feature_dim=%zu",
-        layout.batch_dim,
-        layout.detection_dim,
-        layout.feature_dim);
-    } else {
-      RCLCPP_INFO(this->get_logger(), "Layout will be auto-detected from first inference");
-    }
+      GenericPostprocessor::configureLayout(output_shape, params_.postprocessing.layout);
+    RCLCPP_INFO(
+      this->get_logger(),
+      "Using configured layout: batch_dim=%zu, detection_dim=%zu, feature_dim=%zu",
+      layout.batch_dim,
+      layout.detection_dim,
+      layout.feature_dim);
 
     postprocessor_ = std::make_unique<GenericPostprocessor>(
       params_.postprocessing,
@@ -516,24 +470,27 @@ void DeepObjectDetectionNode::processImages(
   auto start_time = std::chrono::steady_clock::now();
   std::vector<cv::Mat> processed;
   std::vector<ImageMeta> metas;
+  std::vector<std_msgs::msg::Header> processed_headers;
   processed.reserve(images.size());
   metas.reserve(images.size());
+  processed_headers.reserve(images.size());
 
   // Preprocess all images
-  for (const auto & img : images) {
-    if (img.empty()) {
+  for (size_t i = 0; i < images.size() && i < headers.size(); ++i) {
+    if (images[i].empty()) {
       RCLCPP_WARN(this->get_logger(), "Received empty image, skipping");
       continue;
     }
 
     ImageMeta meta;
-    cv::Mat preprocessed = preprocessor_->preprocess(img, meta);
+    cv::Mat preprocessed = preprocessor_->preprocess(images[i], meta);
     if (preprocessed.empty()) {
       RCLCPP_WARN(this->get_logger(), "Preprocessing returned empty image, skipping");
       continue;
     }
     processed.push_back(std::move(preprocessed));
     metas.push_back(meta);
+    processed_headers.push_back(headers[i]);
   }
 
   if (processed.empty()) {
@@ -553,14 +510,8 @@ void DeepObjectDetectionNode::processImages(
   allocator->copy_from_host(input_tensor.data(), packed_input.data.data(), bytes);
 
   // Run inference
-  std::vector<std::vector<SimpleDetection>> batch_detections;
-  if (params_.postprocessing.use_multi_output) {
-    auto output_tensor = run_inference(input_tensor);
-    batch_detections = postprocessor_->decodeMultiOutput({output_tensor}, metas);
-  } else {
-    auto output_tensor = run_inference(input_tensor);
-    batch_detections = postprocessor_->decode(output_tensor, metas);
-  }
+  auto output_tensor = run_inference(input_tensor);
+  std::vector<std::vector<SimpleDetection>> batch_detections = postprocessor_->decode(output_tensor, metas);
 
   auto end_time = std::chrono::steady_clock::now();
   auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
@@ -575,13 +526,6 @@ void DeepObjectDetectionNode::processImages(
     std::accumulate(batch_detections.begin(), batch_detections.end(), size_t(0), [](size_t sum, const auto & dets) {
       return sum + dets.size();
     }));
-
-  // Use headers that match the processed images (may be fewer if some were skipped)
-  std::vector<std_msgs::msg::Header> processed_headers;
-  processed_headers.reserve(processed.size());
-  for (size_t i = 0; i < processed.size() && i < headers.size(); ++i) {
-    processed_headers.push_back(headers[i]);
-  }
 
   publishDetections(batch_detections, processed_headers, metas);
 }

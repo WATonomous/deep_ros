@@ -4,7 +4,7 @@
   <version>0.1.0</version>
   <description>
     Generic model-agnostic deep learning object detection node using ONNX Runtime with explicit provider selection (TensorRT/CUDA/CPU).
-    Works with any ONNX-compatible object detection model - automatically detects and adapts to model output format.
+    Works with any ONNX-compatible object detection model. Output tensor layout must be configured in YAML config file.
     Features dynamic batching, multi-camera support, configurable preprocessing/postprocessing, and fail-fast error handling.
   </description>
 

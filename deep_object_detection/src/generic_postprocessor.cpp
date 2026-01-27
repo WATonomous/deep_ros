@@ -39,74 +39,21 @@ GenericPostprocessor::GenericPostprocessor(
 , use_letterbox_(use_letterbox)
 {}
 
-GenericPostprocessor::OutputLayout GenericPostprocessor::detectLayout(const std::vector<size_t> & output_shape)
-{
-  OutputLayout layout;
-  layout.shape = output_shape;
-  layout.auto_detect = true;
-
-  if (output_shape.size() < 2) {
-    throw std::runtime_error("Output tensor must have at least 2 dimensions");
-  }
-
-  layout.batch_dim = 0;
-
-  if (output_shape.size() == 2) {
-    layout.detection_dim = 0;
-    layout.feature_dim = 1;
-    layout.bbox_start_idx = 0;
-    layout.bbox_count = 4;
-    layout.score_idx = 4;
-    layout.class_idx = 5;
-  } else if (output_shape.size() == 3) {
-    size_t dim1 = output_shape[1];
-    size_t dim2 = output_shape[2];
-
-    if (dim1 < dim2) {
-      layout.detection_dim = 2;
-      layout.feature_dim = 1;
-    } else {
-      layout.detection_dim = 1;
-      layout.feature_dim = 2;
-    }
-
-    layout.bbox_start_idx = 0;
-    layout.bbox_count = 4;
-    layout.score_idx = 4;
-    layout.class_idx = 5;
-  } else {
-    layout.detection_dim = 1;
-    layout.feature_dim = 2;
-    layout.bbox_start_idx = 0;
-    layout.bbox_count = 4;
-    layout.score_idx = 4;
-    layout.class_idx = 5;
-  }
-
-  return layout;
-}
-
-GenericPostprocessor::OutputLayout GenericPostprocessor::autoConfigure(
+GenericPostprocessor::OutputLayout GenericPostprocessor::configureLayout(
   const std::vector<size_t> & output_shape, const OutputLayoutConfig & layout_config)
 {
   OutputLayout layout;
 
-  if (!layout_config.auto_detect) {
-    layout.auto_detect = false;
-    layout.batch_dim = static_cast<size_t>(layout_config.batch_dim);
-    layout.detection_dim = static_cast<size_t>(layout_config.detection_dim);
-    layout.feature_dim = static_cast<size_t>(layout_config.feature_dim);
-    layout.bbox_start_idx = static_cast<size_t>(layout_config.bbox_start_idx);
-    layout.bbox_count = static_cast<size_t>(layout_config.bbox_count);
-    layout.score_idx = static_cast<size_t>(layout_config.score_idx);
-    layout.class_idx = (layout_config.class_idx >= 0) ? static_cast<size_t>(layout_config.class_idx) : SIZE_MAX;
-    if (!output_shape.empty()) {
-      layout.shape = output_shape;
-    }
-  } else if (!output_shape.empty()) {
-    layout = detectLayout(output_shape);
-  } else {
-    layout.auto_detect = true;
+  layout.batch_dim = static_cast<size_t>(layout_config.batch_dim);
+  layout.detection_dim = static_cast<size_t>(layout_config.detection_dim);
+  layout.feature_dim = static_cast<size_t>(layout_config.feature_dim);
+  layout.bbox_start_idx = static_cast<size_t>(layout_config.bbox_start_idx);
+  layout.bbox_count = static_cast<size_t>(layout_config.bbox_count);
+  layout.score_idx = static_cast<size_t>(layout_config.score_idx);
+  layout.class_idx = (layout_config.class_idx >= 0) ? static_cast<size_t>(layout_config.class_idx) : SIZE_MAX;
+
+  if (!output_shape.empty()) {
+    layout.shape = output_shape;
   }
 
   return layout;
@@ -203,9 +150,6 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decode(
   }
 
   OutputLayout layout = layout_;
-  if (layout.auto_detect) {
-    layout = detectLayout(shape);
-  }
 
   size_t batch_size = shape[layout.batch_dim];
   size_t num_detections = shape.size() > layout.detection_dim ? shape[layout.detection_dim] : 1;
@@ -221,8 +165,8 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decode(
       float score = 0.0f;
       int32_t class_id = -1;
 
-      size_t class_start_idx =
-        (config_.class_score_start_idx >= 0) ? static_cast<size_t>(config_.class_score_start_idx) : layout.bbox_count;
+      size_t class_start_idx = (config_.class_score_start_idx >= 0) ? static_cast<size_t>(config_.class_score_start_idx)
+                                                                    : layout.bbox_start_idx + layout.bbox_count;
       size_t class_count = (config_.class_score_count > 0) ? static_cast<size_t>(config_.class_score_count)
                                                            : static_cast<size_t>(num_classes_);
 
@@ -290,159 +234,6 @@ std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decode(
 
       SimpleDetection det;
       convertBbox(data, b, d, shape, det);
-      det.score = score;
-      det.class_id = class_id;
-
-      adjustToOriginal(det, metas[b], use_letterbox_);
-      dets.push_back(det);
-    }
-
-    if (config_.enable_nms) {
-      batch_detections.push_back(applyNms(dets, config_.nms_iou_threshold));
-    } else {
-      batch_detections.push_back(dets);
-    }
-  }
-
-  return batch_detections;
-}
-
-std::vector<std::vector<SimpleDetection>> GenericPostprocessor::decodeMultiOutput(
-  const std::vector<deep_ros::Tensor> & outputs, const std::vector<ImageMeta> & metas) const
-{
-  std::vector<std::vector<SimpleDetection>> batch_detections;
-
-  if (outputs.empty()) {
-    throw std::runtime_error("No output tensors provided");
-  }
-
-  const int boxes_idx = config_.output_boxes_idx;
-  const int scores_idx = config_.output_scores_idx;
-  const int classes_idx = config_.output_classes_idx;
-
-  if (boxes_idx < 0 || boxes_idx >= static_cast<int>(outputs.size())) {
-    throw std::runtime_error("Invalid output_boxes_idx: " + std::to_string(boxes_idx));
-  }
-  if (scores_idx < 0 || scores_idx >= static_cast<int>(outputs.size())) {
-    throw std::runtime_error("Invalid output_scores_idx: " + std::to_string(scores_idx));
-  }
-
-  const auto & boxes_tensor = outputs[boxes_idx];
-  const auto & scores_tensor = outputs[scores_idx];
-
-  const auto & boxes_shape = boxes_tensor.shape();
-  const auto & scores_shape = scores_tensor.shape();
-
-  if (boxes_shape.empty() || scores_shape.empty()) {
-    throw std::runtime_error("Output tensors have empty shapes");
-  }
-
-  const float * boxes_data = boxes_tensor.data_as<float>();
-  const float * scores_data = scores_tensor.data_as<float>();
-
-  if (!boxes_data || !scores_data) {
-    throw std::runtime_error("Output tensors have null data");
-  }
-
-  size_t batch_size = boxes_shape[0];
-  size_t num_detections = boxes_shape.size() > 1 ? boxes_shape[1] : 1;
-  size_t bbox_dims = boxes_shape.size() > 2 ? boxes_shape[2] : boxes_shape.back();
-
-  if (bbox_dims < 4) {
-    throw std::runtime_error("Boxes tensor must have at least 4 values per detection");
-  }
-
-  batch_detections.reserve(std::min(batch_size, metas.size()));
-
-  for (size_t b = 0; b < batch_size && b < metas.size(); ++b) {
-    std::vector<SimpleDetection> dets;
-    dets.reserve(num_detections);
-
-    for (size_t d = 0; d < num_detections; ++d) {
-      size_t box_offset = (b * num_detections + d) * bbox_dims;
-      float x = boxes_data[box_offset];
-      float y = boxes_data[box_offset + 1];
-      float w = boxes_data[box_offset + 2];
-      float h = boxes_data[box_offset + 3];
-
-      float score = 0.0f;
-      int32_t class_id = -1;
-
-      size_t scores_dim1 = scores_shape.size() > 1 ? scores_shape[1] : 1;
-      size_t scores_dim2 = scores_shape.size() > 2 ? scores_shape[2] : 1;
-
-      if (scores_dim1 == static_cast<size_t>(num_classes_) || scores_dim2 == static_cast<size_t>(num_classes_)) {
-        bool detections_first = (scores_dim1 == num_detections);
-
-        if (detections_first) {
-          size_t score_base = (b * num_detections + d) * num_classes_;
-          float max_score = -std::numeric_limits<float>::max();
-          size_t best_class = 0;
-
-          for (size_t c = 0; c < static_cast<size_t>(num_classes_); ++c) {
-            float raw_score = scores_data[score_base + c];
-            float activated_score = applyActivation(raw_score);
-            if (activated_score > max_score) {
-              max_score = activated_score;
-              best_class = c;
-            }
-          }
-          score = max_score;
-          class_id = static_cast<int32_t>(best_class);
-        } else {
-          // [batch, num_classes, num_detections]
-          float max_score = -std::numeric_limits<float>::max();
-          size_t best_class = 0;
-
-          for (size_t c = 0; c < static_cast<size_t>(num_classes_); ++c) {
-            float raw_score = scores_data[b * num_classes_ * num_detections + c * num_detections + d];
-            float activated_score = applyActivation(raw_score);
-            if (activated_score > max_score) {
-              max_score = activated_score;
-              best_class = c;
-            }
-          }
-          score = max_score;
-          class_id = static_cast<int32_t>(best_class);
-        }
-      } else {
-        size_t score_offset = b * num_detections + d;
-        float raw_score = scores_data[score_offset];
-        score = applyActivation(raw_score);
-
-        if (classes_idx >= 0 && classes_idx < static_cast<int>(outputs.size())) {
-          const auto & classes_tensor = outputs[classes_idx];
-          const auto & classes_shape = classes_tensor.shape();
-          const float * classes_data = classes_tensor.data_as<float>();
-          if (classes_data && classes_shape.size() >= 2) {
-            size_t class_offset = b * classes_shape[1] + d;
-            class_id = static_cast<int32_t>(std::round(classes_data[class_offset]));
-          }
-        }
-      }
-
-      if (score < config_.score_threshold) {
-        continue;
-      }
-
-      SimpleDetection det;
-      if (bbox_format_ == "cxcywh") {
-        det.x = x;
-        det.y = y;
-        det.width = w;
-        det.height = h;
-      } else if (bbox_format_ == "xyxy") {
-        det.x = x;
-        det.y = y;
-        det.width = w - x;
-        det.height = h - y;
-      } else if (bbox_format_ == "xywh") {
-        det.x = x;
-        det.y = y;
-        det.width = w;
-        det.height = h;
-      }
-
       det.score = score;
       det.class_id = class_id;
 

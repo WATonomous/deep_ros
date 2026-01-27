@@ -17,7 +17,7 @@
  * @brief Generic postprocessor for object detection model outputs
  *
  * This header defines the GenericPostprocessor class which:
- * - Automatically detects output tensor layouts
+ * - Uses manually configured output tensor layouts (from YAML config)
  * - Applies score activation and thresholding
  * - Performs Non-Maximum Suppression (NMS)
  * - Transforms coordinates from preprocessed to original image space
@@ -43,7 +43,7 @@ namespace deep_object_detection
  * @brief Generic postprocessor for object detection models
  *
  * Handles postprocessing pipeline for various ONNX model output formats:
- * - Automatic layout detection (supports [batch, detections, features], [batch, features, detections], etc.)
+ * - Manual layout configuration (supports [batch, detections, features], [batch, features, detections], etc.)
  * - Score activation (sigmoid, softmax, or none)
  * - Score thresholding
  * - Non-maximum suppression (NMS)
@@ -52,6 +52,7 @@ namespace deep_object_detection
  *
  * Supports both single-output models (boxes + scores + classes in one tensor)
  * and multi-output models (separate tensors for boxes, scores, classes).
+ * Layout must be manually configured in the YAML config file.
  */
 class GenericPostprocessor
 {
@@ -76,7 +77,6 @@ public:
     size_t class_idx = 5;  ///< Index for class ID in feature dimension
     bool has_separate_class_output = false;  ///< True if class IDs are in separate output tensor
     size_t class_output_idx = 0;  ///< Output index for separate class tensor (if applicable)
-    bool auto_detect = true;  ///< True if layout should be auto-detected
   };
 
   /**
@@ -97,28 +97,16 @@ public:
     bool use_letterbox);
 
   /**
-   * @brief Automatically detect output tensor layout from shape
-   * @param output_shape Model output tensor shape
-   * @return Detected OutputLayout
-   *
-   * Analyzes tensor shape to determine layout:
-   * - [batch, detections, features] -> standard layout
-   * - [batch, features, detections] -> transposed layout
-   * - [batch, queries, 4+classes] -> query-based (DETR-style)
-   * - Other shapes -> heuristic-based detection
-   */
-  static OutputLayout detectLayout(const std::vector<size_t> & output_shape);
-
-  /**
-   * @brief Auto-configure output layout based on config and optional output shape
-   * @param output_shape Model output shape (can be empty for deferred detection)
+   * @brief Configure output layout from manual configuration
+   * @param output_shape Model output shape (optional, for validation/logging)
    * @param layout_config Layout configuration from parameters
    * @return Configured OutputLayout
    *
-   * Handles both manual and auto-detection modes. If auto_detect is true and output_shape
-   * is available, automatically detects layout. Otherwise uses manual config or defers detection.
+   * Creates OutputLayout from manual configuration parameters.
+   * All layout parameters must be specified in the config file.
    */
-  static OutputLayout autoConfigure(const std::vector<size_t> & output_shape, const OutputLayoutConfig & layout_config);
+  static OutputLayout configureLayout(
+    const std::vector<size_t> & output_shape, const OutputLayoutConfig & layout_config);
 
   /**
    * @brief Decode model output tensor to detections
@@ -132,18 +120,6 @@ public:
    */
   std::vector<std::vector<SimpleDetection>> decode(
     const deep_ros::Tensor & output, const std::vector<ImageMeta> & metas) const;
-
-  /**
-   * @brief Decode multi-output model to detections
-   * @param outputs Vector of model output tensors (boxes, scores, classes separately)
-   * @param metas Image metadata for coordinate transformation
-   * @return Vector of detections per image in batch
-   *
-   * For models with separate outputs for boxes, scores, and classes.
-   * Uses output_boxes_idx, output_scores_idx, output_classes_idx from config.
-   */
-  std::vector<std::vector<SimpleDetection>> decodeMultiOutput(
-    const std::vector<deep_ros::Tensor> & outputs, const std::vector<ImageMeta> & metas) const;
 
   /**
    * @brief Fill ROS Detection2DArray message with detections

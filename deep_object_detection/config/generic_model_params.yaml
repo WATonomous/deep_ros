@@ -7,6 +7,7 @@ deep_object_detection_node:
     Model:
       num_classes: 80
       bbox_format: "cxcywh"
+      output_shape: [1, 8400, 84]
 
     Preprocessing:
       input_width: 640
@@ -23,15 +24,11 @@ deep_object_detection_node:
       nms_iou_threshold: 0.45
       score_activation: "sigmoid"
       enable_nms: true
-      use_multi_output: false
-      output_boxes_idx: 0
-      output_scores_idx: 1
-      output_classes_idx: 2
       class_score_mode: "all_classes"
       class_score_start_idx: -1
       class_score_count: -1
+
       layout:
-        auto_detect: true
         batch_dim: 0
         detection_dim: 1
         feature_dim: 2
@@ -41,8 +38,8 @@ deep_object_detection_node:
         class_idx: 5
 
     Backend:
-      plugin: "onnxruntime_gpu"  # Options: "onnxruntime_cpu" or "onnxruntime_gpu"
-      execution_provider: "tensorrt"  # For onnxruntime_gpu: "cuda" or "tensorrt"
+      plugin: "onnxruntime_gpu"
+      execution_provider: "tensorrt"
       device_id: 0
       trt_engine_cache_enable: true
       trt_engine_cache_path: "/tmp/deep_ros_ort_trt_cache"
