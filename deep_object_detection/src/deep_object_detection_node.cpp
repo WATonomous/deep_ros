@@ -32,7 +32,7 @@
 #include <deep_core/deep_node_base.hpp>
 #include <deep_core/types/tensor.hpp>
 #include <deep_msgs/msg/multi_image.hpp>
-#include <deep_msgs/msg/multi_image_raw.hpp>
+#include <deep_msgs/msg/multi_image_compressed.hpp>
 #include <lifecycle_msgs/msg/state.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -389,11 +389,11 @@ void DeepObjectDetectionNode::setupSubscription()
   options.callback_group = callback_group_;
 
   if (use_compressed_images_) {
-    // Subscribe to compressed MultiImage
-    multi_image_sub_ = this->create_subscription<deep_msgs::msg::MultiImage>(
+    // Subscribe to compressed MultiImageCompressed
+    multi_image_sub_ = this->create_subscription<deep_msgs::msg::MultiImageCompressed>(
       input_topic_,
       qos_profile,
-      [this](const deep_msgs::msg::MultiImage::ConstSharedPtr msg) {
+      [this](const deep_msgs::msg::MultiImageCompressed::ConstSharedPtr msg) {
         try {
           this->onMultiImage(msg);
         } catch (const std::exception & e) {
@@ -401,13 +401,13 @@ void DeepObjectDetectionNode::setupSubscription()
         }
       },
       options);
-    RCLCPP_INFO(this->get_logger(), "Subscribed to MultiImage (compressed) topic: %s", input_topic_.c_str());
+    RCLCPP_INFO(this->get_logger(), "Subscribed to MultiImageCompressed (compressed) topic: %s", input_topic_.c_str());
   } else {
-    // Subscribe to uncompressed MultiImageRaw
-    multi_image_raw_sub_ = this->create_subscription<deep_msgs::msg::MultiImageRaw>(
+    // Subscribe to uncompressed MultiImage
+    multi_image_raw_sub_ = this->create_subscription<deep_msgs::msg::MultiImage>(
       input_topic_raw_,
       qos_profile,
-      [this](const deep_msgs::msg::MultiImageRaw::ConstSharedPtr msg) {
+      [this](const deep_msgs::msg::MultiImage::ConstSharedPtr msg) {
         try {
           this->onMultiImageRaw(msg);
         } catch (const std::exception & e) {
@@ -415,7 +415,7 @@ void DeepObjectDetectionNode::setupSubscription()
         }
       },
       options);
-    RCLCPP_INFO(this->get_logger(), "Subscribed to MultiImageRaw (uncompressed) topic: %s", input_topic_raw_.c_str());
+    RCLCPP_INFO(this->get_logger(), "Subscribed to MultiImage (uncompressed) topic: %s", input_topic_raw_.c_str());
   }
 }
 
@@ -435,7 +435,7 @@ cv::Mat DeepObjectDetectionNode::decodeImage(const sensor_msgs::msg::Image & img
   }
 }
 
-void DeepObjectDetectionNode::onMultiImage(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg)
+void DeepObjectDetectionNode::onMultiImage(const deep_msgs::msg::MultiImageCompressed::ConstSharedPtr & msg)
 {
   RCLCPP_DEBUG(this->get_logger(), "Received MultiImage message with %zu images", msg->images.size());
   try {
@@ -465,9 +465,9 @@ void DeepObjectDetectionNode::onMultiImage(const deep_msgs::msg::MultiImage::Con
   }
 }
 
-void DeepObjectDetectionNode::onMultiImageRaw(const deep_msgs::msg::MultiImageRaw::ConstSharedPtr & msg)
+void DeepObjectDetectionNode::onMultiImageRaw(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg)
 {
-  RCLCPP_DEBUG(this->get_logger(), "Received MultiImageRaw message with %zu images", msg->images.size());
+  RCLCPP_DEBUG(this->get_logger(), "Received MultiImage message with %zu images", msg->images.size());
   try {
     std::vector<cv::Mat> images;
     std::vector<std_msgs::msg::Header> headers;
@@ -487,10 +487,10 @@ void DeepObjectDetectionNode::onMultiImageRaw(const deep_msgs::msg::MultiImageRa
     if (!images.empty()) {
       processImages(images, headers);
     } else {
-      RCLCPP_WARN(this->get_logger(), "No valid images after decoding, skipping MultiImageRaw");
+      RCLCPP_WARN(this->get_logger(), "No valid images after decoding, skipping MultiImage");
     }
   } catch (const std::exception & e) {
-    RCLCPP_ERROR(this->get_logger(), "Exception processing MultiImageRaw: %s", e.what());
+    RCLCPP_ERROR(this->get_logger(), "Exception processing MultiImage: %s", e.what());
   }
 }
 

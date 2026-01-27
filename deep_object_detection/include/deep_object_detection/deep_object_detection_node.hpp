@@ -17,7 +17,7 @@
  * @brief ROS 2 lifecycle node for object detection using ONNX models
  *
  * This header defines the main DeepObjectDetectionNode class which:
- * - Subscribes to MultiImage messages (synchronized multi-camera input)
+ * - Subscribes to MultiImage/MultiImageCompressed messages (synchronized multi-camera input)
  * - Processes MultiImage messages directly without additional batching
  * - Runs preprocessing, inference, and postprocessing
  * - Publishes Detection2DArray messages with bounding boxes and scores
@@ -33,7 +33,7 @@
 #include <deep_core/deep_node_base.hpp>
 #include <deep_core/types/tensor.hpp>
 #include <deep_msgs/msg/multi_image.hpp>
-#include <deep_msgs/msg/multi_image_raw.hpp>
+#include <deep_msgs/msg/multi_image_compressed.hpp>
 #include <opencv2/core/mat.hpp>
 #include <rclcpp/node_options.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -53,9 +53,9 @@ namespace deep_object_detection
 /**
  * @brief ROS2 lifecycle node for object detection using ONNX models
  *
- * This node performs object detection on synchronized multi-camera streams via MultiImage messages.
+ * This node performs object detection on synchronized multi-camera streams via MultiImage/MultiImageCompressed messages.
  * It supports:
- * - MultiImage input: synchronized compressed images from multiple cameras
+ * - MultiImage/MultiImageCompressed input: synchronized images from multiple cameras
  * - Direct processing: processes MultiImage messages immediately without queuing
  * - Multiple backends: CPU, CUDA, or TensorRT execution providers
  * - Configurable preprocessing: resizing, normalization, color format conversion
@@ -145,20 +145,20 @@ private:
   void setupSubscription();
 
   /**
-   * @brief Callback for MultiImage messages (compressed)
-   * @param msg Shared pointer to MultiImage message containing synchronized compressed images
+   * @brief Callback for MultiImageCompressed messages (compressed)
+   * @param msg Shared pointer to MultiImageCompressed message containing synchronized compressed images
    *
    * Converts compressed images to cv::Mat and processes them.
    */
-  void onMultiImage(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg);
+  void onMultiImage(const deep_msgs::msg::MultiImageCompressed::ConstSharedPtr & msg);
 
   /**
-   * @brief Callback for MultiImageRaw messages (uncompressed)
-   * @param msg Shared pointer to MultiImageRaw message containing synchronized uncompressed images
+   * @brief Callback for MultiImage messages (uncompressed)
+   * @param msg Shared pointer to MultiImage message containing synchronized uncompressed images
    *
    * Converts uncompressed images to cv::Mat and processes them.
    */
-  void onMultiImageRaw(const deep_msgs::msg::MultiImageRaw::ConstSharedPtr & msg);
+  void onMultiImageRaw(const deep_msgs::msg::MultiImage::ConstSharedPtr & msg);
 
   /**
    * @brief Process images through the inference pipeline
@@ -232,10 +232,10 @@ private:
   /// Class names loaded from file
   std::vector<std::string> class_names_;
 
-  /// Subscription to MultiImage topic (synchronized multi-camera compressed input)
-  rclcpp::Subscription<deep_msgs::msg::MultiImage>::SharedPtr multi_image_sub_;
-  /// Subscription to MultiImageRaw topic (synchronized multi-camera uncompressed input)
-  rclcpp::Subscription<deep_msgs::msg::MultiImageRaw>::SharedPtr multi_image_raw_sub_;
+  /// Subscription to MultiImageCompressed topic (synchronized multi-camera compressed input)
+  rclcpp::Subscription<deep_msgs::msg::MultiImageCompressed>::SharedPtr multi_image_sub_;
+  /// Subscription to MultiImage topic (synchronized multi-camera uncompressed input)
+  rclcpp::Subscription<deep_msgs::msg::MultiImage>::SharedPtr multi_image_raw_sub_;
   /// Input topic name (can be set via parameter or remapping)
   std::string input_topic_;
   /// Input topic name for uncompressed images (can be set via remapping)

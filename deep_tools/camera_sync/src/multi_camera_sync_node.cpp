@@ -25,7 +25,7 @@
 #include <rclcpp_components/register_node_macro.hpp>
 
 #include "deep_msgs/msg/multi_image.hpp"
-#include "deep_msgs/msg/multi_image_raw.hpp"
+#include "deep_msgs/msg/multi_image_compressed.hpp"
 
 namespace camera_sync
 {
@@ -103,9 +103,10 @@ void MultiCameraSyncNode::setupSynchronization()
 
   // Setup multi-image publishers
   if (use_compressed_) {
-    multi_image_compressed_pub_ = this->create_publisher<deep_msgs::msg::MultiImage>("~/multi_image_compressed", 10);
+    multi_image_compressed_pub_ =
+      this->create_publisher<deep_msgs::msg::MultiImageCompressed>("~/multi_image_compressed", 10);
   } else {
-    multi_image_raw_pub_ = this->create_publisher<deep_msgs::msg::MultiImageRaw>("~/multi_image_raw", 10);
+    multi_image_raw_pub_ = this->create_publisher<deep_msgs::msg::MultiImage>("~/multi_image_raw", 10);
   }
 
   if (publish_sync_info_) {
@@ -307,7 +308,7 @@ void MultiCameraSyncNode::syncCallback2Raw(const ImageMsg::ConstSharedPtr & img1
 
   // Create and publish multi-image message
   std::vector<ImageMsg::ConstSharedPtr> images = {img1, img2};
-  auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImageRaw>(images);
+  auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImage>(images);
   multi_image_raw_pub_->publish(raw_msg);
 }
 
@@ -320,7 +321,7 @@ void MultiCameraSyncNode::syncCallback3Raw(
 
   // Create and publish multi-image message
   std::vector<ImageMsg::ConstSharedPtr> images = {img1, img2, img3};
-  auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImageRaw>(images);
+  auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImage>(images);
   multi_image_raw_pub_->publish(raw_msg);
 }
 
@@ -339,7 +340,7 @@ void MultiCameraSyncNode::syncCallback4Raw(
 
   // Create and publish multi-image message
   std::vector<ImageMsg::ConstSharedPtr> images = {img1, img2, img3, img4};
-  auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImageRaw>(images);
+  auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImage>(images);
   multi_image_raw_pub_->publish(raw_msg);
 }
 
@@ -360,7 +361,7 @@ void MultiCameraSyncNode::syncCallback5Raw(
 
   // Create and publish multi-image message
   std::vector<ImageMsg::ConstSharedPtr> images = {img1, img2, img3, img4, img5};
-  auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImageRaw>(images);
+  auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImage>(images);
   multi_image_raw_pub_->publish(raw_msg);
 }
 
@@ -383,7 +384,7 @@ void MultiCameraSyncNode::syncCallback6Raw(
 
   // Create and publish multi-image message
   std::vector<ImageMsg::ConstSharedPtr> images = {img1, img2, img3, img4, img5, img6};
-  auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImageRaw>(images);
+  auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImage>(images);
   multi_image_raw_pub_->publish(raw_msg);
 }
 
@@ -396,7 +397,8 @@ void MultiCameraSyncNode::syncCallback2Compressed(
 
   // Create and publish multi-image message
   std::vector<CompressedImageMsg::ConstSharedPtr> images = {img1, img2};
-  auto compressed_msg = createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImage>(images);
+  auto compressed_msg =
+    createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImageCompressed>(images);
   multi_image_compressed_pub_->publish(compressed_msg);
 }
 
@@ -411,7 +413,8 @@ void MultiCameraSyncNode::syncCallback3Compressed(
 
   // Create and publish multi-image message
   std::vector<CompressedImageMsg::ConstSharedPtr> images = {img1, img2, img3};
-  auto compressed_msg = createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImage>(images);
+  auto compressed_msg =
+    createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImageCompressed>(images);
   multi_image_compressed_pub_->publish(compressed_msg);
 }
 
@@ -430,7 +433,8 @@ void MultiCameraSyncNode::syncCallback4Compressed(
 
   // Create and publish multi-image message
   std::vector<CompressedImageMsg::ConstSharedPtr> images = {img1, img2, img3, img4};
-  auto compressed_msg = createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImage>(images);
+  auto compressed_msg =
+    createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImageCompressed>(images);
   multi_image_compressed_pub_->publish(compressed_msg);
 }
 
@@ -451,7 +455,8 @@ void MultiCameraSyncNode::syncCallback5Compressed(
 
   // Create and publish multi-image message
   std::vector<CompressedImageMsg::ConstSharedPtr> images = {img1, img2, img3, img4, img5};
-  auto compressed_msg = createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImage>(images);
+  auto compressed_msg =
+    createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImageCompressed>(images);
   multi_image_compressed_pub_->publish(compressed_msg);
 }
 
@@ -474,7 +479,8 @@ void MultiCameraSyncNode::syncCallback6Compressed(
 
   // Create and publish multi-image message
   std::vector<CompressedImageMsg::ConstSharedPtr> images = {img1, img2, img3, img4, img5, img6};
-  auto compressed_msg = createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImage>(images);
+  auto compressed_msg =
+    createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImageCompressed>(images);
   multi_image_compressed_pub_->publish(compressed_msg);
 }
 

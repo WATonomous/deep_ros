@@ -33,7 +33,7 @@ import launch_testing.asserts
 import numpy as np
 import pytest
 import rclpy
-from deep_msgs.msg import MultiImage
+from deep_msgs.msg import MultiImageCompressed
 from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import Header
 from vision_msgs.msg import Detection2DArray
@@ -139,7 +139,7 @@ class TestGPUBackend(unittest.TestCase):
 
         # Create publisher for MultiImage messages
         multi_image_pub = self.node.create_publisher(
-            MultiImage, "/multi_camera_sync/multi_image_compressed", 10
+            MultiImageCompressed, "/multi_camera_sync/multi_image_compressed", 10
         )
 
         # Variable to track if we received detections
@@ -166,7 +166,7 @@ class TestGPUBackend(unittest.TestCase):
         _, encoded_image = cv2.imencode(".jpg", dummy_image, encode_param)
 
         # Create MultiImage message with 1 image
-        multi_image_msg = MultiImage()
+        multi_image_msg = MultiImageCompressed()
         multi_image_msg.header = Header()
         multi_image_msg.header.stamp = self.node.get_clock().now().to_msg()
         multi_image_msg.header.frame_id = "camera"

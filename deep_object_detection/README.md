@@ -7,7 +7,7 @@ A deep learning object detection node for ROS 2. Simply provide any ONNX-compati
 The `deep_object_detection` package provides:
 - Model-agnostic object detection using ONNX models
 - Automatic output format detection and adaptation
-- Multi-camera support via MultiImage messages (immediate batch processing)
+- Multi-camera support via MultiImage/MultiImageCompressed messages (immediate batch processing)
 - Configurable preprocessing and postprocessing pipelines
 - Plugin-based backend architecture (CPU, CUDA, TensorRT)
 - Full ROS 2 lifecycle node support
@@ -17,7 +17,7 @@ The `deep_object_detection` package provides:
 │                                      ROS 2 Topics                                  │
 │                                                                                    │
 │  ┌──────────────────────────────────┐       ┌──────────────────────────────┐       │
-│  │ MultiImage Topic                 │       │ Detection2DArray Topic       │       │
+│  │ MultiImage/MultiImageCompressed   │       │ Detection2DArray Topic       │       │
 │  │ (synchronized multi-camera)       │       │ (one per image in batch)     │       │
 │  │ • KeepLast(1) QoS                │       └──────────────────────────────┘       │
 │  │ • Immediate processing           │       ┌──────────────────────────────┐       │
@@ -33,10 +33,10 @@ The `deep_object_detection` package provides:
 │  ┌──────────────────────────────────────────────────────────────────────────────┐  │
 │  │                         Processing Pipeline (Per MultiImage Message)         │  │
 │  │                                                                              │  │
-│  │  MultiImage Message                                                          │  │
+│  │  MultiImage/MultiImageCompressed Message                                   │  │
 │  │  ┌──────────────────────────────────────────────────────────────────────┐  │  │
 │  │  │ 1. Decode Images (sequential)                                         │  │  │
-│  │  │    • Extract all CompressedImage from MultiImage                      │  │  │
+│  │  │    • Extract all images from MultiImage/MultiImageCompressed         │  │  │
 │  │  │    • Decode each to cv::Mat                                           │  │  │
 │  │  └────────────────────┬───────────────────────────────────────────────────┘  │  │
 │  │                       │                                                      │  │
@@ -117,14 +117,12 @@ The `deep_object_detection` package provides:
 │  └──────────────────────────┘        └──────────────────────────────────────────┘  │
 └────────────────────────────────────────────────────────────────────────────────────┘
 
-Note: Each MultiImage message is processed immediately. All images within a MultiImage
-message are processed as a single batch through inference. No queuing or batching of
-multiple MultiImage messages occurs.
+Note: Each MultiImage/MultiImageCompressed message is processed immediately. All images within a message are processed as a single batch through inference. No queuing or batching of multiple messages occurs.
 ```
 
 ### Nodes
 
-- **`deep_object_detection_node`**: A lifecycle node that subscribes to MultiImage messages (synchronized multi-camera input), runs object detection inference, and publishes detection results.
+- **`deep_object_detection_node`**: A lifecycle node that subscribes to MultiImage/MultiImageCompressed messages (synchronized multi-camera input), runs object detection inference, and publishes detection results.
 
 ### Configuration
 
@@ -198,12 +196,12 @@ The object detection node requires the `camera_sync` node for synchronized multi
      input_topic:=/multi_camera_sync/multi_image_compressed
    ```
 
-   Configure the detection node to subscribe to the MultiImage topic either via:
+   Configure the detection node to subscribe to the MultiImage/MultiImageCompressed topic either via:
    - **Remapping** (recommended): `input_topic:=/multi_camera_sync/multi_image_compressed` in launch command
    - **Parameter**: Set `input_topic: "/multi_camera_sync/multi_image_compressed"` in config file
 
-   The node processes all images in each MultiImage message as a batch. The batch size
-   is determined by the number of images in the MultiImage message (typically equal to
+   The node processes all images in each MultiImage/MultiImageCompressed message as a batch. The batch size
+   is determined by the number of images in the message (typically equal to
    the number of synchronized cameras).
 
 ### Zero-Copy Component Container (High Performance)
@@ -308,7 +306,7 @@ The node automatically detects and adapts to various ONNX model output formats:
 - `[batch, channels, anchors]` - anchor-based models
 - Any other layout - automatically detected and handled
 
-**Input:** The node expects MultiImage messages (deep_msgs/MultiImage) containing synchronized compressed images from multiple cameras.
+**Input:** The node expects MultiImageCompressed messages (deep_msgs/MultiImageCompressed) containing synchronized compressed images, or MultiImage messages (deep_msgs/MultiImage) containing synchronized uncompressed images from multiple cameras.
 
 **Output:** Detection2DArray messages containing bounding boxes, scores, and class IDs for each image in the batch.
 
@@ -325,7 +323,7 @@ The node automatically detects and adapts to various ONNX model output formats:
 
 ### Required Parameters
 - **`model_path`** (string): Absolute path to ONNX model file (e.g., `/workspaces/deep_ros/yolov8m.onnx`).
-- **`input_topic`** (string): MultiImage topic name to subscribe to.
+- **`input_topic`** (string): MultiImage/MultiImageCompressed topic name to subscribe to.
 
 ### Key Parameters
 - **`class_names_path`** (string, optional): Absolute path to text file with class names, one per line (e.g., `/workspaces/deep_ros/deep_object_detection/config/coco_classes.txt`). If not provided, class IDs will be used in output messages.
@@ -349,9 +347,9 @@ See `config/generic_model_params.yaml` for a complete parameter reference.
 Topic names can be configured either via parameters in the config file or via remappings in the launch file. Remappings take precedence over parameter values.
 
 ### Input Topics
-- **`input_topic`**: MultiImage messages (deep_msgs/MultiImage) containing synchronized compressed images from multiple cameras.
+- **`input_topic`**: MultiImageCompressed messages (deep_msgs/MultiImageCompressed) containing synchronized compressed images, or MultiImage messages (deep_msgs/MultiImage) containing synchronized uncompressed images from multiple cameras.
 
-**Note:** The node only supports MultiImage messages. Individual camera topics are not supported.
+**Note:** The node only supports MultiImage/MultiImageCompressed messages. Individual camera topics are not supported.
 
 **Configuration:**
 - Via parameter: Set `input_topic` in the config file
@@ -382,8 +380,8 @@ Topic names can be configured either via parameters in the config file or via re
 
 ## Limitations
 
-1. **MultiImage input only**: The node only supports MultiImage messages. Individual camera topics are not supported.
-2. **MultiImage input format**: The node processes MultiImage messages immediately upon receipt. All images within a MultiImage message are processed as a single batch. No queuing or accumulation of multiple MultiImage messages occurs.
+1. **MultiImage/MultiImageCompressed input only**: The node only supports MultiImage/MultiImageCompressed messages. Individual camera topics are not supported.
+2. **Message processing**: The node processes MultiImage/MultiImageCompressed messages immediately upon receipt. All images within a message are processed as a single batch. No queuing or accumulation of multiple messages occurs.
 3. **No dynamic reconfiguration**: Parameters cannot be changed at runtime. Node must be reconfigured to change parameters.
 
 ## Testing
