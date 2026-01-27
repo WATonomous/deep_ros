@@ -49,6 +49,6 @@ multi_camera_sync:
 
     # QoS settings optimized for camera data with IPC
     qos_depth: 5
-    qos_reliability: "reliable"  # reliable or "best_effort" for higher throughput
+    qos_reliability: "best_effort"  # reliable or "best_effort" for higher throughput
     qos_durability: "volatile"
     qos_history: "keep_last"
