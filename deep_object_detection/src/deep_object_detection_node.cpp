@@ -214,11 +214,16 @@ deep_ros::CallbackReturn DeepObjectDetectionNode::on_configure_impl(const rclcpp
       class_names_,
       use_letterbox);
 
-    auto pub = this->create_publisher<Detection2DArrayMsg>(params_.output_detections_topic, rclcpp::SensorDataQoS{});
+    // best_effort avoids blocking on slow subscribers and provides better performance for high-frequency sensor data
+    auto detection_qos = rclcpp::QoS(rclcpp::KeepLast(1));
+    detection_qos.best_effort();
+    auto pub = this->create_publisher<Detection2DArrayMsg>(params_.output_detections_topic, detection_qos);
     detection_pub_ = std::static_pointer_cast<rclcpp_lifecycle::LifecyclePublisher<Detection2DArrayMsg>>(pub);
 
+    auto marker_qos = rclcpp::QoS(rclcpp::KeepLast(1));
+    marker_qos.best_effort();
     auto marker_pub =
-      this->create_publisher<visualization_msgs::msg::ImageMarker>(output_annotations_topic_, rclcpp::SensorDataQoS{});
+      this->create_publisher<visualization_msgs::msg::ImageMarker>(output_annotations_topic_, marker_qos);
     image_marker_pub_ =
       std::static_pointer_cast<rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::ImageMarker>>(marker_pub);
 
@@ -467,7 +472,7 @@ void DeepObjectDetectionNode::processImages(
     return;
   }
 
-  auto start_time = std::chrono::steady_clock::now();
+  auto total_start_time = std::chrono::steady_clock::now();
   std::vector<cv::Mat> processed;
   std::vector<ImageMeta> metas;
   std::vector<std_msgs::msg::Header> processed_headers;
@@ -504,28 +509,45 @@ void DeepObjectDetectionNode::processImages(
     return;
   }
 
-  // Build input tensor
+  // Build input tensor and copy to device
   deep_ros::Tensor input_tensor(packed_input.shape, deep_ros::DataType::FLOAT32, allocator);
   const size_t bytes = packed_input.data.size() * sizeof(float);
   allocator->copy_from_host(input_tensor.data(), packed_input.data.data(), bytes);
 
   // Run inference
+  auto inference_start = std::chrono::steady_clock::now();
   auto output_tensor = run_inference(input_tensor);
+  auto inference_end = std::chrono::steady_clock::now();
+  auto inference_ms = std::chrono::duration_cast<std::chrono::milliseconds>(inference_end - inference_start).count();
+
+  // Postprocess
   std::vector<std::vector<SimpleDetection>> batch_detections = postprocessor_->decode(output_tensor, metas);
 
-  auto end_time = std::chrono::steady_clock::now();
-  auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+  auto total_end_time = std::chrono::steady_clock::now();
+  auto total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(total_end_time - total_start_time).count();
+
+  size_t total_detections_count =
+    std::accumulate(batch_detections.begin(), batch_detections.end(), size_t(0), [](size_t sum, const auto & dets) {
+      return sum + dets.size();
+    });
+
+  // Build per-image detection count string for logging
+  std::string per_image_counts;
+  for (size_t i = 0; i < batch_detections.size(); ++i) {
+    if (i > 0) per_image_counts += ", ";
+    per_image_counts += std::to_string(batch_detections[i].size());
+  }
 
   RCLCPP_INFO_THROTTLE(
     this->get_logger(),
     *this->get_clock(),
     2000,
-    "Image processing completed: %zu images in %" PRId64 " ms, total detections: %zu",
+    "Processing %zu images: total=%" PRId64 "ms (inference=%" PRId64 "ms), detections=%zu [per image: %s]",
     processed.size(),
-    static_cast<int64_t>(elapsed_ms),
-    std::accumulate(batch_detections.begin(), batch_detections.end(), size_t(0), [](size_t sum, const auto & dets) {
-      return sum + dets.size();
-    }));
+    static_cast<int64_t>(total_ms),
+    static_cast<int64_t>(inference_ms),
+    total_detections_count,
+    per_image_counts.c_str());
 
   publishDetections(batch_detections, processed_headers, metas);
 }
@@ -545,33 +567,50 @@ void DeepObjectDetectionNode::publishDetections(
     return;
   }
 
-  size_t total_published = 0;
+  size_t total_detections = 0;
+  size_t total_messages = 0;
+
+  // Publish all messages as quickly as possible without blocking
   for (size_t i = 0; i < batch_detections.size() && i < headers.size() && i < metas.size(); ++i) {
-    Detection2DArrayMsg msg;
-    postprocessor_->fillDetectionMessage(headers[i], batch_detections[i], metas[i], msg);
-    detection_pub_->publish(msg);
-    total_published += batch_detections[i].size();
+    const size_t num_dets = batch_detections[i].size();
 
-    RCLCPP_DEBUG(
-      this->get_logger(),
-      "  Published [%zu]: frame_id=%s, %zu detections",
-      i,
-      headers[i].frame_id.c_str(),
-      batch_detections[i].size());
+    try {
+      if (num_dets == 0) {
+        // Still publish empty messages to maintain frame sync
+        Detection2DArrayMsg msg;
+        msg.header = headers[i];
+        msg.detections.clear();
+        detection_pub_->publish(msg);
+        total_messages++;
+        continue;
+      }
 
-    // Also publish ImageMarker annotations if publisher is available
-    if (image_marker_pub_) {
-      auto marker_msg = detectionsToImageMarker(headers[i], batch_detections[i]);
-      image_marker_pub_->publish(marker_msg);
+      total_detections += num_dets;
+      total_messages++;
+
+      Detection2DArrayMsg msg;
+      postprocessor_->fillDetectionMessage(headers[i], batch_detections[i], metas[i], msg);
+      detection_pub_->publish(msg);
+
+      // Also publish ImageMarker annotations if publisher is available
+      if (image_marker_pub_) {
+        auto marker_msg = detectionsToImageMarker(headers[i], batch_detections[i]);
+        image_marker_pub_->publish(marker_msg);
+      }
+    } catch (const std::exception & e) {
+      RCLCPP_ERROR_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000, "Exception while publishing detection [%zu]: %s", i, e.what());
+      // Continue with next detection instead of stopping
     }
   }
+
   RCLCPP_INFO_THROTTLE(
     this->get_logger(),
     *this->get_clock(),
     2000,
-    "Published %zu detection messages (%zu total detections)",
-    batch_detections.size(),
-    total_published);
+    "Published %zu detection messages (%zu total detections across all images)",
+    total_messages,
+    total_detections);
 }
 
 void DeepObjectDetectionNode::loadClassNames()
