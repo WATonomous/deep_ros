@@ -94,6 +94,9 @@ if(BUILD_TESTING)
       ${rclcpp_lifecycle_TARGETS}
       ${vision_msgs_TARGETS}
       ${deep_msgs_TARGETS}
+    DEPENDENCIES
+      deep_msgs
+      vision_msgs
   )
   # Set explicit timeout for unit test
   set_tests_properties(test_deep_object_detection_node PROPERTIES TIMEOUT 10)
