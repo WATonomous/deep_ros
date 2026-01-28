@@ -91,12 +91,7 @@ if(BUILD_TESTING)
   add_deep_test(test_deep_object_detection_node test/test_deep_object_detection_node.cpp
     LIBRARIES
       deep_object_detection_lib
-      ${rclcpp_lifecycle_TARGETS}
-      ${vision_msgs_TARGETS}
-      ${deep_msgs_TARGETS}
-    DEPENDENCIES
-      deep_msgs
-      vision_msgs
+      deep_core::deep_core_lib
   )
   # Set explicit timeout for unit test
   set_tests_properties(test_deep_object_detection_node PROPERTIES TIMEOUT 10)
