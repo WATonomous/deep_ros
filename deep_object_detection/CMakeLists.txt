@@ -86,46 +86,22 @@ install(DIRECTORY config launch
 
 if(BUILD_TESTING)
   find_package(deep_test REQUIRED)
-  find_package(launch_testing_ament_cmake REQUIRED)
 
   # Unit tests
-  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_postprocessors.cpp)
-    add_deep_test(test_postprocessors test/test_postprocessors.cpp
-      LIBRARIES
-        deep_object_detection_lib
-        ${OpenCV_LIBRARIES}
-        ${cv_bridge_TARGETS}
-        ${sensor_msgs_TARGETS}
-        ${rcl_interfaces_TARGETS}
-    )
-  endif()
-
-  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_preprocessor.cpp)
-    add_deep_test(test_preprocessor test/test_preprocessor.cpp
-      LIBRARIES
-        deep_object_detection_lib
-        ${OpenCV_LIBRARIES}
-        ${cv_bridge_TARGETS}
-        ${sensor_msgs_TARGETS}
-        ${rcl_interfaces_TARGETS}
-    )
-  endif()
-
-  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_deep_object_detection_node.cpp)
-    add_deep_test(test_deep_object_detection_node test/test_deep_object_detection_node.cpp
-      LIBRARIES
-        deep_object_detection_lib
-        ${rclcpp_lifecycle_TARGETS}
-        ${vision_msgs_TARGETS}
-        ${deep_msgs_TARGETS}
-    )
-    # Set explicit timeout for unit test
-    set_tests_properties(test_deep_object_detection_node PROPERTIES TIMEOUT 10)
-  endif()
+  add_deep_test(test_deep_object_detection_node test/test_deep_object_detection_node.cpp
+    LIBRARIES
+      deep_object_detection_lib
+      ${rclcpp_lifecycle_TARGETS}
+      ${vision_msgs_TARGETS}
+      ${deep_msgs_TARGETS}
+  )
+  # Set explicit timeout for unit test
+  set_tests_properties(test_deep_object_detection_node PROPERTIES TIMEOUT 10)
 
   # Launch tests disabled by default
   # Set ENABLE_LAUNCH_TESTS=1 to enable them
   if(DEFINED ENV{ENABLE_LAUNCH_TESTS} AND "$ENV{ENABLE_LAUNCH_TESTS}" STREQUAL "1")
+    find_package(launch_testing_ament_cmake REQUIRED)
     message(STATUS "Launch tests enabled (CPU/GPU/TensorRT)")
     add_deep_launch_test(test/launch_tests/test_deep_object_detection_cpu_backend.py TIMEOUT 60)
     add_deep_launch_test(test/launch_tests/test_deep_object_detection_gpu_backend.py TIMEOUT 60)

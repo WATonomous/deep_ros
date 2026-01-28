@@ -7,7 +7,7 @@ deep_object_detection_node:
     Model:
       num_classes: 80
       bbox_format: "cxcywh"
-      output_shape: [1, 8400, 84]
+      output_shape: [1, 84, 8400]
 
     Preprocessing:
       input_width: 640
@@ -30,8 +30,8 @@ deep_object_detection_node:
 
       layout:
         batch_dim: 0
-        detection_dim: 1
-        feature_dim: 2
+        detection_dim: 2
+        feature_dim: 1
         bbox_start_idx: 0
         bbox_count: 4
         score_idx: 4

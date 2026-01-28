@@ -81,8 +81,8 @@ void DeepObjectDetectionNode::declareParameters()
   this->declare_parameter<int>("Postprocessing.class_score_count", -1);
 
   this->declare_parameter<int>("Postprocessing.layout.batch_dim", 0);
-  this->declare_parameter<int>("Postprocessing.layout.detection_dim", 1);
-  this->declare_parameter<int>("Postprocessing.layout.feature_dim", 2);
+  this->declare_parameter<int>("Postprocessing.layout.detection_dim", 2);
+  this->declare_parameter<int>("Postprocessing.layout.feature_dim", 1);
   this->declare_parameter<int>("Postprocessing.layout.bbox_start_idx", 0);
   this->declare_parameter<int>("Postprocessing.layout.bbox_count", 4);
   this->declare_parameter<int>("Postprocessing.layout.score_idx", 4);
@@ -567,9 +567,6 @@ void DeepObjectDetectionNode::publishDetections(
     return;
   }
 
-  size_t total_detections = 0;
-  size_t total_messages = 0;
-
   // Publish all messages as quickly as possible without blocking
   for (size_t i = 0; i < batch_detections.size() && i < headers.size() && i < metas.size(); ++i) {
     const size_t num_dets = batch_detections[i].size();
@@ -581,12 +578,8 @@ void DeepObjectDetectionNode::publishDetections(
         msg.header = headers[i];
         msg.detections.clear();
         detection_pub_->publish(msg);
-        total_messages++;
         continue;
       }
-
-      total_detections += num_dets;
-      total_messages++;
 
       Detection2DArrayMsg msg;
       postprocessor_->fillDetectionMessage(headers[i], batch_detections[i], metas[i], msg);
@@ -603,14 +596,6 @@ void DeepObjectDetectionNode::publishDetections(
       // Continue with next detection instead of stopping
     }
   }
-
-  RCLCPP_INFO_THROTTLE(
-    this->get_logger(),
-    *this->get_clock(),
-    2000,
-    "Published %zu detection messages (%zu total detections across all images)",
-    total_messages,
-    total_detections);
 }
 
 void DeepObjectDetectionNode::loadClassNames()

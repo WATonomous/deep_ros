@@ -8,7 +8,7 @@
     Features dynamic batching, multi-camera support, configurable preprocessing/postprocessing, and fail-fast error handling.
   </description>
 
-  <maintainer email="watonomous@example.com">WATonomous</maintainer>
+  <maintainer email="hello@watonomous.ca">WATonomous</maintainer>
   <license>Apache License 2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
