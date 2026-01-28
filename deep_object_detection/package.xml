@@ -26,7 +26,7 @@
   <depend>deep_ort_gpu_backend_plugin</depend>
   <depend>onnxruntime_vendor</depend>
   <depend>onnxruntime_gpu_vendor</depend>
-  <depend>opencv2</depend>
+  <depend>libopencv-dev</depend>
   <depend>rcl_interfaces</depend>
 
   <test_depend>deep_test</test_depend>
