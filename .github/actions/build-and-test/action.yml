@@ -34,13 +34,12 @@ runs:
     - name: 🔗 Set library path
       shell: bash
       run: |
-        echo "LD_LIBRARY_PATH=$(pwd)/build/install/lib:$(pwd)/build/install/deep_test/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
-
+        echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/build/deep_test" >> $GITHUB_ENV
     - name: ✅ Run tests
       shell: bash
       run: |
         source /opt/ros/${{ inputs.ros-distro }}/setup.bash
-        source build/install/setup.bash
+        source install/setup.bash
         IS_CI=1 colcon test --merge-install --event-handlers console_cohesion+
         colcon test-result --verbose
 
