@@ -35,31 +35,48 @@ TestExecutorFixture::TestExecutorFixture()
 
 TestExecutorFixture::~TestExecutorFixture()
 {
-  // Deactivate all lifecycle nodes to ensure proper cleanup
+  stop_spinning();
+
+  // Now that spinning has stopped, we can safely deactivate lifecycle nodes
   for (auto & node : lifecycle_nodes_) {
-    if (node && node->get_current_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
-      try {
-        node->deactivate();
-      } catch (const std::exception & e) {
-        // Log but don't throw during destruction
-        RCLCPP_WARN(
-          rclcpp::get_logger("TestExecutorFixture"), "Failed to deactivate node during cleanup: %s", e.what());
-      }
+    if (!node) {
+      continue;
+    }
+
+    auto state = node->get_current_state().id();
+    if (state == lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
+      node->deactivate();
     }
   }
 
-  // Cancel executor and wait for thread to finish
-  executor_.cancel();
-
-  if (spin_thread_.joinable()) {
-    spin_thread_.join();
-  }
+  lifecycle_nodes_.clear();
 }
 
 void TestExecutorFixture::start_spinning()
 {
   if (!spin_thread_.joinable()) {
-    spin_thread_ = std::thread([this]() { executor_.spin(); });
+    should_spin_ = true;
+    spin_thread_ = std::thread([this]() {
+      // Use spin_once with timeout instead of blocking spin()
+      // This allows the thread to exit when should_spin_ is set to false
+      while (should_spin_.load()) {
+        executor_.spin_once(std::chrono::milliseconds(100));
+      }
+    });
+  }
+}
+
+void TestExecutorFixture::stop_spinning()
+{
+  should_spin_ = false;
+  executor_.cancel();
+
+  if (spin_thread_.joinable()) {
+    // Give it a moment to exit the loop
+    if (!spin_thread_.joinable()) {
+      return;  // Already joined
+    }
+    spin_thread_.join();
   }
 }
 
