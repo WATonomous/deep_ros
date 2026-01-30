@@ -14,19 +14,38 @@
 
 #include "test_fixtures/test_executor_fixture.hpp"
 
+#include <atomic>
+#include <mutex>
+
 #include <lifecycle_msgs/msg/state.hpp>
 
 namespace deep_ros::test
 {
 
+// Static members for safe one-time initialization
+static std::mutex ros_init_mutex;
+static std::atomic<int> ros_init_count{0};
+static std::atomic<bool> ros_initialized{false};
+
 ROS2Initializer::ROS2Initializer()
 {
-  rclcpp::init(0, nullptr);
+  std::lock_guard<std::mutex> lock(ros_init_mutex);
+  if (!ros_initialized.load()) {
+    rclcpp::init(0, nullptr);
+    ros_initialized.store(true);
+  }
+  ros_init_count++;
 }
 
 ROS2Initializer::~ROS2Initializer()
 {
-  rclcpp::shutdown();
+  std::lock_guard<std::mutex> lock(ros_init_mutex);
+  ros_init_count--;
+  // Only shutdown when the last instance is destroyed
+  if (ros_init_count.load() == 0 && ros_initialized.load()) {
+    rclcpp::shutdown();
+    ros_initialized.store(false);
+  }
 }
 
 TestExecutorFixture::TestExecutorFixture()
