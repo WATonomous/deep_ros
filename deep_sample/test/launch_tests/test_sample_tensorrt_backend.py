@@ -36,6 +36,18 @@ from std_msgs.msg import Float32MultiArray
 import numpy as np
 
 
+def _is_gpu_available():
+    """Check if GPU and CUDA libraries are available."""
+    try:
+        import ctypes
+
+        # Try to load CUDA runtime library
+        ctypes.CDLL("libcuda.so.1")
+        return True
+    except (OSError, AttributeError):
+        return False
+
+
 @pytest.mark.launch_test
 def generate_test_description():
     """Generate launch description for TensorRT backend test."""
@@ -77,6 +89,9 @@ def generate_test_description():
     )
 
 
+@unittest.skipUnless(
+    _is_gpu_available(), "GPU/CUDA not available - skipping TensorRT backend tests"
+)
 class TestTensorRTBackend(unittest.TestCase):
     """Test TensorRT backend functionality."""
 
