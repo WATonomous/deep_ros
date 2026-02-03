@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <thread>
 #include <type_traits>
@@ -63,6 +64,12 @@ public:
   void start_spinning();
 
   /**
+   * @brief Stop spinning the executor
+   * Can be called to cleanly stop the executor before fixture destruction
+   */
+  void stop_spinning();
+
+  /**
    * @brief Add a templated test node to be spun by this executor
    *
    * @tparam T The test node type (must inherit from rclcpp::Node or rclcpp_lifecycle::LifecycleNode)
@@ -83,9 +90,22 @@ public:
     }
   }
 
+  /**
+   * @brief Remove a node from the executor
+   *
+   * @tparam T The test node type
+   * @param node The test node to remove
+   */
+  template <typename T>
+  void remove_node(std::shared_ptr<T> node)
+  {
+    executor_.remove_node(node->get_node_base_interface());
+  }
+
 protected:
   rclcpp::executors::SingleThreadedExecutor executor_;
   std::thread spin_thread_;
+  std::atomic<bool> should_spin_{true};
   std::vector<std::shared_ptr<rclcpp_lifecycle::LifecycleNode>> lifecycle_nodes_;
 };
 
