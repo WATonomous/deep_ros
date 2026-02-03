@@ -34,8 +34,8 @@ runs:
     - name: ✅ Run tests
       shell: bash
       run: |
-        source /opt/ros/${{ inputs.ros-distro }}/setup.bash
         source install/setup.bash
+        source /opt/ros/${{ inputs.ros-distro }}/setup.bash
         IS_CI=1 colcon test --merge-install --event-handlers console_cohesion+
         colcon test-result --verbose
 
