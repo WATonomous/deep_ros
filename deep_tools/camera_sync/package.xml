@@ -2,8 +2,8 @@
 <package format="3">
   <name>camera_sync</name>
   <version>0.1.0</version>
-  <description>ROS2 CLI tool and nodes for ONNX model management and multi-camera synchronization</description>
-  <maintainer email="hello@watonomous.ca">WATonomous</maintainer>
+  <description>ROS2 node for multi-camera synchronization</description>
+  <maintainer email="lereljic@watonomous.ca">Lereljic</maintainer>
   <license>Apache 2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
@@ -15,6 +15,7 @@
   <depend>message_filters</depend>
   <depend>image_transport</depend>
   <depend>deep_msgs</depend>
+  <depend>class_loader</depend>
 
 
 

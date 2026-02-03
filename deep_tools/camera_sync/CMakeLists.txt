@@ -11,14 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.22)
 project(camera_sync)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
@@ -29,7 +28,6 @@ find_package(message_filters REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(deep_msgs REQUIRED)
 
-# Create include directory
 include_directories(include)
 
 # Define lifecycle node support based on ROS distro
@@ -40,7 +38,6 @@ else()
   add_definitions(-DUSE_LIFECYCLE_NODE=0)
 endif()
 
-# Add the multi-camera sync library for component
 add_library(multi_camera_sync_component SHARED src/multi_camera_sync_node.cpp)
 target_link_libraries(multi_camera_sync_component
   rclcpp::rclcpp
@@ -57,9 +54,6 @@ target_link_libraries(multi_camera_sync_component
 rclcpp_components_register_nodes(multi_camera_sync_component "camera_sync::MultiCameraSyncNode")
 set(node_plugins "${node_plugins}camera_sync::MultiCameraSyncNode;$<TARGET_FILE:multi_camera_sync_component>\n")
 
-
-
-# Install executables and libraries
 install(TARGETS
   multi_camera_sync_component
   ARCHIVE DESTINATION lib
@@ -67,24 +61,18 @@ install(TARGETS
   RUNTIME DESTINATION bin
 )
 
-
-
-# Install include directory
 install(DIRECTORY include/
   DESTINATION include
 )
 
-# Install launch files if any
 install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch
   FILES_MATCHING PATTERN "*.py" PATTERN "*.yaml" PATTERN "*.md"
 )
 
-# Install config files
 install(DIRECTORY config/
   DESTINATION share/${PROJECT_NAME}/config
   FILES_MATCHING PATTERN "*.yaml"
 )
-
 
 ament_package()
