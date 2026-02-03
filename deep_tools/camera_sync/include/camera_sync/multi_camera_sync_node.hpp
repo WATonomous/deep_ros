@@ -16,16 +16,14 @@
 #define CAMERA_SYNC__MULTI_CAMERA_SYNC_NODE_HPP_
 
 #include <cv_bridge/cv_bridge.h>
-#include <message_filters/subscriber.h>
-#include <message_filters/sync_policies/approximate_time.h>
-#include <message_filters/synchronizer.h>
 
 #include <chrono>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
-#include <image_transport/image_transport.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -48,11 +46,11 @@ namespace camera_sync
 {
 
 /**
- * @brief Node that synchronizes N camera image messages using message filters
+ * @brief Node that synchronizes N camera image messages using manual timestamp-based buffering
  *
  * This node can handle both raw images (sensor_msgs/Image) and compressed images
  * (sensor_msgs/CompressedImage) and synchronize them based on their timestamps.
- * Supports 2-6 cameras with a compact implementation.
+ * Supports 2-12 cameras with a unified manual synchronization implementation.
  */
 #if USE_LIFECYCLE_NODE
 class MultiCameraSyncNode : public rclcpp_lifecycle::LifecycleNode
@@ -88,38 +86,8 @@ private:
   using CompressedImageMsg = sensor_msgs::msg::CompressedImage;
 
   // Subscriber types
-#if USE_LIFECYCLE_NODE
-  using ImageSubscriber = message_filters::Subscriber<ImageMsg, rclcpp_lifecycle::LifecycleNode>;
-  using CompressedImageSubscriber = message_filters::Subscriber<CompressedImageMsg, rclcpp_lifecycle::LifecycleNode>;
-#else
-  using ImageSubscriber = message_filters::Subscriber<ImageMsg>;
-  using CompressedImageSubscriber = message_filters::Subscriber<CompressedImageMsg>;
-#endif
-
-  // Sync policies for raw images
-  using ImageSyncPolicy2 = message_filters::sync_policies::ApproximateTime<ImageMsg, ImageMsg>;
-  using ImageSyncPolicy3 = message_filters::sync_policies::ApproximateTime<ImageMsg, ImageMsg, ImageMsg>;
-  using ImageSyncPolicy4 = message_filters::sync_policies::ApproximateTime<ImageMsg, ImageMsg, ImageMsg, ImageMsg>;
-  using ImageSyncPolicy5 =
-    message_filters::sync_policies::ApproximateTime<ImageMsg, ImageMsg, ImageMsg, ImageMsg, ImageMsg>;
-  using ImageSyncPolicy6 =
-    message_filters::sync_policies::ApproximateTime<ImageMsg, ImageMsg, ImageMsg, ImageMsg, ImageMsg, ImageMsg>;
-
-  // Sync policies for compressed images
-  using CompressedSyncPolicy2 = message_filters::sync_policies::ApproximateTime<CompressedImageMsg, CompressedImageMsg>;
-  using CompressedSyncPolicy3 =
-    message_filters::sync_policies::ApproximateTime<CompressedImageMsg, CompressedImageMsg, CompressedImageMsg>;
-  using CompressedSyncPolicy4 = message_filters::sync_policies::
-    ApproximateTime<CompressedImageMsg, CompressedImageMsg, CompressedImageMsg, CompressedImageMsg>;
-  using CompressedSyncPolicy5 = message_filters::sync_policies::
-    ApproximateTime<CompressedImageMsg, CompressedImageMsg, CompressedImageMsg, CompressedImageMsg, CompressedImageMsg>;
-  using CompressedSyncPolicy6 = message_filters::sync_policies::ApproximateTime<
-    CompressedImageMsg,
-    CompressedImageMsg,
-    CompressedImageMsg,
-    CompressedImageMsg,
-    CompressedImageMsg,
-    CompressedImageMsg>;
+  using ImageSubscriber = rclcpp::Subscription<ImageMsg>;
+  using CompressedImageSubscriber = rclcpp::Subscription<CompressedImageMsg>;
 
   /**
    * @brief Initialize the node parameters
@@ -142,61 +110,6 @@ private:
   void setupCompressedSync(size_t num_cameras);
 
   /**
-   * @brief Callback functions for synchronized raw images
-   */
-  void syncCallback2Raw(const ImageMsg::ConstSharedPtr & img1, const ImageMsg::ConstSharedPtr & img2);
-  void syncCallback3Raw(
-    const ImageMsg::ConstSharedPtr & img1,
-    const ImageMsg::ConstSharedPtr & img2,
-    const ImageMsg::ConstSharedPtr & img3);
-  void syncCallback4Raw(
-    const ImageMsg::ConstSharedPtr & img1,
-    const ImageMsg::ConstSharedPtr & img2,
-    const ImageMsg::ConstSharedPtr & img3,
-    const ImageMsg::ConstSharedPtr & img4);
-  void syncCallback5Raw(
-    const ImageMsg::ConstSharedPtr & img1,
-    const ImageMsg::ConstSharedPtr & img2,
-    const ImageMsg::ConstSharedPtr & img3,
-    const ImageMsg::ConstSharedPtr & img4,
-    const ImageMsg::ConstSharedPtr & img5);
-  void syncCallback6Raw(
-    const ImageMsg::ConstSharedPtr & img1,
-    const ImageMsg::ConstSharedPtr & img2,
-    const ImageMsg::ConstSharedPtr & img3,
-    const ImageMsg::ConstSharedPtr & img4,
-    const ImageMsg::ConstSharedPtr & img5,
-    const ImageMsg::ConstSharedPtr & img6);
-
-  /**
-   * @brief Callback functions for synchronized compressed images
-   */
-  void syncCallback2Compressed(
-    const CompressedImageMsg::ConstSharedPtr & img1, const CompressedImageMsg::ConstSharedPtr & img2);
-  void syncCallback3Compressed(
-    const CompressedImageMsg::ConstSharedPtr & img1,
-    const CompressedImageMsg::ConstSharedPtr & img2,
-    const CompressedImageMsg::ConstSharedPtr & img3);
-  void syncCallback4Compressed(
-    const CompressedImageMsg::ConstSharedPtr & img1,
-    const CompressedImageMsg::ConstSharedPtr & img2,
-    const CompressedImageMsg::ConstSharedPtr & img3,
-    const CompressedImageMsg::ConstSharedPtr & img4);
-  void syncCallback5Compressed(
-    const CompressedImageMsg::ConstSharedPtr & img1,
-    const CompressedImageMsg::ConstSharedPtr & img2,
-    const CompressedImageMsg::ConstSharedPtr & img3,
-    const CompressedImageMsg::ConstSharedPtr & img4,
-    const CompressedImageMsg::ConstSharedPtr & img5);
-  void syncCallback6Compressed(
-    const CompressedImageMsg::ConstSharedPtr & img1,
-    const CompressedImageMsg::ConstSharedPtr & img2,
-    const CompressedImageMsg::ConstSharedPtr & img3,
-    const CompressedImageMsg::ConstSharedPtr & img4,
-    const CompressedImageMsg::ConstSharedPtr & img5,
-    const CompressedImageMsg::ConstSharedPtr & img6);
-
-  /**
    * @brief Process synchronized images (statistics and custom logic)
    * @param timestamps Vector of synchronized timestamps from all cameras
    */
@@ -205,31 +118,13 @@ private:
   // Parameters
   std::vector<std::string> camera_topics_;
   std::vector<std::string> camera_names_;
-  std::vector<sensor_msgs::msg::Image::ConstSharedPtr> image_array;
   bool use_compressed_;
   double sync_tolerance_ms_;
   int queue_size_;
-  bool publish_sync_info_;
 
   // Subscribers
-  std::vector<std::unique_ptr<ImageSubscriber>> image_subscribers_;
-  std::vector<std::unique_ptr<CompressedImageSubscriber>> compressed_subscribers_;
-
-  // Synchronizers for raw images
-  std::unique_ptr<message_filters::Synchronizer<ImageSyncPolicy2>> sync2_raw_;
-  std::unique_ptr<message_filters::Synchronizer<ImageSyncPolicy3>> sync3_raw_;
-  std::unique_ptr<message_filters::Synchronizer<ImageSyncPolicy4>> sync4_raw_;
-  std::unique_ptr<message_filters::Synchronizer<ImageSyncPolicy5>> sync5_raw_;
-  std::unique_ptr<message_filters::Synchronizer<ImageSyncPolicy6>> sync6_raw_;
-
-  // Synchronizers for compressed images
-  std::unique_ptr<message_filters::Synchronizer<CompressedSyncPolicy2>> sync2_compressed_;
-  std::unique_ptr<message_filters::Synchronizer<CompressedSyncPolicy3>> sync3_compressed_;
-  std::unique_ptr<message_filters::Synchronizer<CompressedSyncPolicy4>> sync4_compressed_;
-  std::unique_ptr<message_filters::Synchronizer<CompressedSyncPolicy5>> sync5_compressed_;
-  std::unique_ptr<message_filters::Synchronizer<CompressedSyncPolicy6>> sync6_compressed_;
-
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr sync_info_pub_;
+  std::vector<std::shared_ptr<ImageSubscriber>> image_subscribers_;
+  std::vector<std::shared_ptr<CompressedImageSubscriber>> compressed_subscribers_;
 
   // Publishers for multi-image messages
   rclcpp::Publisher<deep_msgs::msg::MultiImageRaw>::SharedPtr multi_image_raw_pub_;
@@ -239,6 +134,34 @@ private:
   int64_t sync_count_;
   rclcpp::Time last_sync_time_;
   std::chrono::steady_clock::time_point start_time_;
+
+  struct ImageBuffer
+  {
+    std::map<uint64_t, ImageMsg::ConstSharedPtr> buffer;
+    std::shared_ptr<std::mutex> mutex;
+
+    ImageBuffer()
+    : mutex(std::make_shared<std::mutex>())
+    {}
+  };
+
+  struct CompressedImageBuffer
+  {
+    std::map<uint64_t, CompressedImageMsg::ConstSharedPtr> buffer;
+    std::shared_ptr<std::mutex> mutex;
+
+    CompressedImageBuffer()
+    : mutex(std::make_shared<std::mutex>())
+    {}
+  };
+
+  std::vector<ImageBuffer> raw_image_buffers_;
+  std::vector<CompressedImageBuffer> compressed_image_buffers_;
+
+  void handleRawImageCallback(size_t camera_idx, const ImageMsg::ConstSharedPtr & msg);
+  void handleCompressedImageCallback(size_t camera_idx, const CompressedImageMsg::ConstSharedPtr & msg);
+  void tryPublishSyncedRawImages();
+  void tryPublishSyncedCompressedImages();
 };
 
 }  // namespace camera_sync
