@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>deep_object_detection</name>
+  <version>0.1.0</version>
+  <description>
+    Generic model-agnostic deep learning object detection node using ONNX Runtime with explicit provider selection (TensorRT/CUDA/CPU).
+    Works with any ONNX-compatible object detection model. Output tensor layout must be configured in YAML config file.
+    Features dynamic batching, multi-camera support, configurable preprocessing/postprocessing, and fail-fast error handling.
+  </description>
+
+  <maintainer email="hello@watonomous.ca">WATonomous</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>sensor_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>vision_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>deep_core</depend>
+  <depend>deep_msgs</depend>
+  <depend>deep_ort_backend_plugin</depend>
+  <depend>deep_ort_gpu_backend_plugin</depend>
+  <depend>onnxruntime_vendor</depend>
+  <depend>onnxruntime_gpu_vendor</depend>
+  <depend>libopencv-dev</depend>
+  <depend>rcl_interfaces</depend>
+
+  <test_depend>deep_test</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

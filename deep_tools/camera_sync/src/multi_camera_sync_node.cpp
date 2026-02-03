@@ -26,7 +26,7 @@
 #include <rclcpp_components/register_node_macro.hpp>
 
 #include "deep_msgs/msg/multi_image.hpp"
-#include "deep_msgs/msg/multi_image_raw.hpp"
+#include "deep_msgs/msg/multi_image_compressed.hpp"
 
 namespace camera_sync
 {
@@ -102,9 +102,10 @@ void MultiCameraSyncNode::setupSynchronization()
 
   // Setup multi-image publishers
   if (use_compressed_) {
-    multi_image_compressed_pub_ = this->create_publisher<deep_msgs::msg::MultiImage>("~/multi_image_compressed", 10);
+    multi_image_compressed_pub_ =
+      this->create_publisher<deep_msgs::msg::MultiImageCompressed>("~/multi_image_compressed", 10);
   } else {
-    multi_image_raw_pub_ = this->create_publisher<deep_msgs::msg::MultiImageRaw>("~/multi_image_raw", 10);
+    multi_image_raw_pub_ = this->create_publisher<deep_msgs::msg::MultiImage>("~/multi_image_raw", 10);
   }
 }
 

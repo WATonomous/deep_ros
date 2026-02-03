@@ -54,7 +54,7 @@ bool is_cuda_available()
   try {
     // Try creating a simple CUDA execution provider to verify CUDA availability
     auto logger = rclcpp::get_logger("test_cuda_availability");
-    OrtGpuBackendExecutor test_executor(0, "cuda", logger);
+    OrtGpuBackendExecutor test_executor(0, "cuda", logger, false, "");
     return true;
   } catch (...) {
     return false;
@@ -122,7 +122,7 @@ TEST_CASE("OrtGpuBackendExecutor basic functionality", "[executor]")
   }
 
   auto logger = rclcpp::get_logger("test_executor");
-  OrtGpuBackendExecutor executor(0, "cuda", logger);
+  OrtGpuBackendExecutor executor(0, "cuda", logger, false, "");
   auto allocator = get_ort_gpu_cpu_allocator();
 
   // Test supported formats
@@ -222,7 +222,7 @@ TEST_CASE("TensorRT execution provider", "[tensorrt][!mayfail]")
 {
   try {
     auto logger = rclcpp::get_logger("test_tensorrt");
-    OrtGpuBackendExecutor executor(0, "tensorrt", logger);
+    OrtGpuBackendExecutor executor(0, "tensorrt", logger, false, "");
 
     REQUIRE(executor.get_device_id() == 0);
 

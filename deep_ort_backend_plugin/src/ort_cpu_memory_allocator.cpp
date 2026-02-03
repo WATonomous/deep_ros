@@ -67,7 +67,7 @@ const OrtMemoryInfo * OrtCpuMemoryAllocator::get_ort_memory_info() const
   return ort_memory_info_;
 }
 
-void * ORT_API_CALL OrtCpuMemoryAllocator::ort_alloc(OrtAllocator * this_, size_t size)
+void * ORT_API_CALL OrtCpuMemoryAllocator::ort_alloc(OrtAllocator * /*this_*/, size_t size)
 {
   if (instance_) {
     return instance_->allocate(size);
@@ -75,14 +75,14 @@ void * ORT_API_CALL OrtCpuMemoryAllocator::ort_alloc(OrtAllocator * this_, size_
   return nullptr;
 }
 
-void ORT_API_CALL OrtCpuMemoryAllocator::ort_free(OrtAllocator * this_, void * p)
+void ORT_API_CALL OrtCpuMemoryAllocator::ort_free(OrtAllocator * /*this_*/, void * p)
 {
   if (instance_) {
     instance_->deallocate(p);
   }
 }
 
-const OrtMemoryInfo * ORT_API_CALL OrtCpuMemoryAllocator::ort_info(const OrtAllocator * this_)
+const OrtMemoryInfo * ORT_API_CALL OrtCpuMemoryAllocator::ort_info(const OrtAllocator * /*this_*/)
 {
   if (instance_) {
     return instance_->get_ort_memory_info();
@@ -90,7 +90,7 @@ const OrtMemoryInfo * ORT_API_CALL OrtCpuMemoryAllocator::ort_info(const OrtAllo
   return nullptr;
 }
 
-void * ORT_API_CALL OrtCpuMemoryAllocator::ort_reserve(OrtAllocator * this_, size_t size)
+void * ORT_API_CALL OrtCpuMemoryAllocator::ort_reserve(OrtAllocator * /*this_*/, size_t size)
 {
   if (instance_) {
     return instance_->allocate(size);

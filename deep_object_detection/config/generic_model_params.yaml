@@ -1,0 +1,45 @@
+deep_object_detection_node:
+  ros__parameters:
+    model_path: "/workspaces/deep_ros/yolov8m.onnx"
+    class_names_path: "/workspaces/deep_ros/deep_object_detection/config/coco_classes.txt"
+    use_compressed_images: true  # Set to true for compressed images, false for uncompressed (shared memory)
+
+    Model:
+      num_classes: 80
+      bbox_format: "cxcywh"
+      output_shape: [1, 84, 8400]
+
+    Preprocessing:
+      input_width: 640
+      input_height: 640
+      normalization_type: "scale_0_1"
+      mean: [0.0, 0.0, 0.0]
+      std: [1.0, 1.0, 1.0]
+      resize_method: "letterbox"
+      pad_value: 114
+      color_format: "rgb"
+
+    Postprocessing:
+      score_threshold: 0.65
+      nms_iou_threshold: 0.45
+      score_activation: "sigmoid"
+      enable_nms: true
+      class_score_mode: "all_classes"
+      class_score_start_idx: -1
+      class_score_count: -1
+
+      layout:
+        batch_dim: 0
+        detection_dim: 2
+        feature_dim: 1
+        bbox_start_idx: 0
+        bbox_count: 4
+        score_idx: 4
+        class_idx: 5
+
+    Backend:
+      plugin: "onnxruntime_gpu"
+      execution_provider: "tensorrt"
+      device_id: 0
+      trt_engine_cache_enable: true
+      trt_engine_cache_path: "/tmp/deep_ros_ort_trt_cache"

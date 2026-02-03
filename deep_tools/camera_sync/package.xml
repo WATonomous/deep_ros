@@ -12,9 +12,9 @@
   <depend>rclcpp_lifecycle</depend>
   <depend>lifecycle_msgs</depend>
   <depend>sensor_msgs</depend>
-  <depend>cv_bridge</depend>
   <depend>message_filters</depend>
   <depend>image_transport</depend>
+  <depend>cv_bridge</depend>
   <depend>deep_msgs</depend>
   <depend>class_loader</depend>
 

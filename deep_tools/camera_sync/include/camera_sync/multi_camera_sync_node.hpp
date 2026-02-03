@@ -40,7 +40,7 @@
 #endif
 
 #include "deep_msgs/msg/multi_image.hpp"
-#include "deep_msgs/msg/multi_image_raw.hpp"
+#include "deep_msgs/msg/multi_image_compressed.hpp"
 
 namespace camera_sync
 {
@@ -127,8 +127,8 @@ private:
   std::vector<std::shared_ptr<CompressedImageSubscriber>> compressed_subscribers_;
 
   // Publishers for multi-image messages
-  rclcpp::Publisher<deep_msgs::msg::MultiImageRaw>::SharedPtr multi_image_raw_pub_;
-  rclcpp::Publisher<deep_msgs::msg::MultiImage>::SharedPtr multi_image_compressed_pub_;
+  rclcpp::Publisher<deep_msgs::msg::MultiImage>::SharedPtr multi_image_raw_pub_;
+  rclcpp::Publisher<deep_msgs::msg::MultiImageCompressed>::SharedPtr multi_image_compressed_pub_;
 
   // Statistics
   int64_t sync_count_;

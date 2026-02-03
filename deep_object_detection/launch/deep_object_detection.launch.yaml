@@ -1,0 +1,73 @@
+# Copyright (c) 2025-present WATonomous. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+launch:
+  - arg:
+      name: "config_file"
+      default: "$(find-pkg-share deep_object_detection)/config/generic_model_params.yaml"
+      description: "Path to YAML config for object detection"
+
+  - arg:
+      name: "input_topic"
+      default: "/multi_camera_sync/multi_image_compressed"
+      description: "Input MultiImage topic (configured via remapping)"
+
+  - arg:
+      name: "output_detections_topic"
+      default: "/detections"
+      description: "Output detections topic (configured via remapping)"
+
+  - arg:
+      name: "output_annotations_topic"
+      default: "/image_annotations"
+      description: "Output image annotations topic (configured via remapping)"
+
+  - arg:
+      name: "use_lifecycle_manager"
+      default: "true"
+      description: "Whether to use nav2_lifecycle_manager for automatic lifecycle transitions"
+
+  - node_container:
+      pkg: rclcpp_components
+      exec: component_container
+      name: detection_container
+      namespace: ''
+      output: screen
+      composable_node:
+        - pkg: deep_object_detection
+          plugin: deep_object_detection::DeepObjectDetectionNode
+          name: deep_object_detection_node
+          namespace: ''
+          remap:
+            - from: "/multi_camera_sync/multi_image_compressed"
+              to: "$(var input_topic)"
+            - from: "/detections"
+              to: "$(var output_detections_topic)"
+            - from: "/image_annotations"
+              to: "$(var output_annotations_topic)"
+          param:
+            - from: "$(var config_file)"
+
+  - node:
+      pkg: "nav2_lifecycle_manager"
+      exec: "lifecycle_manager"
+      name: "detection_lifecycle_manager"
+      output: "screen"
+      param:
+        - name: "node_names"
+          value: ["deep_object_detection_node"]
+        - name: "autostart"
+          value: true
+        - name: "bond_timeout"
+          value: 0.0

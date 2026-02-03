@@ -34,7 +34,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 ENV DEBIAN_FRONTEND=interactive
 
-# Install Tensorrt Runtime
 RUN curl -fsSL -o cuda-keyring_1.1-1_all.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb \
     && dpkg -i cuda-keyring_1.1-1_all.deb \
     && apt-get update && apt-get install -y --no-install-recommends \
@@ -58,9 +57,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     && rm -rf /var/lib/apt/lists/*
-
-# Install pre-commit
-RUN python3 -m pip install --no-cache-dir pre-commit==3.8.0
 
 # Set working dir (matches VSCode workspace)
 WORKDIR /deep_ros_ws
@@ -116,6 +112,9 @@ RUN groupadd --gid ${USER_GID} ${USERNAME} \
 
 # Set the default user. Omit if you want to keep the default as root.
 USER $USERNAME
+
+# Install pre-commit for the user
+RUN python3 -m pip install --no-cache-dir --user pre-commit==3.8.0
 
 # Install Claude Code natively
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
