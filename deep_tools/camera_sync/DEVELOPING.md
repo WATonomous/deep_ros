@@ -17,11 +17,6 @@ The Macro:
 #endif
 ```
 
-### 2. Message Filters Synchronization Limitation
-**Problem**: `message_filters::Synchronizer` requires compile-time known number of topics.
-- **Limitation**: Cannot dynamically sync N cameras - must handle 2-6 cameras with separate synchronizers
-- **Implementation**: Switch statement creates different sync policies for each camera count
-
 ## Architecture Notes
 - **Component-only**: No standalone executable - use component loading only which is ideal to allow for IPC (zero-copy)
 - **Dual Mode**: Supports both raw and compressed image synchronization

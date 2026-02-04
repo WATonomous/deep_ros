@@ -1,10 +1,10 @@
 # Multi-Camera Synchronization Node
 
-A ROS2 node that uses message filters to time-synchronize N camera image messages, supporting both compressed and raw images.
+A ROS2 node that uses custom buffering to time-synchronize N camera image messages, supporting both compressed and raw images.
 
 ## Features
 
-- **Flexible camera count**: Supports 2-6 cameras simultaneously
+- **Flexible camera count**: Supports 2-12 cameras simultaneously
 - **Image format support**: Works with both `sensor_msgs/Image` (raw) and `sensor_msgs/CompressedImage`
 - **Configurable synchronization**: Adjustable time tolerance and queue sizes
 - **Real-time monitoring**: Synchronization statistics and rate monitoring
@@ -18,7 +18,7 @@ A ROS2 node that uses message filters to time-synchronize N camera image message
 | `camera_names` | string[] | `[]` | Names for cameras (auto-generated if empty) |
 | `use_compressed` | bool | `false` | Use compressed images instead of raw RGB |
 | `sync_tolerance_ms` | double | `50.0` | Max time difference for sync (milliseconds) |
-| `queue_size` | int | `10` | Message filter queue size |
+| `queue_size` | int | `10` | Buffer queue size |
 | `publish_sync_info` | bool | `true` | Publish synchronization statistics |
 
 ## Usage
@@ -35,10 +35,10 @@ All configuration changes can be passed through CLI. Here are some example argum
 
 ## How It Works
 
-The node uses ROS2 message filters with approximate time synchronization policy to match images from multiple cameras based on their timestamps. Key components:
+The node uses ROS2 buffers with approximate time synchronization policy to match images from multiple cameras based on their timestamps. Key components:
 
 1. **Message Subscribers**: Creates subscribers for each camera topic
-2. **Synchronizer**: Uses `message_filters::sync_policies::ApproximateTime` to match messages
+2. **Synchronizer**: Stores buffers from first subscriber and matches with other subscribers within timestamp sync tolerance to match messages
 3. **Callback & Publishing**: Creates MultiImage/MultiImageCompressed msgs with timestamp to batch the camera images together
 4. **Statistics**: Tracks synchronization rate and timing spread
 
@@ -67,7 +67,6 @@ Example log output:
 
 - `rclcpp` - ROS2 C++ client library
 - `sensor_msgs` - Standard sensor message types
-- `message_filters` - Time synchronization utilities
 - `image_transport` - Efficient image transmission
 
 ## Limitations
