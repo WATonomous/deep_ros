@@ -430,7 +430,7 @@ void MultiCameraSyncNode::tryPublishSyncedRawImages()
   // Publish synced images
   RCLCPP_DEBUG(this->get_logger(), "Publishing synced raw images (sync count: %ld)", ++sync_count_);
   processSynchronizedImages(timestamps);
-  auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImageRaw>(synced_images);
+  auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImage>(synced_images);
   multi_image_raw_pub_->publish(raw_msg);
 }
 
@@ -534,7 +534,7 @@ void MultiCameraSyncNode::tryPublishSyncedCompressedImages()
   RCLCPP_DEBUG(this->get_logger(), "Publishing synced compressed images (sync count: %ld)", ++sync_count_);
   processSynchronizedImages(timestamps);
   auto compressed_msg =
-    createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImage>(synced_images);
+    createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImageCompressed>(synced_images);
   multi_image_compressed_pub_->publish(compressed_msg);
 }
 
