@@ -27,6 +27,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(deep_msgs REQUIRED)
+find_package(class_loader REQUIRED)
 
 include_directories(include)
 
@@ -43,6 +44,7 @@ target_link_libraries(multi_camera_sync_component
   rclcpp::rclcpp
   rclcpp_lifecycle::rclcpp_lifecycle
   rclcpp_components::component_manager
+  class_loader::class_loader
   lifecycle_msgs::lifecycle_msgs__rosidl_typesupport_cpp
   sensor_msgs::sensor_msgs__rosidl_typesupport_cpp
   image_transport::image_transport

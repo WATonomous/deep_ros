@@ -32,7 +32,13 @@ function(add_deep_test TEST_NAME TEST_SOURCE)
   )
 
   # Find dependencies
-  find_package(Catch2 REQUIRED)
+  # Catch2 version requirement compatibility:
+  # Humble uses Catch2 2.x, Jazzy+ uses Catch2 3.x
+  if("$ENV{ROS_DISTRO}" STREQUAL "humble")
+    find_package(Catch2 2 REQUIRED)
+  else()
+    find_package(Catch2 REQUIRED)
+  endif()
   find_package(rclcpp REQUIRED)
   find_package(rclcpp_lifecycle REQUIRED)
 

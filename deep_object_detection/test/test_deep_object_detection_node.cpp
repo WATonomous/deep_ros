@@ -41,8 +41,8 @@
 #include <string>
 #include <vector>
 
-#include <catch2/catch.hpp>
 #include <deep_object_detection/deep_object_detection_node.hpp>
+#include <deep_test/compat.hpp>
 #include <deep_test/deep_test.hpp>
 #include <lifecycle_msgs/msg/state.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -161,8 +161,8 @@ TEST_CASE_METHOD(
     REQUIRE(node->get_parameter("Preprocessing.color_format").as_string() == "rgb");
 
     // Postprocessing parameters
-    REQUIRE(node->get_parameter("Postprocessing.score_threshold").as_double() == Approx(0.25));
-    REQUIRE(node->get_parameter("Postprocessing.nms_iou_threshold").as_double() == Approx(0.45));
+    REQUIRE(node->get_parameter("Postprocessing.score_threshold").as_double() == CATCH_APPROX(0.25));
+    REQUIRE(node->get_parameter("Postprocessing.nms_iou_threshold").as_double() == CATCH_APPROX(0.45));
     REQUIRE(node->get_parameter("Postprocessing.score_activation").as_string() == "sigmoid");
     REQUIRE(node->get_parameter("Postprocessing.enable_nms").as_bool() == true);
     REQUIRE(node->get_parameter("Postprocessing.class_score_mode").as_string() == "all_classes");
@@ -230,7 +230,7 @@ TEST_CASE_METHOD(
     auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("Postprocessing.score_threshold", 0.5)};
     auto result = node->set_parameters(params);
     REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("Postprocessing.score_threshold").as_double() == Approx(0.5));
+    REQUIRE(node->get_parameter("Postprocessing.score_threshold").as_double() == CATCH_APPROX(0.5));
   }
 
   SECTION("NMS IoU threshold can be configured")
@@ -238,7 +238,7 @@ TEST_CASE_METHOD(
     auto params = std::vector<rclcpp::Parameter>{rclcpp::Parameter("Postprocessing.nms_iou_threshold", 0.6)};
     auto result = node->set_parameters(params);
     REQUIRE(result[0].successful == true);
-    REQUIRE(node->get_parameter("Postprocessing.nms_iou_threshold").as_double() == Approx(0.6));
+    REQUIRE(node->get_parameter("Postprocessing.nms_iou_threshold").as_double() == CATCH_APPROX(0.6));
   }
 }
 

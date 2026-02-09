@@ -20,10 +20,10 @@
 #include <thread>
 #include <vector>
 
-#include <catch2/catch.hpp>
 #include <deep_ort_gpu_backend_plugin/ort_gpu_backend_executor.hpp>
 #include <deep_ort_gpu_backend_plugin/ort_gpu_backend_plugin.hpp>
 #include <deep_ort_gpu_backend_plugin/ort_gpu_memory_allocator.hpp>
+#include <deep_test/compat.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 

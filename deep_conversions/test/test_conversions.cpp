@@ -18,11 +18,11 @@
 #include <string>
 #include <vector>
 
-#include <catch2/catch.hpp>
 #include <deep_conversions/image_conversions.hpp>
 #include <deep_conversions/imu_conversions.hpp>
 #include <deep_conversions/laserscan_conversions.hpp>
 #include <deep_conversions/pointcloud_conversions.hpp>
+#include <deep_test/compat.hpp>
 #include <deep_test/deep_test.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/imu.hpp>
@@ -346,16 +346,16 @@ TEST_CASE_METHOD(deep_ros::test::MockBackendFixture, "IMU conversion", "[convers
 
     // Verify data order: [qx, qy, qz, qw, ax, ay, az, gx, gy, gz]
     float * data = static_cast<float *>(tensor.data());
-    REQUIRE(data[0] == Approx(0.1f));  // qx
-    REQUIRE(data[1] == Approx(0.2f));  // qy
-    REQUIRE(data[2] == Approx(0.3f));  // qz
-    REQUIRE(data[3] == Approx(0.9f));  // qw
-    REQUIRE(data[4] == Approx(1.0f));  // ax
-    REQUIRE(data[5] == Approx(2.0f));  // ay
-    REQUIRE(data[6] == Approx(9.8f));  // az
-    REQUIRE(data[7] == Approx(0.01f));  // gx
-    REQUIRE(data[8] == Approx(0.02f));  // gy
-    REQUIRE(data[9] == Approx(0.03f));  // gz
+    REQUIRE(data[0] == CATCH_APPROX(0.1f));  // qx
+    REQUIRE(data[1] == CATCH_APPROX(0.2f));  // qy
+    REQUIRE(data[2] == CATCH_APPROX(0.3f));  // qz
+    REQUIRE(data[3] == CATCH_APPROX(0.9f));  // qw
+    REQUIRE(data[4] == CATCH_APPROX(1.0f));  // ax
+    REQUIRE(data[5] == CATCH_APPROX(2.0f));  // ay
+    REQUIRE(data[6] == CATCH_APPROX(9.8f));  // az
+    REQUIRE(data[7] == CATCH_APPROX(0.01f));  // gx
+    REQUIRE(data[8] == CATCH_APPROX(0.02f));  // gy
+    REQUIRE(data[9] == CATCH_APPROX(0.03f));  // gz
   }
 }
 
@@ -435,9 +435,9 @@ TEST_CASE_METHOD(
     // Verify data is in HWC order
     const float * tensor_data = tensor_hwc.data_as<float>();
     // Check pixel at (0,0): should have channels [0, 1, 2] values
-    REQUIRE(tensor_data[0] == Approx(0.0f));  // Channel 0
-    REQUIRE(tensor_data[1] == Approx(1.0f));  // Channel 1
-    REQUIRE(tensor_data[2] == Approx(2.0f));  // Channel 2
+    REQUIRE(tensor_data[0] == CATCH_APPROX(0.0f));  // Channel 0
+    REQUIRE(tensor_data[1] == CATCH_APPROX(1.0f));  // Channel 1
+    REQUIRE(tensor_data[2] == CATCH_APPROX(2.0f));  // Channel 2
   }
 
   SECTION("CHW layout for ONNX models")
@@ -472,15 +472,15 @@ TEST_CASE_METHOD(
     const float * tensor_data = tensor_chw.data_as<float>();
     // Check that channel 0 comes first (all channel 0 values before channel 1)
     // At (h=0, w=0), channel 0 should be at index 0
-    REQUIRE(tensor_data[0] == Approx(0.0f));  // h=0, w=0, c=0
+    REQUIRE(tensor_data[0] == CATCH_APPROX(0.0f));  // h=0, w=0, c=0
     // At (h=0, w=1), channel 0 should be at index 1
-    REQUIRE(tensor_data[1] == Approx(10.0f));  // h=0, w=1, c=0
+    REQUIRE(tensor_data[1] == CATCH_APPROX(10.0f));  // h=0, w=1, c=0
     // At (h=1, w=0), channel 0 should be at index 32
-    REQUIRE(tensor_data[32] == Approx(1000.0f));  // h=1, w=0, c=0
+    REQUIRE(tensor_data[32] == CATCH_APPROX(1000.0f));  // h=1, w=0, c=0
 
     // Check that channel 1 starts after all channel 0 data
     size_t channel1_start = 32 * 32;
-    REQUIRE(tensor_data[channel1_start] == Approx(1.0f));  // h=0, w=0, c=1
+    REQUIRE(tensor_data[channel1_start] == CATCH_APPROX(1.0f));  // h=0, w=0, c=1
   }
 
   SECTION("Batch conversion with CHW layout")

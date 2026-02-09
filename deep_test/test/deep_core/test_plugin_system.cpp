@@ -17,11 +17,11 @@
 #include <utility>
 #include <vector>
 
-#include <catch2/catch.hpp>
 #include <deep_core/plugin_interfaces/backend_inference_executor.hpp>
 #include <deep_core/plugin_interfaces/backend_memory_allocator.hpp>
 #include <deep_core/plugin_interfaces/deep_backend_plugin.hpp>
 #include <deep_core/types/tensor.hpp>
+#include <deep_test/compat.hpp>
 #include <pluginlib/class_loader.hpp>
 #include <test_fixtures/mock_backend_fixture.hpp>
 

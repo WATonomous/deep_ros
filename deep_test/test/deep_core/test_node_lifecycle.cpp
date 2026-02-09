@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-#include <catch2/catch.hpp>
+#include <deep_test/compat.hpp>
 #include <deep_test/deep_test.hpp>
 #include <lifecycle_msgs/msg/state.hpp>
 #include <rclcpp/rclcpp.hpp>
