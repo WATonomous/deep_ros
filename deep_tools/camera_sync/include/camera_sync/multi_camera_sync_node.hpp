@@ -15,7 +15,11 @@
 #ifndef CAMERA_SYNC__MULTI_CAMERA_SYNC_NODE_HPP_
 #define CAMERA_SYNC__MULTI_CAMERA_SYNC_NODE_HPP_
 
-#include <cv_bridge/cv_bridge.h>
+#if __has_include(<cv_bridge/cv_bridge.hpp>)
+  #include <cv_bridge/cv_bridge.hpp>
+#else
+  #include <cv_bridge/cv_bridge.h>
+#endif
 
 #include <chrono>
 #include <map>

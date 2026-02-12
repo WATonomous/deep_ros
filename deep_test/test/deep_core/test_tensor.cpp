@@ -17,8 +17,8 @@
 #include <utility>
 #include <vector>
 
-#include <catch2/catch.hpp>
 #include <deep_core/types/tensor.hpp>
+#include <deep_test/compat.hpp>
 #include <test_fixtures/mock_backend_fixture.hpp>
 
 TEST_CASE("deep_ros::Tensor: Basic Construction and Properties", "[tensor][construction]")

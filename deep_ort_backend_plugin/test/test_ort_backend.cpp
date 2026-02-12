@@ -18,10 +18,10 @@
 #include <thread>
 #include <vector>
 
-#include <catch2/catch.hpp>
 #include <deep_ort_backend_plugin/ort_backend_executor.hpp>
 #include <deep_ort_backend_plugin/ort_backend_plugin.hpp>
 #include <deep_ort_backend_plugin/ort_cpu_memory_allocator.hpp>
+#include <deep_test/compat.hpp>
 
 namespace deep_ort_backend
 {

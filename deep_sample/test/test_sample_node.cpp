@@ -18,8 +18,8 @@
 #include <thread>
 #include <vector>
 
-#include <catch2/catch.hpp>
 #include <deep_sample/sample_inference_node.hpp>
+#include <deep_test/compat.hpp>
 #include <deep_test/deep_test.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>

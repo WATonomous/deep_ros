@@ -17,7 +17,7 @@
 #include <string>
 #include <thread>
 
-#include <catch2/catch.hpp>
+#include <deep_test/compat.hpp>
 #include <deep_test/deep_test.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/string.hpp>

@@ -17,8 +17,8 @@
 #include <utility>
 #include <vector>
 
-#include <catch2/catch.hpp>
 #include <deep_core/types/tensor.hpp>
+#include <deep_test/compat.hpp>
 #include <deep_test/deep_test.hpp>
 #include <test_nodes/deep_test_node.hpp>
 
