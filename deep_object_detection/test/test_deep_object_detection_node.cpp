@@ -140,6 +140,7 @@ TEST_CASE_METHOD(
     // Input/Output configuration
     REQUIRE(node->has_parameter("use_compressed_images"));
     REQUIRE(node->has_parameter("output_detections_topic"));
+    REQUIRE(node->has_parameter("publish_annotations"));
   }
 
   SECTION("Parameters have sensible defaults")
@@ -178,6 +179,7 @@ TEST_CASE_METHOD(
     // Input/Output configuration
     REQUIRE(node->get_parameter("use_compressed_images").as_bool() == true);
     REQUIRE(node->get_parameter("output_detections_topic").as_string() == "/detections");
+    REQUIRE(node->get_parameter("publish_annotations").as_bool() == true);
   }
 }
 
