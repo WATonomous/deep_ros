@@ -248,6 +248,8 @@ private:
   rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::ImageMarker>::SharedPtr image_marker_pub_;
   /// Output annotations topic name for ImageMarker messages
   std::string output_annotations_topic_;
+  /// Whether to publish ImageMarker annotations (configurable via publish_annotations)
+  bool publish_annotations_{true};
   /// Callback group for subscription (allows concurrent execution)
   rclcpp::CallbackGroup::SharedPtr callback_group_;
 

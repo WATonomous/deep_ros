@@ -102,6 +102,7 @@ ros2 run deep_object_detection deep_object_detection_node \
 
 - **`use_compressed_images`** (bool, default: true): Use compressed images (MultiImageCompressed) vs uncompressed (MultiImage)
 - **`output_detections_topic`** (string, default: "/detections"): Output detections topic name
+- **`publish_annotations`** (bool, default: true): If true, publish ImageMarker messages on `/image_annotations` for visualization (e.g. Foxglove). Set to false to disable.
 
 ## Topics
 
@@ -111,7 +112,7 @@ ros2 run deep_object_detection deep_object_detection_node \
 |-------|------|-------------|
 | `input_topic` | `deep_msgs/MultiImage` or `deep_msgs/MultiImageCompressed` | Synchronized multi-camera input (compressed or uncompressed) |
 | `output_detections_topic` | `vision_msgs/Detection2DArray` | Detection results (one per image in batch, default: `/detections`) |
-| `/image_annotations` | `visualization_msgs/ImageMarker` | Visualization annotations with bounding boxes (optional) |
+| `/image_annotations` | `visualization_msgs/ImageMarker` | Visualization annotations with bounding boxes (only when `publish_annotations: true`) |
 
 **Note:** The node only supports MultiImage/MultiImageCompressed messages. Individual camera topics are not supported.
 

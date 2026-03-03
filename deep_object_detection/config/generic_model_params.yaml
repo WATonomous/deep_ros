@@ -3,6 +3,7 @@ deep_object_detection_node:
     model_path: "/workspaces/deep_ros/yolov8m.onnx"
     class_names_path: "/workspaces/deep_ros/deep_object_detection/config/coco_classes.txt"
     use_compressed_images: true  # Set to true for compressed images, false for uncompressed (shared memory)
+    publish_annotations: true   # Set to true to publish ImageMarker bounding boxes (e.g. for Foxglove), false to disable
 
     Model:
       num_classes: 80
