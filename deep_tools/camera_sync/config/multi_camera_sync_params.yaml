@@ -40,10 +40,19 @@ multi_camera_sync:
 
     # Optional: camera_info topics (one per camera, same order as camera_topics). Leave empty to disable.
     # When set, synced CameraInfo is published on ~/multi_camera_info (same header.stamp as multi_image).
-    # camera_info_topics:
-    #   - "/camera_lower_sw/camera_info"
-    #   - "/camera_lower_ne/camera_info"
-    #   - ...
+    camera_info_topics:
+      - "/camera_lower_sw/camera_info"
+      - "/camera_lower_ne/camera_info"
+      - "/camera_lower_se/camera_info"
+      - "/camera_lower_nw/camera_info"
+      - "/camera_pano_ww/camera_info"
+      - "/camera_pano_nn/camera_info"
+      - "/camera_pano_ee/camera_info"
+      - "/camera_pano_se/camera_info"
+      - "/camera_pano_ne/camera_info"
+      - "/camera_pano_nw/camera_info"
+      - "/camera_pano_ss/camera_info"
+      - "/camera_pano_sw/camera_info"
 
     # Optional names for the cameras (if not provided, will auto-generate camera_1, camera_2, etc.)
     camera_names:
