@@ -25,6 +25,7 @@
 
 #include <rclcpp_components/register_node_macro.hpp>
 
+#include "deep_msgs/msg/multi_camera_info.hpp"
 #include "deep_msgs/msg/multi_image.hpp"
 #include "deep_msgs/msg/multi_image_compressed.hpp"
 
@@ -64,12 +65,14 @@ void MultiCameraSyncNode::initializeParameters()
   // Declare and get parameters
   this->declare_parameter("camera_topics", std::vector<std::string>{});
   this->declare_parameter("camera_names", std::vector<std::string>{});
+  this->declare_parameter("camera_info_topics", std::vector<std::string>{});
   this->declare_parameter("use_compressed", false);
   this->declare_parameter("sync_tolerance_ms", 50.0);
   this->declare_parameter("queue_size", 10);
 
   camera_topics_ = this->get_parameter("camera_topics").as_string_array();
   camera_names_ = this->get_parameter("camera_names").as_string_array();
+  camera_info_topics_ = this->get_parameter("camera_info_topics").as_string_array();
   use_compressed_ = this->get_parameter("use_compressed").as_bool();
   sync_tolerance_ms_ = this->get_parameter("sync_tolerance_ms").as_double();
   queue_size_ = this->get_parameter("queue_size").as_int();
@@ -77,6 +80,11 @@ void MultiCameraSyncNode::initializeParameters()
   // Validate
   if (camera_topics_.empty() || camera_topics_.size() < 2 || camera_topics_.size() > 12) {
     throw std::runtime_error("Need 2-12 camera topics");
+  }
+
+  if (!camera_info_topics_.empty() && camera_info_topics_.size() != camera_topics_.size()) {
+    throw std::runtime_error(
+      "camera_info_topics must be empty or have the same length as camera_topics");
   }
 
   // Auto-generate names if not provided
@@ -107,17 +115,32 @@ void MultiCameraSyncNode::setupSynchronization()
   } else {
     multi_image_raw_pub_ = this->create_publisher<deep_msgs::msg::MultiImage>("~/multi_image_raw", 10);
   }
+  if (!camera_info_topics_.empty()) {
+    multi_camera_info_pub_ =
+      this->create_publisher<deep_msgs::msg::MultiCameraInfo>("~/multi_camera_info", 10);
+  }
 }
 
 void MultiCameraSyncNode::setupRawSync(size_t num_cameras)
 {
   // Initialize buffers for all cameras
   raw_image_buffers_.resize(num_cameras);
+  if (!camera_info_topics_.empty()) {
+    camera_info_buffers_.resize(num_cameras);
+  }
 
   // Create subscribers with manual synchronization callback
   for (size_t i = 0; i < num_cameras; ++i) {
     auto callback = [this, i](const ImageMsg::ConstSharedPtr & msg) { this->handleRawImageCallback(i, msg); };
     image_subscribers_.push_back(this->create_subscription<ImageMsg>(camera_topics_[i], queue_size_, callback));
+  }
+
+  for (size_t i = 0; i < camera_info_topics_.size(); ++i) {
+    auto callback = [this, i](const CameraInfoMsg::ConstSharedPtr & msg) {
+      this->handleCameraInfoCallback(i, msg);
+    };
+    camera_info_subscribers_.push_back(
+      this->create_subscription<CameraInfoMsg>(camera_info_topics_[i], queue_size_, callback));
   }
 
   RCLCPP_INFO(this->get_logger(), "Set up raw image synchronization for %zu cameras", num_cameras);
@@ -127,6 +150,9 @@ void MultiCameraSyncNode::setupCompressedSync(size_t num_cameras)
 {
   // Initialize buffers for all cameras
   compressed_image_buffers_.resize(num_cameras);
+  if (!camera_info_topics_.empty()) {
+    camera_info_buffers_.resize(num_cameras);
+  }
 
   // Create subscribers with manual synchronization callback
   for (size_t i = 0; i < num_cameras; ++i) {
@@ -135,6 +161,14 @@ void MultiCameraSyncNode::setupCompressedSync(size_t num_cameras)
     };
     compressed_subscribers_.push_back(
       this->create_subscription<CompressedImageMsg>(camera_topics_[i], queue_size_, callback));
+  }
+
+  for (size_t i = 0; i < camera_info_topics_.size(); ++i) {
+    auto callback = [this, i](const CameraInfoMsg::ConstSharedPtr & msg) {
+      this->handleCameraInfoCallback(i, msg);
+    };
+    camera_info_subscribers_.push_back(
+      this->create_subscription<CameraInfoMsg>(camera_info_topics_[i], queue_size_, callback));
   }
 
   RCLCPP_INFO(this->get_logger(), "Set up compressed image synchronization for %zu cameras", num_cameras);
@@ -239,14 +273,17 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn MultiC
   // Reset subscribers
   image_subscribers_.clear();
   compressed_subscribers_.clear();
+  camera_info_subscribers_.clear();
 
   // Reset publishers
   multi_image_raw_pub_.reset();
   multi_image_compressed_pub_.reset();
+  multi_camera_info_pub_.reset();
 
   // Clear buffers
   raw_image_buffers_.clear();
   compressed_image_buffers_.clear();
+  camera_info_buffers_.clear();
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
@@ -330,6 +367,51 @@ void MultiCameraSyncNode::handleCompressedImageCallback(
   }
 
   tryPublishSyncedCompressedImages();
+}
+
+void MultiCameraSyncNode::handleCameraInfoCallback(size_t camera_idx, const CameraInfoMsg::ConstSharedPtr & msg)
+{
+  if (camera_idx >= camera_info_buffers_.size()) {
+    return;
+  }
+  std::lock_guard<std::mutex> lock(*camera_info_buffers_[camera_idx].mutex);
+  uint64_t msg_time_ns = msg->header.stamp.sec * 1000000000ULL + msg->header.stamp.nanosec;
+  camera_info_buffers_[camera_idx].buffer[msg_time_ns] = msg;
+  // Prune old messages
+  auto it = camera_info_buffers_[camera_idx].buffer.begin();
+  while (it != camera_info_buffers_[camera_idx].buffer.end()) {
+    int64_t time_diff_ns = static_cast<int64_t>(msg_time_ns) - static_cast<int64_t>(it->first);
+    if (time_diff_ns > static_cast<int64_t>(sync_tolerance_ms_ * 2 * 1e6)) {
+      it = camera_info_buffers_[camera_idx].buffer.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+CameraInfoMsg::ConstSharedPtr MultiCameraSyncNode::findClosestCameraInfo(size_t camera_idx, uint64_t timestamp_ns)
+{
+  if (camera_idx >= camera_info_buffers_.size() || camera_info_buffers_[camera_idx].buffer.empty()) {
+    return nullptr;
+  }
+  std::lock_guard<std::mutex> lock(*camera_info_buffers_[camera_idx].mutex);
+  auto & buffer = camera_info_buffers_[camera_idx].buffer;
+  int64_t tolerance_ns = static_cast<int64_t>(sync_tolerance_ms_ * 1e6);
+  int64_t lower_bound_ns = static_cast<int64_t>(timestamp_ns) - tolerance_ns;
+  int64_t upper_bound_ns = static_cast<int64_t>(timestamp_ns) + tolerance_ns;
+
+  auto it = buffer.lower_bound(lower_bound_ns >= 0 ? static_cast<uint64_t>(lower_bound_ns) : 0);
+  CameraInfoMsg::ConstSharedPtr best_match = nullptr;
+  int64_t best_time_diff = INT64_MAX;
+  while (it != buffer.end() && static_cast<int64_t>(it->first) <= upper_bound_ns) {
+    int64_t time_diff_ns = std::abs(static_cast<int64_t>(timestamp_ns) - static_cast<int64_t>(it->first));
+    if (time_diff_ns < best_time_diff) {
+      best_time_diff = time_diff_ns;
+      best_match = it->second;
+    }
+    ++it;
+  }
+  return (best_match != nullptr && best_time_diff <= tolerance_ns) ? best_match : nullptr;
 }
 
 void MultiCameraSyncNode::tryPublishSyncedRawImages()
@@ -432,6 +514,27 @@ void MultiCameraSyncNode::tryPublishSyncedRawImages()
   processSynchronizedImages(timestamps);
   auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImage>(synced_images);
   multi_image_raw_pub_->publish(raw_msg);
+
+  if (multi_camera_info_pub_ && !camera_info_buffers_.empty()) {
+    deep_msgs::msg::MultiCameraInfo info_msg;
+    info_msg.header = raw_msg.header;
+    info_msg.camera_infos.reserve(synced_images.size());
+    bool all_found = true;
+    for (size_t i = 0; i < timestamps.size(); ++i) {
+      uint64_t ts_ns =
+        static_cast<uint64_t>(timestamps[i].seconds() * 1e9) + timestamps[i].nanoseconds();
+      auto info = findClosestCameraInfo(i, ts_ns);
+      if (info) {
+        info_msg.camera_infos.push_back(*info);
+      } else {
+        all_found = false;
+        break;
+      }
+    }
+    if (all_found) {
+      multi_camera_info_pub_->publish(info_msg);
+    }
+  }
 }
 
 void MultiCameraSyncNode::tryPublishSyncedCompressedImages()
@@ -536,6 +639,28 @@ void MultiCameraSyncNode::tryPublishSyncedCompressedImages()
   auto compressed_msg =
     createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImageCompressed>(synced_images);
   multi_image_compressed_pub_->publish(compressed_msg);
+
+ 
+  if (multi_camera_info_pub_ && !camera_info_buffers_.empty()) {
+    deep_msgs::msg::MultiCameraInfo info_msg;
+    info_msg.header = compressed_msg.header;
+    info_msg.camera_infos.reserve(synced_images.size());
+    bool all_found = true;
+    for (size_t i = 0; i < timestamps.size(); ++i) {
+      uint64_t ts_ns =
+        static_cast<uint64_t>(timestamps[i].seconds() * 1e9) + timestamps[i].nanoseconds();
+      auto info = findClosestCameraInfo(i, ts_ns);
+      if (info) {
+        info_msg.camera_infos.push_back(*info);
+      } else {
+        all_found = false;
+        break;
+      }
+    }
+    if (all_found) {
+      multi_camera_info_pub_->publish(info_msg);
+    }
+  }
 }
 
 }  // namespace camera_sync

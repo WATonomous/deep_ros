@@ -29,6 +29,7 @@
 #include <vector>
 
 #include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
 #include <sensor_msgs/msg/image.hpp>
 
@@ -43,6 +44,7 @@
   #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #endif
 
+#include "deep_msgs/msg/multi_camera_info.hpp"
 #include "deep_msgs/msg/multi_image.hpp"
 #include "deep_msgs/msg/multi_image_compressed.hpp"
 
@@ -88,10 +90,12 @@ private:
   // Message types
   using ImageMsg = sensor_msgs::msg::Image;
   using CompressedImageMsg = sensor_msgs::msg::CompressedImage;
+  using CameraInfoMsg = sensor_msgs::msg::CameraInfo;
 
   // Subscriber types
   using ImageSubscriber = rclcpp::Subscription<ImageMsg>;
   using CompressedImageSubscriber = rclcpp::Subscription<CompressedImageMsg>;
+  using CameraInfoSubscriber = rclcpp::Subscription<CameraInfoMsg>;
 
   /**
    * @brief Initialize the node parameters
@@ -122,6 +126,7 @@ private:
   // Parameters
   std::vector<std::string> camera_topics_;
   std::vector<std::string> camera_names_;
+  std::vector<std::string> camera_info_topics_;
   bool use_compressed_;
   double sync_tolerance_ms_;
   int queue_size_;
@@ -129,10 +134,12 @@ private:
   // Subscribers
   std::vector<std::shared_ptr<ImageSubscriber>> image_subscribers_;
   std::vector<std::shared_ptr<CompressedImageSubscriber>> compressed_subscribers_;
+  std::vector<std::shared_ptr<CameraInfoSubscriber>> camera_info_subscribers_;
 
-  // Publishers for multi-image messages
+  // Publishers for multi-image and batched camera info
   rclcpp::Publisher<deep_msgs::msg::MultiImage>::SharedPtr multi_image_raw_pub_;
   rclcpp::Publisher<deep_msgs::msg::MultiImageCompressed>::SharedPtr multi_image_compressed_pub_;
+  rclcpp::Publisher<deep_msgs::msg::MultiCameraInfo>::SharedPtr multi_camera_info_pub_;
 
   // Statistics
   int64_t sync_count_;
@@ -159,11 +166,30 @@ private:
     {}
   };
 
+  struct CameraInfoBuffer
+  {
+    std::map<uint64_t, CameraInfoMsg::ConstSharedPtr> buffer;
+    std::shared_ptr<std::mutex> mutex;
+
+    CameraInfoBuffer()
+    : mutex(std::make_shared<std::mutex>())
+    {}
+  };
+
   std::vector<ImageBuffer> raw_image_buffers_;
   std::vector<CompressedImageBuffer> compressed_image_buffers_;
+  std::vector<CameraInfoBuffer> camera_info_buffers_;
 
   void handleRawImageCallback(size_t camera_idx, const ImageMsg::ConstSharedPtr & msg);
   void handleCompressedImageCallback(size_t camera_idx, const CompressedImageMsg::ConstSharedPtr & msg);
+  void handleCameraInfoCallback(size_t camera_idx, const CameraInfoMsg::ConstSharedPtr & msg);
+
+  /**
+   * @brief Find the CameraInfo closest to the given timestamp within sync tolerance
+   * @return SharedPtr to the best match, or nullptr if none found or camera_info disabled
+   */
+  CameraInfoMsg::ConstSharedPtr findClosestCameraInfo(size_t camera_idx, uint64_t timestamp_ns);
+
   void tryPublishSyncedRawImages();
   void tryPublishSyncedCompressedImages();
 };

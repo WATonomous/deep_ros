@@ -28,6 +28,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MultiImage.msg"
   "msg/MultiImageCompressed.msg"
+  "msg/MultiCameraInfo.msg"
   DEPENDENCIES std_msgs sensor_msgs
 )
 
