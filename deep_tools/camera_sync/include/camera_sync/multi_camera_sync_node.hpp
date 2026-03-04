@@ -185,10 +185,13 @@ private:
   void handleCameraInfoCallback(size_t camera_idx, const CameraInfoMsg::ConstSharedPtr & msg);
 
   /**
-   * @brief Find the CameraInfo closest to the given timestamp within sync tolerance
-   * @return SharedPtr to the best match, or nullptr if none found or camera_info disabled
+   * @brief Collect camera_info for the synced set by looking up each camera's buffer at
+   *        the given timestamp keys (same keys used for the image match).
+   *        All camera_info buffers must already be locked by the caller.
    */
-  CameraInfoMsg::ConstSharedPtr findClosestCameraInfo(size_t camera_idx, uint64_t timestamp_ns);
+  void collectSyncedCameraInfos(
+    const std::vector<uint64_t> & matched_timestamp_keys_ns,
+    std::vector<CameraInfoMsg::ConstSharedPtr> & out_infos);
 
   void tryPublishSyncedRawImages();
   void tryPublishSyncedCompressedImages();
