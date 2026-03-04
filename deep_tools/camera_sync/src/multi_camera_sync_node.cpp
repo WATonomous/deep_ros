@@ -83,8 +83,7 @@ void MultiCameraSyncNode::initializeParameters()
   }
 
   if (!camera_info_topics_.empty() && camera_info_topics_.size() != camera_topics_.size()) {
-    throw std::runtime_error(
-      "camera_info_topics must be empty or have the same length as camera_topics");
+    throw std::runtime_error("camera_info_topics must be empty or have the same length as camera_topics");
   }
 
   // Auto-generate names if not provided
@@ -116,8 +115,7 @@ void MultiCameraSyncNode::setupSynchronization()
     multi_image_raw_pub_ = this->create_publisher<deep_msgs::msg::MultiImage>("~/multi_image_raw", 10);
   }
   if (!camera_info_topics_.empty()) {
-    multi_camera_info_pub_ =
-      this->create_publisher<deep_msgs::msg::MultiCameraInfo>("~/multi_camera_info", 10);
+    multi_camera_info_pub_ = this->create_publisher<deep_msgs::msg::MultiCameraInfo>("~/multi_camera_info", 10);
   }
 }
 
@@ -136,9 +134,7 @@ void MultiCameraSyncNode::setupRawSync(size_t num_cameras)
   }
 
   for (size_t i = 0; i < camera_info_topics_.size(); ++i) {
-    auto callback = [this, i](const CameraInfoMsg::ConstSharedPtr & msg) {
-      this->handleCameraInfoCallback(i, msg);
-    };
+    auto callback = [this, i](const CameraInfoMsg::ConstSharedPtr & msg) { this->handleCameraInfoCallback(i, msg); };
     camera_info_subscribers_.push_back(
       this->create_subscription<CameraInfoMsg>(camera_info_topics_[i], queue_size_, callback));
   }
@@ -164,9 +160,7 @@ void MultiCameraSyncNode::setupCompressedSync(size_t num_cameras)
   }
 
   for (size_t i = 0; i < camera_info_topics_.size(); ++i) {
-    auto callback = [this, i](const CameraInfoMsg::ConstSharedPtr & msg) {
-      this->handleCameraInfoCallback(i, msg);
-    };
+    auto callback = [this, i](const CameraInfoMsg::ConstSharedPtr & msg) { this->handleCameraInfoCallback(i, msg); };
     camera_info_subscribers_.push_back(
       this->create_subscription<CameraInfoMsg>(camera_info_topics_[i], queue_size_, callback));
   }
@@ -389,8 +383,7 @@ void MultiCameraSyncNode::handleCameraInfoCallback(size_t camera_idx, const Came
 }
 
 void MultiCameraSyncNode::collectSyncedCameraInfos(
-  const std::vector<uint64_t> & matched_timestamp_keys_ns,
-  std::vector<CameraInfoMsg::ConstSharedPtr> & out_infos)
+  const std::vector<uint64_t> & matched_timestamp_keys_ns, std::vector<CameraInfoMsg::ConstSharedPtr> & out_infos)
 {
   int64_t tolerance_ns = static_cast<int64_t>(sync_tolerance_ms_ * 1e6);
   for (size_t i = 0; i < matched_timestamp_keys_ns.size(); ++i) {

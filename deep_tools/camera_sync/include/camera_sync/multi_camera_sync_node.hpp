@@ -190,8 +190,7 @@ private:
    *        All camera_info buffers must already be locked by the caller.
    */
   void collectSyncedCameraInfos(
-    const std::vector<uint64_t> & matched_timestamp_keys_ns,
-    std::vector<CameraInfoMsg::ConstSharedPtr> & out_infos);
+    const std::vector<uint64_t> & matched_timestamp_keys_ns, std::vector<CameraInfoMsg::ConstSharedPtr> & out_infos);
 
   void tryPublishSyncedRawImages();
   void tryPublishSyncedCompressedImages();
