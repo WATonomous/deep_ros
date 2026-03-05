@@ -211,11 +211,13 @@ void ImagePreprocessor::applyColorConversion(cv::Mat & image) const
   }
 }
 
-PackedInput ImagePreprocessor::pack(const std::vector<cv::Mat> & images) const
+const PackedInput & ImagePreprocessor::pack(const std::vector<cv::Mat> & images) const
 {
-  PackedInput packed;
+  thread_local PackedInput cache;
+  cache.data.clear();
+  cache.shape.clear();
   if (images.empty()) {
-    return packed;
+    return cache;
   }
 
   const size_t batch = images.size();
@@ -225,8 +227,8 @@ PackedInput ImagePreprocessor::pack(const std::vector<cv::Mat> & images) const
   const size_t image_size = channels * height * width;
   const size_t required = batch * image_size;
 
-  packed.shape = {batch, channels, height, width};
-  packed.data.resize(required);
+  cache.shape = {batch, channels, height, width};
+  cache.data.resize(required);
 
   std::array<cv::Mat, RGB_CHANNELS> channel_planes;
   const size_t plane_elements = height * width;
@@ -252,7 +254,7 @@ PackedInput ImagePreprocessor::pack(const std::vector<cv::Mat> & images) const
     }
 
     cv::split(img, channel_planes.data());
-    float * batch_base = packed.data.data() + b * image_size;
+    float * batch_base = cache.data.data() + b * image_size;
     for (size_t c = 0; c < channels; ++c) {
       const float * src_ptr = channel_planes[c].ptr<float>();
       float * dst_ptr = batch_base + c * plane_elements;
@@ -260,7 +262,7 @@ PackedInput ImagePreprocessor::pack(const std::vector<cv::Mat> & images) const
     }
   }
 
-  return packed;
+  return cache;
 }
 
 }  // namespace deep_object_detection

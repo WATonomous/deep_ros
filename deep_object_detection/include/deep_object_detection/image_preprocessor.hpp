@@ -72,12 +72,10 @@ public:
   /**
     * @brief Pack a batch of preprocessed images into a single tensor
     * @param images Vector of preprocessed images (same size, normalized)
-    * @return PackedInput containing flattened float array in NCHW layout and shape
-    *
-    * Converts batch of OpenCV Mats to a single flattened float array
-    * in NCHW format (batch, channels, height, width).
+    * @return Reference to packed buffer (NCHW layout). Valid only until the next
+    *         call to pack() from the same thread
     */
-  PackedInput pack(const std::vector<cv::Mat> & images) const;
+  const PackedInput & pack(const std::vector<cv::Mat> & images) const;
 
   /**
     * @brief Get preprocessing configuration
