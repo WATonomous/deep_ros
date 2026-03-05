@@ -211,11 +211,9 @@ void ImagePreprocessor::applyColorConversion(cv::Mat & image) const
   }
 }
 
-const PackedInput & ImagePreprocessor::pack(const std::vector<cv::Mat> & images) const
+PackedInput ImagePreprocessor::pack(const std::vector<cv::Mat> & images) const
 {
-  auto & packed = packed_input_cache_;
-  packed.data.clear();
-  packed.shape.clear();
+  PackedInput packed;
   if (images.empty()) {
     return packed;
   }

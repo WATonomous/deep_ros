@@ -103,14 +103,12 @@ void DeepObjectDetectionNode::declareParameters()
 
   // Output configuration
   this->declare_parameter<std::string>("output_detections_topic", "/detections");
-  this->declare_parameter<bool>("publish_annotations", true);
 
   // get the parameter values, changed via topic remaps
   input_topic_ = "/multi_camera_sync/multi_image_compressed";
   input_topic_raw_ = "/multi_camera_sync/multi_image_raw";
   output_annotations_topic_ = "/image_annotations";
   params_.output_detections_topic = this->get_parameter("output_detections_topic").as_string();
-  publish_annotations_ = this->get_parameter("publish_annotations").as_bool();
 
   params_.model_path = this->get_parameter("model_path").as_string();
   params_.model_metadata.num_classes = this->get_parameter("Model.num_classes").as_int();
@@ -170,7 +168,7 @@ deep_ros::CallbackReturn DeepObjectDetectionNode::on_configure_impl(const rclcpp
   RCLCPP_INFO(this->get_logger(), "Configuring deep object detection node");
 
   try {
-    // Check if plugin and model are loaded (handled by DeepNodeBase)Deep object detection node activated
+    // Check if plugin and model are loaded (handled by DeepNodeBase)
     if (!is_plugin_loaded()) {
       RCLCPP_ERROR(this->get_logger(), "Backend plugin not loaded");
       return deep_ros::CallbackReturn::FAILURE;
@@ -226,20 +224,12 @@ deep_ros::CallbackReturn DeepObjectDetectionNode::on_configure_impl(const rclcpp
     auto pub = this->create_publisher<Detection2DArrayMsg>(params_.output_detections_topic, detection_qos);
     detection_pub_ = std::static_pointer_cast<rclcpp_lifecycle::LifecyclePublisher<Detection2DArrayMsg>>(pub);
 
-    if (publish_annotations_) {
-      auto marker_qos = rclcpp::QoS(rclcpp::KeepLast(1));
-      marker_qos.best_effort();
-      auto marker_pub =
-        this->create_publisher<visualization_msgs::msg::ImageMarker>(output_annotations_topic_, marker_qos);
-      image_marker_pub_ =
-        std::static_pointer_cast<rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::ImageMarker>>(
-          marker_pub);
-      RCLCPP_INFO(
-        this->get_logger(), "ImageMarker annotations enabled on topic: %s", output_annotations_topic_.c_str());
-    } else {
-      image_marker_pub_.reset();
-      RCLCPP_INFO(this->get_logger(), "ImageMarker annotations disabled (publish_annotations=false)");
-    }
+    auto marker_qos = rclcpp::QoS(rclcpp::KeepLast(1));
+    marker_qos.best_effort();
+    auto marker_pub =
+      this->create_publisher<visualization_msgs::msg::ImageMarker>(output_annotations_topic_, marker_qos);
+    image_marker_pub_ =
+      std::static_pointer_cast<rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::ImageMarker>>(marker_pub);
 
     RCLCPP_INFO(this->get_logger(), "Will subscribe to MultiImage topic: %s", input_topic_.c_str());
 
@@ -517,7 +507,7 @@ void DeepObjectDetectionNode::processImages(
     return;
   }
 
-  const auto & packed_input = preprocessor_->pack(processed);
+  auto packed_input = preprocessor_->pack(processed);
   if (packed_input.data.empty()) {
     RCLCPP_ERROR(this->get_logger(), "Packed input is empty after preprocessing %zu images", processed.size());
     return;
