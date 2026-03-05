@@ -124,7 +124,7 @@ void MultiCameraSyncNode::setupRawSync(size_t num_cameras)
   // Initialize buffers for all cameras
   raw_image_buffers_.resize(num_cameras);
   if (!camera_info_topics_.empty()) {
-    camera_info_buffers_.resize(num_cameras);
+    latest_camera_infos_.resize(num_cameras);
   }
 
   // Create subscribers with manual synchronization callback
@@ -147,7 +147,7 @@ void MultiCameraSyncNode::setupCompressedSync(size_t num_cameras)
   // Initialize buffers for all cameras
   compressed_image_buffers_.resize(num_cameras);
   if (!camera_info_topics_.empty()) {
-    camera_info_buffers_.resize(num_cameras);
+    latest_camera_infos_.resize(num_cameras);
   }
 
   // Create subscribers with manual synchronization callback
@@ -277,7 +277,7 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn MultiC
   // Clear buffers
   raw_image_buffers_.clear();
   compressed_image_buffers_.clear();
-  camera_info_buffers_.clear();
+  latest_camera_infos_.clear();
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
@@ -363,81 +363,52 @@ void MultiCameraSyncNode::handleCompressedImageCallback(
   tryPublishSyncedCompressedImages();
 }
 
-void MultiCameraSyncNode::handleCameraInfoCallback(size_t camera_idx, const CameraInfoMsg::ConstSharedPtr & msg)
+void MultiCameraSyncNode::tryPublishBatchedCameraInfo(const std_msgs::msg::Header & header)
 {
-  if (camera_idx >= camera_info_buffers_.size()) {
+  if (!multi_camera_info_pub_ || latest_camera_infos_.empty()) {
     return;
   }
-  std::lock_guard<std::mutex> lock(*camera_info_buffers_[camera_idx].mutex);
-  uint64_t msg_time_ns = msg->header.stamp.sec * 1000000000ULL + msg->header.stamp.nanosec;
-  camera_info_buffers_[camera_idx].buffer[msg_time_ns] = msg;
-  auto it = camera_info_buffers_[camera_idx].buffer.begin();
-  while (it != camera_info_buffers_[camera_idx].buffer.end()) {
-    int64_t time_diff_ns = static_cast<int64_t>(msg_time_ns) - static_cast<int64_t>(it->first);
-    if (time_diff_ns > static_cast<int64_t>(sync_tolerance_ms_ * 2 * 1e6)) {
-      it = camera_info_buffers_[camera_idx].buffer.erase(it);
-    } else {
-      ++it;
-    }
-  }
-}
-
-void MultiCameraSyncNode::collectSyncedCameraInfos(
-  const std::vector<uint64_t> & matched_timestamp_keys_ns, std::vector<CameraInfoMsg::ConstSharedPtr> & out_infos)
-{
-  int64_t tolerance_ns = static_cast<int64_t>(sync_tolerance_ms_ * 1e6);
-  for (size_t i = 0; i < matched_timestamp_keys_ns.size(); ++i) {
-    auto & buffer = camera_info_buffers_[i].buffer;
-    uint64_t ref_ns = matched_timestamp_keys_ns[i];
-    int64_t lower_bound_ns = static_cast<int64_t>(ref_ns) - tolerance_ns;
-    int64_t upper_bound_ns = static_cast<int64_t>(ref_ns) + tolerance_ns;
-
-    auto it = buffer.lower_bound(lower_bound_ns >= 0 ? static_cast<uint64_t>(lower_bound_ns) : 0);
-    CameraInfoMsg::ConstSharedPtr best_match = nullptr;
-    int64_t best_time_diff = INT64_MAX;
-    while (it != buffer.end() && static_cast<int64_t>(it->first) <= upper_bound_ns) {
-      int64_t time_diff_ns = std::abs(static_cast<int64_t>(ref_ns) - static_cast<int64_t>(it->first));
-      if (time_diff_ns < best_time_diff) {
-        best_time_diff = time_diff_ns;
-        best_match = it->second;
-      }
-      ++it;
-    }
-    if (best_match == nullptr || best_time_diff > tolerance_ns) {
-      out_infos.clear();
+  std::lock_guard<std::mutex> lock(latest_camera_info_mutex_);
+  for (const auto & info : latest_camera_infos_) {
+    if (!info) {
       return;
     }
-    out_infos.push_back(best_match);
   }
+  deep_msgs::msg::MultiCameraInfo info_msg;
+  info_msg.header = header;
+  info_msg.camera_infos.reserve(latest_camera_infos_.size());
+  for (auto & info : latest_camera_infos_) {
+    info_msg.camera_infos.push_back(*info);
+  }
+  multi_camera_info_pub_->publish(info_msg);
+}
+
+void MultiCameraSyncNode::handleCameraInfoCallback(size_t camera_idx, const CameraInfoMsg::ConstSharedPtr & msg)
+{
+  if (camera_idx >= latest_camera_infos_.size()) {
+    return;
+  }
+  {
+    std::lock_guard<std::mutex> lock(latest_camera_info_mutex_);
+    latest_camera_infos_[camera_idx] = msg;
+  }
+  tryPublishBatchedCameraInfo(msg->header);
 }
 
 void MultiCameraSyncNode::tryPublishSyncedRawImages()
 {
   std::vector<ImageMsg::ConstSharedPtr> synced_images;
   std::vector<rclcpp::Time> timestamps;
-  std::vector<uint64_t> matched_keys_ns;
-  std::vector<CameraInfoMsg::ConstSharedPtr> synced_infos;
   uint64_t sync_time_ns;
-  const bool sync_camera_info = multi_camera_info_pub_ && !camera_info_buffers_.empty();
 
-  // Lock all image buffers (and camera_info buffers if enabled)
+  // Lock all image buffers
   for (auto & buffer : raw_image_buffers_) {
     buffer.mutex->lock();
-  }
-  if (sync_camera_info) {
-    for (auto & buffer : camera_info_buffers_) {
-      buffer.mutex->lock();
-    }
   }
 
   auto unlock_all = [&]() {
     for (auto & buffer : raw_image_buffers_) {
       buffer.mutex->unlock();
-    }
-    if (sync_camera_info) {
-      for (auto & buffer : camera_info_buffers_) {
-        buffer.mutex->unlock();
-      }
     }
   };
 
@@ -480,7 +451,6 @@ void MultiCameraSyncNode::tryPublishSyncedRawImages()
 
     if (best_match != nullptr && best_time_diff <= tolerance_ns) {
       synced_images.push_back(best_match);
-      matched_keys_ns.push_back(best_key);
       uint32_t sec = best_key / 1000000000ULL;
       uint32_t nanosec = best_key % 1000000000ULL;
       timestamps.push_back(rclcpp::Time(sec, nanosec));
@@ -501,11 +471,6 @@ void MultiCameraSyncNode::tryPublishSyncedRawImages()
     }
   }
 
-  // Collect camera_info using the same matched timestamp keys while buffers are still locked
-  if (all_found && sync_camera_info && synced_images.size() == raw_image_buffers_.size()) {
-    collectSyncedCameraInfos(matched_keys_ns, synced_infos);
-  }
-
   unlock_all();
 
   if (!all_found || synced_images.size() != raw_image_buffers_.size()) {
@@ -522,45 +487,22 @@ void MultiCameraSyncNode::tryPublishSyncedRawImages()
   processSynchronizedImages(timestamps);
   auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImage>(synced_images);
   multi_image_raw_pub_->publish(raw_msg);
-
-  if (sync_camera_info && synced_infos.size() == synced_images.size()) {
-    deep_msgs::msg::MultiCameraInfo info_msg;
-    info_msg.header = raw_msg.header;
-    info_msg.camera_infos.reserve(synced_infos.size());
-    for (auto & info : synced_infos) {
-      info_msg.camera_infos.push_back(*info);
-    }
-    multi_camera_info_pub_->publish(info_msg);
-  }
 }
 
 void MultiCameraSyncNode::tryPublishSyncedCompressedImages()
 {
   std::vector<CompressedImageMsg::ConstSharedPtr> synced_images;
   std::vector<rclcpp::Time> timestamps;
-  std::vector<uint64_t> matched_keys_ns;
-  std::vector<CameraInfoMsg::ConstSharedPtr> synced_infos;
   uint64_t sync_time_ns;
-  const bool sync_camera_info = multi_camera_info_pub_ && !camera_info_buffers_.empty();
 
-  // Lock all compressed image buffers (and camera_info buffers if enabled)
+  // Lock all compressed image buffers
   for (auto & buffer : compressed_image_buffers_) {
     buffer.mutex->lock();
-  }
-  if (sync_camera_info) {
-    for (auto & buffer : camera_info_buffers_) {
-      buffer.mutex->lock();
-    }
   }
 
   auto unlock_all = [&]() {
     for (auto & buffer : compressed_image_buffers_) {
       buffer.mutex->unlock();
-    }
-    if (sync_camera_info) {
-      for (auto & buffer : camera_info_buffers_) {
-        buffer.mutex->unlock();
-      }
     }
   };
 
@@ -604,7 +546,6 @@ void MultiCameraSyncNode::tryPublishSyncedCompressedImages()
 
     if (best_match != nullptr && best_time_diff <= tolerance_ns) {
       synced_images.push_back(best_match);
-      matched_keys_ns.push_back(best_key);
       uint32_t sec = best_key / 1000000000ULL;
       uint32_t nanosec = best_key % 1000000000ULL;
       timestamps.push_back(rclcpp::Time(sec, nanosec));
@@ -625,11 +566,6 @@ void MultiCameraSyncNode::tryPublishSyncedCompressedImages()
     }
   }
 
-  // Collect camera_info using the same matched timestamp keys while buffers are still locked
-  if (all_found && sync_camera_info && synced_images.size() == compressed_image_buffers_.size()) {
-    collectSyncedCameraInfos(matched_keys_ns, synced_infos);
-  }
-
   unlock_all();
 
   if (!all_found || synced_images.size() != compressed_image_buffers_.size()) {
@@ -647,16 +583,6 @@ void MultiCameraSyncNode::tryPublishSyncedCompressedImages()
   auto compressed_msg =
     createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImageCompressed>(synced_images);
   multi_image_compressed_pub_->publish(compressed_msg);
-
-  if (sync_camera_info && synced_infos.size() == synced_images.size()) {
-    deep_msgs::msg::MultiCameraInfo info_msg;
-    info_msg.header = compressed_msg.header;
-    info_msg.camera_infos.reserve(synced_infos.size());
-    for (auto & info : synced_infos) {
-      info_msg.camera_infos.push_back(*info);
-    }
-    multi_camera_info_pub_->publish(info_msg);
-  }
 }
 
 }  // namespace camera_sync

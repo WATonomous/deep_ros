@@ -32,6 +32,7 @@
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <std_msgs/msg/header.hpp>
 
 // Conditional lifecycle node support for Rolling and newer
 // USE_LIFECYCLE_NODE is defined by CMake based on ROS distribution
@@ -166,31 +167,19 @@ private:
     {}
   };
 
-  struct CameraInfoBuffer
-  {
-    std::map<uint64_t, CameraInfoMsg::ConstSharedPtr> buffer;
-    std::shared_ptr<std::mutex> mutex;
-
-    CameraInfoBuffer()
-    : mutex(std::make_shared<std::mutex>())
-    {}
-  };
-
   std::vector<ImageBuffer> raw_image_buffers_;
   std::vector<CompressedImageBuffer> compressed_image_buffers_;
-  std::vector<CameraInfoBuffer> camera_info_buffers_;
+
+  // Camera info is static (intrinsics don't change); store latest per camera, publish batch when any update arrives
+  std::vector<CameraInfoMsg::ConstSharedPtr> latest_camera_infos_;
+  std::mutex latest_camera_info_mutex_;
 
   void handleRawImageCallback(size_t camera_idx, const ImageMsg::ConstSharedPtr & msg);
   void handleCompressedImageCallback(size_t camera_idx, const CompressedImageMsg::ConstSharedPtr & msg);
   void handleCameraInfoCallback(size_t camera_idx, const CameraInfoMsg::ConstSharedPtr & msg);
 
-  /**
-   * @brief Collect camera_info for the synced set by looking up each camera's buffer at
-   *        the given timestamp keys (same keys used for the image match).
-   *        All camera_info buffers must already be locked by the caller.
-   */
-  void collectSyncedCameraInfos(
-    const std::vector<uint64_t> & matched_timestamp_keys_ns, std::vector<CameraInfoMsg::ConstSharedPtr> & out_infos);
+  /** Publish MultiCameraInfo if we have latest from every camera (called from camera_info callback). */
+  void tryPublishBatchedCameraInfo(const std_msgs::msg::Header & header);
 
   void tryPublishSyncedRawImages();
   void tryPublishSyncedCompressedImages();

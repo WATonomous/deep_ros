@@ -170,7 +170,7 @@ deep_ros::CallbackReturn DeepObjectDetectionNode::on_configure_impl(const rclcpp
   RCLCPP_INFO(this->get_logger(), "Configuring deep object detection node");
 
   try {
-    // Check if plugin and model are loaded (handled by DeepNodeBase)
+    // Check if plugin and model are loaded (handled by DeepNodeBase)Deep object detection node activated
     if (!is_plugin_loaded()) {
       RCLCPP_ERROR(this->get_logger(), "Backend plugin not loaded");
       return deep_ros::CallbackReturn::FAILURE;
