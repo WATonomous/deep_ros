@@ -517,7 +517,7 @@ void DeepObjectDetectionNode::processImages(
     return;
   }
 
-  const auto & packed_input = preprocessor_->pack(processed);
+  auto packed_input = preprocessor_->pack(processed);
   if (packed_input.data.empty()) {
     RCLCPP_ERROR(this->get_logger(), "Packed input is empty after preprocessing %zu images", processed.size());
     return;
