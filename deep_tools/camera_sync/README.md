@@ -16,6 +16,7 @@ A ROS2 node that uses custom buffering to time-synchronize N camera image messag
 |-----------|------|---------|-------------|
 | `camera_topics` | string[] | `[]` | List of camera image topics to synchronize |
 | `camera_names` | string[] | `[]` | Names for cameras (auto-generated if empty) |
+| `camera_info_topics` | string[] | `[]` | Optional: one `sensor_msgs/CameraInfo` topic per camera (same order). When set, latest camera info per camera is batched and published on `~/multi_camera_info` whenever any camera_info message arrives (independent of image sync; intrinsics are static, rate may differ). |
 | `use_compressed` | bool | `false` | Use compressed images instead of raw RGB |
 | `sync_tolerance_ms` | double | `50.0` | Max time difference for sync (milliseconds) |
 | `queue_size` | int | `10` | Buffer queue size |
@@ -39,7 +40,7 @@ The node uses ROS2 buffers with approximate time synchronization policy to match
 
 1. **Message Subscribers**: Creates subscribers for each camera topic
 2. **Synchronizer**: Stores buffers from first subscriber and matches with other subscribers within timestamp sync tolerance to match messages
-3. **Callback & Publishing**: Creates MultiImage/MultiImageCompressed msgs with timestamp to batch the camera images together
+3. **Callback & Publishing**: Creates MultiImage/MultiImageCompressed msgs with timestamp to batch the camera images. Camera info is batched separately: whenever a camera_info message arrives and we have latest from every camera, `~/multi_camera_info` is published (independent of image sync; intrinsics are static).
 4. **Statistics**: Tracks synchronization rate and timing spread
 
 ### Synchronization Logic
@@ -71,7 +72,7 @@ Example log output:
 
 ## Limitations
 
-- Maximum 6 cameras supported (can be extended by adding more sync policies)
+- Maximum 12 cameras supported (can be extended by adding more sync policies)
 - Uses approximate time synchronization (not exact)
 - All cameras must use the same image message type (raw or compressed)
 - Requires reasonably synchronized system clocks across camera sources
