@@ -147,6 +147,18 @@ private:
   rclcpp::Time last_sync_time_;
   std::chrono::steady_clock::time_point start_time_;
 
+  // Deduplication: never publish the same reference frame twice (avoids duplicate syncs)
+  uint64_t last_published_reference_time_ns_;
+  std::mutex publish_throttle_mutex_;
+
+  /** Time jump threshold (ns): if a new message is this much older than current buffer max, state is stale — reset. */
+  static constexpr uint64_t TIME_RESET_THRESHOLD_NS = 2'000'000'000ULL;  // 2 seconds
+
+  /** Clear all raw buffers and reset last-published reference (used when time jumps backward). */
+  void clearRawBuffersAndResetReference();
+  /** Clear all compressed buffers and reset last-published reference. */
+  void clearCompressedBuffersAndResetReference();
+
   struct ImageBuffer
   {
     std::map<uint64_t, ImageMsg::ConstSharedPtr> buffer;
