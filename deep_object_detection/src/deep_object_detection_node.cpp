@@ -223,8 +223,8 @@ deep_ros::CallbackReturn DeepObjectDetectionNode::on_configure_impl(const rclcpp
     // best_effort avoids blocking on slow subscribers and provides better performance for high-frequency sensor data
     auto detection_qos = rclcpp::QoS(rclcpp::KeepLast(1));
     detection_qos.best_effort();
-    auto pub = this->create_publisher<Detection2DArrayMsg>(params_.output_detections_topic, detection_qos);
-    detection_pub_ = std::static_pointer_cast<rclcpp_lifecycle::LifecyclePublisher<Detection2DArrayMsg>>(pub);
+    auto pub = this->create_publisher<MultiDetection2DArrayMsg>(params_.output_detections_topic, detection_qos);
+    detection_pub_ = std::static_pointer_cast<rclcpp_lifecycle::LifecyclePublisher<MultiDetection2DArrayMsg>>(pub);
 
     if (publish_annotations_) {
       auto marker_qos = rclcpp::QoS(rclcpp::KeepLast(1));
@@ -581,23 +581,31 @@ void DeepObjectDetectionNode::publishDetections(
     return;
   }
 
-  // Publish all messages as quickly as possible without blocking
+  MultiDetection2DArrayMsg batch_msg;
+  // Set batch header to the first image's header (timestamp and frame from first camera)
+  if (!headers.empty()) {
+    batch_msg.header = headers[0];
+  }
+
+  batch_msg.camera_detections.reserve(batch_detections.size());
+
+  // Create per-camera detection arrays
   for (size_t i = 0; i < batch_detections.size() && i < headers.size() && i < metas.size(); ++i) {
     const size_t num_dets = batch_detections[i].size();
 
     try {
-      if (num_dets == 0) {
-        // Still publish empty messages to maintain frame sync
-        Detection2DArrayMsg msg;
-        msg.header = headers[i];
-        msg.detections.clear();
-        detection_pub_->publish(msg);
-        continue;
+      // Create a Detection2DArray for this camera
+      Detection2DArrayMsg camera_array;
+      camera_array.header = headers[i];
+      camera_array.detections.clear();
+
+      if (num_dets > 0) {
+        // Fill the detection array with detections for this camera
+        postprocessor_->fillDetectionMessage(headers[i], batch_detections[i], metas[i], camera_array);
       }
 
-      Detection2DArrayMsg msg;
-      postprocessor_->fillDetectionMessage(headers[i], batch_detections[i], metas[i], msg);
-      detection_pub_->publish(msg);
+      // Add this camera's detections to the batch
+      batch_msg.camera_detections.push_back(camera_array);
 
       // Also publish ImageMarker annotations if publisher is available
       if (image_marker_pub_) {
@@ -610,6 +618,8 @@ void DeepObjectDetectionNode::publishDetections(
       // Continue with next detection instead of stopping
     }
   }
+
+  detection_pub_->publish(batch_msg);
 }
 
 void DeepObjectDetectionNode::loadClassNames()

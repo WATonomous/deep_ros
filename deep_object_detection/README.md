@@ -111,7 +111,7 @@ ros2 run deep_object_detection deep_object_detection_node \
 | Topic | Type | Description |
 |-------|------|-------------|
 | `input_topic` | `deep_msgs/MultiImage` or `deep_msgs/MultiImageCompressed` | Synchronized multi-camera input (compressed or uncompressed) |
-| `output_detections_topic` | `vision_msgs/Detection2DArray` | Detection results (one per image in batch, default: `/detections`) |
+| `output_detections_topic` | `deep_msgs/MultiDetection2DArray` | Batched detection results (all cameras in one message, default: `/detections`) |
 | `/image_annotations` | `visualization_msgs/ImageMarker` | Visualization annotations with bounding boxes (only when `publish_annotations: true`) |
 
 **Note:** The node only supports MultiImage/MultiImageCompressed messages. Individual camera topics are not supported.
