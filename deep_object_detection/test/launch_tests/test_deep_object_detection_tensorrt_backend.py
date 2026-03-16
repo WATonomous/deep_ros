@@ -33,10 +33,9 @@ import launch_testing.asserts
 import numpy as np
 import pytest
 import rclpy
-from deep_msgs.msg import MultiImageCompressed
+from deep_msgs.msg import MultiImageCompressed, MultiDetection2DArray
 from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import Header
-from vision_msgs.msg import Detection2DArray
 
 
 @pytest.mark.launch_test
@@ -159,7 +158,7 @@ class TestTensorRTBackend(unittest.TestCase):
 
         # Create subscriber for detection output
         self.detection_sub = self.node.create_subscription(
-            Detection2DArray, "/detections", detection_callback, 10
+            MultiDetection2DArray, "/detections", detection_callback, 10
         )
 
         # Wait for publisher/subscriber to be ready

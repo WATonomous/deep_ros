@@ -19,7 +19,7 @@
  * This header defines:
  * - Configuration structures (PreprocessingConfig, PostprocessingConfig, DetectionParams)
  * - Data structures (ImageMeta, PackedInput, SimpleDetection)
- * - ROS message type aliases (Detection2DMsg, Detection2DArrayMsg)
+ * - ROS message type aliases (Detection2DMsg, Detection2DArrayMsg, MultiDetection2DArrayMsg)
  */
 
 #pragma once
@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 
+#include <deep_msgs/msg/multi_detection2_d_array.hpp>
 #include <opencv2/core/mat.hpp>
 #include <std_msgs/msg/header.hpp>
 #include <vision_msgs/msg/detection2_d.hpp>
@@ -37,6 +38,7 @@ namespace deep_object_detection
 {
 using Detection2DMsg = vision_msgs::msg::Detection2D;
 using Detection2DArrayMsg = vision_msgs::msg::Detection2DArray;
+using MultiDetection2DArrayMsg = deep_msgs::msg::MultiDetection2DArray;
 
 /// Number of RGB color channels
 constexpr size_t RGB_CHANNELS = 3;

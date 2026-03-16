@@ -77,6 +77,10 @@ multi_camera_sync:
     # Larger values allow more tolerance but may reduce temporal accuracy
     sync_tolerance_ms: 33.0
 
+    # Time jump reset threshold (ms). If a new message is this much older than the current buffer max
+    # (e.g. bag restart or timestamp jump), all buffers are cleared and sync restarts. Should be >> sync_tolerance_ms.
+    time_jump_reset_threshold_ms: 2000.0
+
     # Queue size for message filters
     # Larger values can handle more variable frame rates but use more memory
     queue_size: 10

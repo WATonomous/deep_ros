@@ -69,6 +69,7 @@ void MultiCameraSyncNode::initializeParameters()
   this->declare_parameter("use_compressed", false);
   this->declare_parameter("sync_tolerance_ms", 50.0);
   this->declare_parameter("queue_size", 10);
+  this->declare_parameter("time_jump_reset_threshold_ms", 2000.0);
 
   camera_topics_ = this->get_parameter("camera_topics").as_string_array();
   camera_names_ = this->get_parameter("camera_names").as_string_array();
@@ -76,8 +77,14 @@ void MultiCameraSyncNode::initializeParameters()
   use_compressed_ = this->get_parameter("use_compressed").as_bool();
   sync_tolerance_ms_ = this->get_parameter("sync_tolerance_ms").as_double();
   queue_size_ = this->get_parameter("queue_size").as_int();
+  const double time_jump_ms = this->get_parameter("time_jump_reset_threshold_ms").as_double();
+  time_jump_reset_threshold_ns_ = static_cast<uint64_t>(time_jump_ms * 1e6);
+  last_published_reference_time_ns_ = 0;
 
   // Validate
+  if (time_jump_reset_threshold_ns_ == 0) {
+    throw std::runtime_error("time_jump_reset_threshold_ms must be positive");
+  }
   if (camera_topics_.empty() || camera_topics_.size() < 2 || camera_topics_.size() > 12) {
     throw std::runtime_error("Need 2-12 camera topics");
   }
@@ -300,9 +307,11 @@ void MultiCameraSyncNode::handleRawImageCallback(size_t camera_idx, const ImageM
     return;
   }
 
+  bool clear_raw_buffers = false;
+  uint64_t msg_time_ns = msg->header.stamp.sec * 1000000000ULL + msg->header.stamp.nanosec;
+
   {
     std::lock_guard<std::mutex> lock(*raw_image_buffers_[camera_idx].mutex);
-    uint64_t msg_time_ns = msg->header.stamp.sec * 1000000000ULL + msg->header.stamp.nanosec;
     raw_image_buffers_[camera_idx].buffer[msg_time_ns] = msg;
 
     RCLCPP_DEBUG(
@@ -322,9 +331,26 @@ void MultiCameraSyncNode::handleRawImageCallback(size_t camera_idx, const ImageM
         ++it;
       }
     }
+
+    // Time jumped backward: reset buffers so we can sync on new data
+    if (camera_idx == 0 && raw_image_buffers_[0].buffer.size() > 1) {
+      uint64_t max_ts = raw_image_buffers_[0].buffer.rbegin()->first;
+      if (msg_time_ns + time_jump_reset_threshold_ns_ < max_ts) {
+        clear_raw_buffers = true;
+      }
+    }
   }
 
-  tryPublishSyncedRawImages();
+  if (clear_raw_buffers) {
+    clearRawBuffersAndResetReference();
+    std::lock_guard<std::mutex> lock(*raw_image_buffers_[0].mutex);
+    raw_image_buffers_[0].buffer[msg_time_ns] = msg;
+  }
+
+  // Sync only on reference camera (0) so we publish once per interval, not n times for n cameras.
+  if (camera_idx == 0) {
+    tryPublishSyncedRawImages();
+  }
 }
 
 void MultiCameraSyncNode::handleCompressedImageCallback(
@@ -336,9 +362,11 @@ void MultiCameraSyncNode::handleCompressedImageCallback(
     return;
   }
 
+  bool clear_compressed_buffers = false;
+  uint64_t msg_time_ns = msg->header.stamp.sec * 1000000000ULL + msg->header.stamp.nanosec;
+
   {
     std::lock_guard<std::mutex> lock(*compressed_image_buffers_[camera_idx].mutex);
-    uint64_t msg_time_ns = msg->header.stamp.sec * 1000000000ULL + msg->header.stamp.nanosec;
     compressed_image_buffers_[camera_idx].buffer[msg_time_ns] = msg;
 
     RCLCPP_DEBUG(
@@ -358,9 +386,51 @@ void MultiCameraSyncNode::handleCompressedImageCallback(
         ++it;
       }
     }
+
+    // Time jumped backward: reset buffers so we can sync on new data
+    if (camera_idx == 0 && compressed_image_buffers_[0].buffer.size() > 1) {
+      uint64_t max_ts = compressed_image_buffers_[0].buffer.rbegin()->first;
+      if (msg_time_ns + time_jump_reset_threshold_ns_ < max_ts) {
+        clear_compressed_buffers = true;
+      }
+    }
   }
 
-  tryPublishSyncedCompressedImages();
+  if (clear_compressed_buffers) {
+    RCLCPP_INFO(this->get_logger(), "Time jump backward detected; resetting sync state");
+    clearCompressedBuffersAndResetReference();
+    std::lock_guard<std::mutex> lock(*compressed_image_buffers_[0].mutex);
+    compressed_image_buffers_[0].buffer[msg_time_ns] = msg;
+  }
+
+  // Sync only on reference camera (0) so we publish once per interval, not n times for n cameras.
+  if (camera_idx == 0) {
+    tryPublishSyncedCompressedImages();
+  }
+}
+
+void MultiCameraSyncNode::clearRawBuffersAndResetReference()
+{
+  for (auto & buffer : raw_image_buffers_) {
+    std::lock_guard<std::mutex> lock(*buffer.mutex);
+    buffer.buffer.clear();
+  }
+  {
+    std::lock_guard<std::mutex> lock(publish_throttle_mutex_);
+    last_published_reference_time_ns_ = 0;
+  }
+}
+
+void MultiCameraSyncNode::clearCompressedBuffersAndResetReference()
+{
+  for (auto & buffer : compressed_image_buffers_) {
+    std::lock_guard<std::mutex> lock(*buffer.mutex);
+    buffer.buffer.clear();
+  }
+  {
+    std::lock_guard<std::mutex> lock(publish_throttle_mutex_);
+    last_published_reference_time_ns_ = 0;
+  }
 }
 
 void MultiCameraSyncNode::tryPublishBatchedCameraInfo(const std_msgs::msg::Header & header)
@@ -401,7 +471,6 @@ void MultiCameraSyncNode::tryPublishSyncedRawImages()
   std::vector<rclcpp::Time> timestamps;
   uint64_t sync_time_ns;
 
-  // Lock all image buffers
   for (auto & buffer : raw_image_buffers_) {
     buffer.mutex->lock();
   }
@@ -419,6 +488,16 @@ void MultiCameraSyncNode::tryPublishSyncedRawImages()
   }
 
   sync_time_ns = raw_image_buffers_[0].buffer.rbegin()->first;
+
+  // Skip duplicate reference frame (same frame can trigger tryPublish more than once).
+  {
+    std::lock_guard<std::mutex> lock(publish_throttle_mutex_);
+    if (sync_time_ns == last_published_reference_time_ns_) {
+      RCLCPP_DEBUG(this->get_logger(), "Skipping duplicate reference time %lu", sync_time_ns);
+      unlock_all();
+      return;
+    }
+  }
 
   RCLCPP_DEBUG(this->get_logger(), "Trying to sync with reference time %lu", sync_time_ns);
 
@@ -483,6 +562,11 @@ void MultiCameraSyncNode::tryPublishSyncedRawImages()
     return;
   }
 
+  {
+    std::lock_guard<std::mutex> lock(publish_throttle_mutex_);
+    last_published_reference_time_ns_ = sync_time_ns;
+  }
+
   RCLCPP_DEBUG(this->get_logger(), "Publishing synced raw images (sync count: %ld)", ++sync_count_);
   processSynchronizedImages(timestamps);
   auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImage>(synced_images);
@@ -495,7 +579,6 @@ void MultiCameraSyncNode::tryPublishSyncedCompressedImages()
   std::vector<rclcpp::Time> timestamps;
   uint64_t sync_time_ns;
 
-  // Lock all compressed image buffers
   for (auto & buffer : compressed_image_buffers_) {
     buffer.mutex->lock();
   }
@@ -513,6 +596,16 @@ void MultiCameraSyncNode::tryPublishSyncedCompressedImages()
   }
 
   sync_time_ns = compressed_image_buffers_[0].buffer.rbegin()->first;
+
+  // Skip duplicate reference frame (same frame can trigger tryPublish more than once).
+  {
+    std::lock_guard<std::mutex> lock(publish_throttle_mutex_);
+    if (sync_time_ns == last_published_reference_time_ns_) {
+      RCLCPP_DEBUG(this->get_logger(), "Skipping duplicate reference time %lu (compressed)", sync_time_ns);
+      unlock_all();
+      return;
+    }
+  }
 
   RCLCPP_DEBUG(this->get_logger(), "Trying to sync compressed with reference time %lu", sync_time_ns);
 
@@ -576,6 +669,11 @@ void MultiCameraSyncNode::tryPublishSyncedCompressedImages()
       synced_images.size(),
       compressed_image_buffers_.size());
     return;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(publish_throttle_mutex_);
+    last_published_reference_time_ns_ = sync_time_ns;
   }
 
   RCLCPP_DEBUG(this->get_logger(), "Publishing synced compressed images (sync count: %ld)", ++sync_count_);

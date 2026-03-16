@@ -131,6 +131,8 @@ private:
   bool use_compressed_;
   double sync_tolerance_ms_;
   int queue_size_;
+  /** Time jump threshold (ns). If a new message is this much older than buffer max, buffers are reset. */
+  uint64_t time_jump_reset_threshold_ns_;
 
   // Subscribers
   std::vector<std::shared_ptr<ImageSubscriber>> image_subscribers_;
@@ -146,6 +148,13 @@ private:
   int64_t sync_count_;
   rclcpp::Time last_sync_time_;
   std::chrono::steady_clock::time_point start_time_;
+
+  // Deduplication: never publish same reference frame twice.
+  uint64_t last_published_reference_time_ns_;
+  std::mutex publish_throttle_mutex_;
+
+  void clearRawBuffersAndResetReference();
+  void clearCompressedBuffersAndResetReference();
 
   struct ImageBuffer
   {

@@ -190,8 +190,8 @@ private:
    * @param headers ROS headers for each image (for timestamp and frame_id)
    * @param metas Image metadata for coordinate transformations
    *
-   * Converts SimpleDetection objects to Detection2DArray messages and publishes
-   * them. Each image in the batch gets its own Detection2DArray message.
+   * Converts SimpleDetection objects to Detection2DArray messages (one per camera/image)
+   * and batches them into a single MultiDetection2DArray message for atomic publishing.
    */
   void publishDetections(
     const std::vector<std::vector<SimpleDetection>> & batch_detections,
@@ -242,8 +242,8 @@ private:
   std::string input_topic_raw_;
   /// Whether to use compressed images (true) or uncompressed images (false)
   bool use_compressed_images_;
-  /// Publisher for Detection2DArray messages
-  rclcpp_lifecycle::LifecyclePublisher<Detection2DArrayMsg>::SharedPtr detection_pub_;
+  /// Publisher for MultiDetection2DArray messages (batched detections from all cameras)
+  rclcpp_lifecycle::LifecyclePublisher<MultiDetection2DArrayMsg>::SharedPtr detection_pub_;
   /// Publisher for ImageMarker annotations (for Foxglove visualization)
   rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::ImageMarker>::SharedPtr image_marker_pub_;
   /// Output annotations topic name for ImageMarker messages

@@ -28,10 +28,9 @@ import launch_testing.asserts
 import numpy as np
 import pytest
 import rclpy
-from deep_msgs.msg import MultiImageCompressed
+from deep_msgs.msg import MultiImageCompressed, MultiDetection2DArray
 from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import Header
-from vision_msgs.msg import Detection2DArray
 
 
 @pytest.mark.launch_test
@@ -143,7 +142,7 @@ class TestCPUBackend(unittest.TestCase):
 
         qos_profile = SensorDataQoS()
         self.detection_sub = self.node.create_subscription(
-            Detection2DArray, "/detections", detection_callback, qos_profile
+            MultiDetection2DArray, "/detections", detection_callback, qos_profile
         )
 
         # Wait for publisher/subscriber to be ready

@@ -19,6 +19,7 @@ A ROS2 node that uses custom buffering to time-synchronize N camera image messag
 | `camera_info_topics` | string[] | `[]` | Optional: one `sensor_msgs/CameraInfo` topic per camera (same order). When set, latest camera info per camera is batched and published on `~/multi_camera_info` whenever any camera_info message arrives (independent of image sync; intrinsics are static, rate may differ). |
 | `use_compressed` | bool | `false` | Use compressed images instead of raw RGB |
 | `sync_tolerance_ms` | double | `50.0` | Max time difference for sync (milliseconds) |
+| `time_jump_reset_threshold_ms` | double | `2000.0` | If a new message is this much older than buffer max (e.g. bag restart), buffers are reset. Should be much larger than `sync_tolerance_ms`. |
 | `queue_size` | int | `10` | Buffer queue size |
 | `publish_sync_info` | bool | `true` | Publish synchronization statistics |
 
