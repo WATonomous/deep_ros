@@ -56,6 +56,16 @@ TestExecutorFixture::~TestExecutorFixture()
 {
   stop_spinning();
 
+  for (auto & node_base : node_base_interfaces_) {
+    if (!node_base) {
+      continue;
+    }
+
+    executor_.remove_node(node_base);
+  }
+
+  node_base_interfaces_.clear();
+
   // Now that spinning has stopped, we can safely deactivate lifecycle nodes
   for (auto & node : lifecycle_nodes_) {
     if (!node) {
@@ -69,6 +79,7 @@ TestExecutorFixture::~TestExecutorFixture()
   }
 
   lifecycle_nodes_.clear();
+  managed_nodes_.clear();
 }
 
 void TestExecutorFixture::start_spinning()
