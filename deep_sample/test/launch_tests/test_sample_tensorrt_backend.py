@@ -21,6 +21,8 @@ It will be skipped in CI environments.
 """
 
 import os
+import pathlib
+import subprocess
 import time
 import unittest
 
@@ -38,12 +40,47 @@ import numpy as np
 
 def _is_gpu_available():
     """Check if GPU and CUDA libraries are available."""
+    visible_devices = os.environ.get("NVIDIA_VISIBLE_DEVICES", "").strip().lower()
+    if visible_devices in {"none", "void"}:
+        return False
+
+    if not (
+        pathlib.Path("/dev/nvidiactl").exists() or pathlib.Path("/dev/nvidia0").exists()
+    ):
+        return False
+
     try:
         import ctypes
+
+        result = subprocess.run(
+            ["nvidia-smi", "-L"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if result.returncode != 0:
+            return False
 
         # Try to load CUDA runtime library
         ctypes.CDLL("libcuda.so.1")
         return True
+    except (OSError, AttributeError, FileNotFoundError, subprocess.SubprocessError):
+        return False
+
+
+def _is_tensorrt_available():
+    """Check if TensorRT runtime libraries are available."""
+    try:
+        import ctypes
+
+        for library_name in ("libnvinfer.so", "libnvinfer.so.10", "libnvinfer.so.8"):
+            try:
+                ctypes.CDLL(library_name)
+                return True
+            except OSError:
+                continue
+        return False
     except (OSError, AttributeError):
         return False
 
@@ -90,7 +127,8 @@ def generate_test_description():
 
 
 @unittest.skipUnless(
-    _is_gpu_available(), "GPU/CUDA not available - skipping TensorRT backend tests"
+    _is_gpu_available() and _is_tensorrt_available(),
+    "GPU/CUDA or TensorRT not available - skipping TensorRT backend tests",
 )
 class TestTensorRTBackend(unittest.TestCase):
     """Test TensorRT backend functionality."""
