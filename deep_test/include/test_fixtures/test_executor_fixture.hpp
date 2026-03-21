@@ -14,7 +14,9 @@
 
 #pragma once
 
+#include <algorithm>
 #include <atomic>
+#include <cstddef>
 #include <memory>
 #include <thread>
 #include <type_traits>
@@ -82,7 +84,10 @@ public:
       std::is_base_of_v<rclcpp::Node, T> || std::is_base_of_v<rclcpp_lifecycle::LifecycleNode, T>,
       "T must inherit from rclcpp::Node or rclcpp_lifecycle::LifecycleNode");
 
-    executor_.add_node(node->get_node_base_interface());
+    auto node_base = node->get_node_base_interface();
+    executor_.add_node(node_base);
+    node_base_interfaces_.push_back(node_base);
+    managed_nodes_.push_back(node);
 
     // Track lifecycle nodes for cleanup
     if constexpr (std::is_base_of_v<rclcpp_lifecycle::LifecycleNode, T>) {
@@ -99,13 +104,25 @@ public:
   template <typename T>
   void remove_node(std::shared_ptr<T> node)
   {
-    executor_.remove_node(node->get_node_base_interface());
+    auto node_base = node->get_node_base_interface();
+    executor_.remove_node(node_base);
+
+    auto it = std::find(node_base_interfaces_.begin(), node_base_interfaces_.end(), node_base);
+    if (it != node_base_interfaces_.end()) {
+      auto index = static_cast<size_t>(std::distance(node_base_interfaces_.begin(), it));
+      node_base_interfaces_.erase(it);
+      if (index < managed_nodes_.size()) {
+        managed_nodes_.erase(managed_nodes_.begin() + static_cast<std::ptrdiff_t>(index));
+      }
+    }
   }
 
 protected:
   rclcpp::executors::SingleThreadedExecutor executor_;
   std::thread spin_thread_;
   std::atomic<bool> should_spin_{true};
+  std::vector<rclcpp::node_interfaces::NodeBaseInterface::SharedPtr> node_base_interfaces_;
+  std::vector<std::shared_ptr<void>> managed_nodes_;
   std::vector<std::shared_ptr<rclcpp_lifecycle::LifecycleNode>> lifecycle_nodes_;
 };
 

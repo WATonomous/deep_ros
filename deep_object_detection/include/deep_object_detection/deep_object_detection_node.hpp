@@ -164,11 +164,15 @@ private:
    * @brief Process images through the inference pipeline
    * @param images Vector of cv::Mat images to process
    * @param headers ROS headers for each image (for timestamp and frame_id)
+   * @param batch_header ROS header for the batch (from the original MultiImage message)
    *
    * Runs preprocessing, inference, and postprocessing.
    * Publishes detection results for each image.
    */
-  void processImages(const std::vector<cv::Mat> & images, const std::vector<std_msgs::msg::Header> & headers);
+  void processImages(
+    const std::vector<cv::Mat> & images,
+    const std::vector<std_msgs::msg::Header> & headers,
+    const std_msgs::msg::Header & batch_header);
 
   /**
    * @brief Convert CompressedImage to cv::Mat
@@ -189,6 +193,7 @@ private:
    * @param batch_detections Detections for each image in the batch
    * @param headers ROS headers for each image (for timestamp and frame_id)
    * @param metas Image metadata for coordinate transformations
+   * @param batch_header ROS header for the batch (from the original MultiImage message)
    *
    * Converts SimpleDetection objects to Detection2DArray messages (one per camera/image)
    * and batches them into a single MultiDetection2DArray message for atomic publishing.
@@ -196,7 +201,8 @@ private:
   void publishDetections(
     const std::vector<std::vector<SimpleDetection>> & batch_detections,
     const std::vector<std_msgs::msg::Header> & headers,
-    const std::vector<ImageMeta> & metas);
+    const std::vector<ImageMeta> & metas,
+    const std_msgs::msg::Header & batch_header);
 
   /**
    * @brief Convert detections to ImageMarker annotations for Foxglove visualization

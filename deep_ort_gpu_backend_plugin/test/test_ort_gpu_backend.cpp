@@ -51,6 +51,19 @@ rclcpp_lifecycle::LifecycleNode::SharedPtr create_dummy_node()
 // Helper function to check if CUDA is available
 bool is_cuda_available()
 {
+  const char * visible_devices = std::getenv("NVIDIA_VISIBLE_DEVICES");
+  if (visible_devices != nullptr) {
+    const std::string value(visible_devices);
+    if (value.empty() || value == "none" || value == "void") {
+      return false;
+    }
+  }
+
+  const bool has_nvidia_device = std::filesystem::exists("/dev/nvidiactl") || std::filesystem::exists("/dev/nvidia0");
+  if (!has_nvidia_device) {
+    return false;
+  }
+
   try {
     // Try creating a simple CUDA execution provider to verify CUDA availability
     auto logger = rclcpp::get_logger("test_cuda_availability");
@@ -151,6 +164,11 @@ TEST_CASE("OrtGpuBackendPlugin interface", "[plugin]")
 
   OrtGpuBackendPlugin plugin;
   auto node = create_dummy_node();
+
+  node->declare_parameter("Backend.device_id", 0);
+  node->declare_parameter("Backend.execution_provider", "cuda");
+  node->declare_parameter("Backend.trt_engine_cache_enable", false);
+  node->declare_parameter("Backend.trt_engine_cache_path", "/tmp/deep_ros_ort_trt_cache");
 
   // Plugin will declare parameters in initialize()
   plugin.initialize(node);

@@ -429,7 +429,7 @@ void DeepObjectDetectionNode::onMultiImage(const deep_msgs::msg::MultiImageCompr
     }
 
     if (!images.empty()) {
-      processImages(images, headers);
+      processImages(images, headers, msg->header);
     } else {
       RCLCPP_WARN(this->get_logger(), "No valid images after decoding, skipping MultiImage");
     }
@@ -458,7 +458,7 @@ void DeepObjectDetectionNode::onMultiImageRaw(const deep_msgs::msg::MultiImage::
     }
 
     if (!images.empty()) {
-      processImages(images, headers);
+      processImages(images, headers, msg->header);
     } else {
       RCLCPP_WARN(this->get_logger(), "No valid images after decoding, skipping MultiImage");
     }
@@ -468,7 +468,9 @@ void DeepObjectDetectionNode::onMultiImageRaw(const deep_msgs::msg::MultiImage::
 }
 
 void DeepObjectDetectionNode::processImages(
-  const std::vector<cv::Mat> & images, const std::vector<std_msgs::msg::Header> & headers)
+  const std::vector<cv::Mat> & images,
+  const std::vector<std_msgs::msg::Header> & headers,
+  const std_msgs::msg::Header & batch_header)
 {
   if (!is_plugin_loaded() || !is_model_loaded()) {
     RCLCPP_ERROR(this->get_logger(), "Cannot process images: backend not initialized");
@@ -563,13 +565,14 @@ void DeepObjectDetectionNode::processImages(
     total_detections_count,
     per_image_counts.c_str());
 
-  publishDetections(batch_detections, processed_headers, metas);
+  publishDetections(batch_detections, processed_headers, metas, batch_header);
 }
 
 void DeepObjectDetectionNode::publishDetections(
   const std::vector<std::vector<SimpleDetection>> & batch_detections,
   const std::vector<std_msgs::msg::Header> & headers,
-  const std::vector<ImageMeta> & metas)
+  const std::vector<ImageMeta> & metas,
+  const std_msgs::msg::Header & batch_header)
 {
   if (this->get_current_state().id() != lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
     return;
@@ -582,10 +585,8 @@ void DeepObjectDetectionNode::publishDetections(
   }
 
   MultiDetection2DArrayMsg batch_msg;
-  // Set batch header to the first image's header (timestamp and frame from first camera)
-  if (!headers.empty()) {
-    batch_msg.header = headers[0];
-  }
+  // Set batch header to the MultiImage msg's header (timestamp and frame from original message)
+  batch_msg.header = batch_header;
 
   batch_msg.camera_detections.reserve(batch_detections.size());
 

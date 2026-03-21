@@ -21,6 +21,8 @@ It will be skipped in CI environments.
 """
 
 import os
+import pathlib
+import subprocess
 import time
 import unittest
 
@@ -38,13 +40,32 @@ import numpy as np
 
 def _is_gpu_available():
     """Check if GPU and CUDA libraries are available."""
+    visible_devices = os.environ.get("NVIDIA_VISIBLE_DEVICES", "").strip().lower()
+    if visible_devices in {"none", "void"}:
+        return False
+
+    if not (
+        pathlib.Path("/dev/nvidiactl").exists() or pathlib.Path("/dev/nvidia0").exists()
+    ):
+        return False
+
     try:
         import ctypes
+
+        result = subprocess.run(
+            ["nvidia-smi", "-L"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if result.returncode != 0:
+            return False
 
         # Try to load CUDA runtime library
         ctypes.CDLL("libcuda.so.1")
         return True
-    except (OSError, AttributeError):
+    except (OSError, AttributeError, FileNotFoundError, subprocess.SubprocessError):
         return False
 
 
