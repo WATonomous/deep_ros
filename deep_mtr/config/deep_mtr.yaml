@@ -1,0 +1,10 @@
+---
+deep_mtr_node:
+  ros__parameters:
+    Backend:
+      plugin: ""
+    model_path: ""
+    Bond:
+      enable: false
+    input_topic: "/mtr/scenes"
+    output_topic: "/mtr/predictions"

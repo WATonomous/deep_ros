@@ -1,3 +1,17 @@
+// Copyright (c) 2025-present WATonomous. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <atomic>
 #include <chrono>
 #include <memory>
@@ -10,8 +24,6 @@
 #include <deep_test/deep_test.hpp>
 #include <lifecycle_msgs/msg/state.hpp>
 #include <rclcpp/rclcpp.hpp>
-
-using namespace std::chrono_literals;
 
 TEST_CASE("DeepMtrNode runs as an empty lifecycle skeleton", "[deep_mtr][lifecycle]")
 {
@@ -35,8 +47,7 @@ TEST_CASE("DeepMtrNode never fabricates a prediction", "[deep_mtr][placeholder]"
   auto client = std::make_shared<rclcpp::Node>("deep_mtr_test_client");
   std::atomic<int> result_count{0};
   auto result_sub = client->create_subscription<deep_msgs::msg::MtrPredictionArray>(
-    "/mtr/predictions", 10,
-    [&result_count](deep_msgs::msg::MtrPredictionArray::ConstSharedPtr) {++result_count;});
+    "/mtr/predictions", 10, [&result_count](deep_msgs::msg::MtrPredictionArray::ConstSharedPtr) { ++result_count; });
   auto scene_pub = client->create_publisher<deep_msgs::msg::MtrScene>("/mtr/scenes", 10);
 
   REQUIRE(node->configure().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE);
@@ -48,10 +59,10 @@ TEST_CASE("DeepMtrNode never fabricates a prediction", "[deep_mtr][placeholder]"
   deep_msgs::msg::MtrScene scene;
   scene.request_id = "must-not-produce-output";
   scene_pub->publish(scene);
-  const auto deadline = std::chrono::steady_clock::now() + 300ms;
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(300);
   while (std::chrono::steady_clock::now() < deadline) {
     executor.spin_some();
-    std::this_thread::sleep_for(10ms);
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
 
   REQUIRE(result_count.load() == 0);
