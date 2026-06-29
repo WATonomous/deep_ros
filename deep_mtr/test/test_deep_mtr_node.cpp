@@ -17,10 +17,10 @@
 #include <memory>
 #include <thread>
 
-#include <catch2/catch_test_macros.hpp>
 #include <deep_msgs/msg/mtr_prediction_array.hpp>
 #include <deep_msgs/msg/mtr_scene.hpp>
 #include <deep_mtr/deep_mtr_node.hpp>
+#include <deep_test/compat.hpp>
 #include <deep_test/deep_test.hpp>
 #include <lifecycle_msgs/msg/state.hpp>
 #include <rclcpp/rclcpp.hpp>
