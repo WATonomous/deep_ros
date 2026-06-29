@@ -20,6 +20,7 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -31,8 +32,19 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MultiImageCompressed.msg"
   "msg/MultiCameraInfo.msg"
   "msg/MultiDetection2DArray.msg"
-  DEPENDENCIES std_msgs sensor_msgs vision_msgs
+  "msg/MapPolyline.msg"
+  "msg/MtrScene.msg"
+  "msg/MtrTrajectory.msg"
+  "msg/MtrObjectPrediction.msg"
+  "msg/MtrPredictionArray.msg"
+  DEPENDENCIES geometry_msgs std_msgs sensor_msgs vision_msgs
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_mtr_messages test/test_mtr_messages.cpp)
+  rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+  target_link_libraries(test_mtr_messages "${cpp_typesupport_target}")
+endif()
 
 ament_package()
