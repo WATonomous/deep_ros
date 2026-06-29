@@ -1,0 +1,36 @@
+cmake_minimum_required(VERSION 3.22)
+project(deep_mtr)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(ament_cmake REQUIRED)
+find_package(deep_core REQUIRED)
+find_package(deep_msgs REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
+find_package(rclcpp_lifecycle REQUIRED)
+
+add_library(deep_mtr_component SHARED src/deep_mtr_node.cpp)
+target_include_directories(deep_mtr_component PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_link_libraries(deep_mtr_component PUBLIC
+  pluginlib::pluginlib rclcpp::rclcpp rclcpp_components::component
+  rclcpp_lifecycle::rclcpp_lifecycle ${deep_msgs_TARGETS}
+  PRIVATE deep_core::deep_core_lib)
+rclcpp_components_register_node(deep_mtr_component
+  PLUGIN deep_mtr::DeepMtrNode EXECUTABLE deep_mtr_node)
+
+install(TARGETS deep_mtr_component EXPORT export_deep_mtr
+  ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+install(DIRECTORY include/ DESTINATION include)
+
+if(BUILD_TESTING)
+  find_package(deep_test REQUIRED)
+  add_deep_test(test_deep_mtr_node test/test_deep_mtr_node.cpp
+    LIBRARIES deep_mtr_component deep_core::deep_core_lib)
+endif()
+
+ament_export_targets(export_deep_mtr HAS_LIBRARY_TARGET)
+ament_package()
