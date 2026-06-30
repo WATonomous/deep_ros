@@ -2,13 +2,6 @@
 
 Full ML infrastructure pipeline for ROS2. Includes inference model-agnostic node containers for quick deployment and testing of ML models, as well as sample model farm for building, training, evaluating, and quantizing neural networks.
 
-## Motion Transformer scaffolding
-
-`deep_mtr` provides neutral ROS interfaces and a lifecycle-node integration boundary for future
-Motion Transformer inference. It is intentionally non-inferencing: incoming scenes produce a
-bounded diagnostic and no prediction message until model-specific history, tensor preparation,
-ONNX execution, and output decoding are implemented.
-
 ## Installation
 
 (TODO) Add the base library into the ROS buildfarm
