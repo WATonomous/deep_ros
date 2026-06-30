@@ -1,0 +1,8 @@
+launch:
+  - node:
+      pkg: "deep_mtr"
+      exec: "deep_mtr_node"
+      name: "deep_mtr_node"
+      output: "screen"
+      param:
+        - from: "$(find-pkg-share deep_mtr)/config/deep_mtr.yaml"

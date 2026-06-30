@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>deep_mtr</name>
+  <version>0.1.0</version>
+  <description>Lifecycle-node scaffolding for Motion Transformer inference.</description>
+
+  <maintainer email="watonomous@example.com">WATonomous</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>deep_core</depend>
+  <depend>deep_msgs</depend>
+  <depend>pluginlib</depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>rclcpp_lifecycle</depend>
+
+  <test_depend>deep_test</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
