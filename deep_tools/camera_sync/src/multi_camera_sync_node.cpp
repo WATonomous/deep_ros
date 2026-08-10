@@ -571,7 +571,7 @@ void MultiCameraSyncNode::tryPublishSyncedRawImages()
   RCLCPP_DEBUG(this->get_logger(), "Publishing synced raw images (sync count: %ld)", ++sync_count_);
   processSynchronizedImages(timestamps);
   // Use the reference sync_time_ns as the message header stamp so downstream synchronizers
-  // (like BEVFusion) see the same timestamp as the input images.
+  // see the same timestamp as the input images.
   uint32_t sec = sync_time_ns / 1000000000ULL;
   uint32_t nanosec = sync_time_ns % 1000000000ULL;
   auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImage>(
