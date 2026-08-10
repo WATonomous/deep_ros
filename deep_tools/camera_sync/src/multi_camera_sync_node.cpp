@@ -177,10 +177,11 @@ void MultiCameraSyncNode::setupCompressedSync(size_t num_cameras)
 
 // Helper function to create multi-image messages (optimized with move semantics)
 template <typename ImageMsgT, typename MultiMsgT>
-MultiMsgT createMultiImageMessage(std::vector<typename ImageMsgT::ConstSharedPtr> images)
+MultiMsgT createMultiImageMessage(std::vector<typename ImageMsgT::ConstSharedPtr> images, const rclcpp::Time & stamp)
 {
   MultiMsgT msg;
-  msg.header.stamp = rclcpp::Clock().now();
+  // Use the provided synchronized stamp (reference time) instead of a new clock now().
+  msg.header.stamp = stamp;
   msg.images.reserve(images.size());
   for (auto & img : images) {
     msg.images.push_back(std::move(*img));  // Move instead of copy
@@ -569,7 +570,12 @@ void MultiCameraSyncNode::tryPublishSyncedRawImages()
 
   RCLCPP_DEBUG(this->get_logger(), "Publishing synced raw images (sync count: %ld)", ++sync_count_);
   processSynchronizedImages(timestamps);
-  auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImage>(synced_images);
+  // Use the reference sync_time_ns as the message header stamp so downstream synchronizers
+  // (like BEVFusion) see the same timestamp as the input images.
+  uint32_t sec = sync_time_ns / 1000000000ULL;
+  uint32_t nanosec = sync_time_ns % 1000000000ULL;
+  auto raw_msg = createMultiImageMessage<sensor_msgs::msg::Image, deep_msgs::msg::MultiImage>(
+    synced_images, rclcpp::Time(sec, nanosec));
   multi_image_raw_pub_->publish(raw_msg);
 }
 
@@ -678,8 +684,10 @@ void MultiCameraSyncNode::tryPublishSyncedCompressedImages()
 
   RCLCPP_DEBUG(this->get_logger(), "Publishing synced compressed images (sync count: %ld)", ++sync_count_);
   processSynchronizedImages(timestamps);
-  auto compressed_msg =
-    createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImageCompressed>(synced_images);
+  uint32_t sec = sync_time_ns / 1000000000ULL;
+  uint32_t nanosec = sync_time_ns % 1000000000ULL;
+  auto compressed_msg = createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImageCompressed>(
+    synced_images, rclcpp::Time(sec, nanosec));
   multi_image_compressed_pub_->publish(compressed_msg);
 }
 
