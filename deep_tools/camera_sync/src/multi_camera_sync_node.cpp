@@ -686,8 +686,9 @@ void MultiCameraSyncNode::tryPublishSyncedCompressedImages()
   processSynchronizedImages(timestamps);
   uint32_t sec = sync_time_ns / 1000000000ULL;
   uint32_t nanosec = sync_time_ns % 1000000000ULL;
-  auto compressed_msg = createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImageCompressed>(
-    synced_images, rclcpp::Time(sec, nanosec));
+  auto compressed_msg =
+    createMultiImageMessage<sensor_msgs::msg::CompressedImage, deep_msgs::msg::MultiImageCompressed>(
+      synced_images, rclcpp::Time(sec, nanosec));
   multi_image_compressed_pub_->publish(compressed_msg);
 }
 
