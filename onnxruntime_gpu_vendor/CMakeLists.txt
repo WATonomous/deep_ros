@@ -18,9 +18,9 @@ find_package(ament_cmake REQUIRED)
 
 
 set(ONNXRUNTIME_VERSION "${PROJECT_VERSION}")
+set(ORT_NUGET_ID "microsoft.ml.onnxruntime.gpu.linux")
 set(ONNXRUNTIME_URL
-
-  "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime.gpu.linux/${ONNXRUNTIME_VERSION}/microsoft.ml.onnxruntime.gpu.linux.${ONNXRUNTIME_VERSION}.nupkg"
+  "https://api.nuget.org/v3-flatcontainer/${ORT_NUGET_ID}/${ONNXRUNTIME_VERSION}/${ORT_NUGET_ID}.${ONNXRUNTIME_VERSION}.nupkg"
 )
 set(ONNXRUNTIME_DOWNLOAD_DIR "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime-download")
 set(ONNXRUNTIME_EXTRACT_DIR "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime-linux-x64-gpu-${ONNXRUNTIME_VERSION}")
