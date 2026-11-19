@@ -18,7 +18,7 @@ find_package(ament_cmake REQUIRED)
 
 set(ONNXRUNTIME_VERSION "${PROJECT_VERSION}")
 set(ONNXRUNTIME_URL
-  "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}.tgz"
+  "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/${ONNXRUNTIME_VERSION}/microsoft.ml.onnxruntime.${ONNXRUNTIME_VERSION}.nupkg"
 )
 set(ONNXRUNTIME_DOWNLOAD_DIR "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime-download")
 set(ONNXRUNTIME_EXTRACT_DIR "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}")
@@ -28,7 +28,7 @@ if(NOT EXISTS "${ONNXRUNTIME_EXTRACT_DIR}")
   message(STATUS "Downloading ONNX Runtime ${ONNXRUNTIME_VERSION}...")
   file(DOWNLOAD
     ${ONNXRUNTIME_URL}
-    "${ONNXRUNTIME_DOWNLOAD_DIR}/onnxruntime.tgz"
+    "${ONNXRUNTIME_DOWNLOAD_DIR}/onnxruntime.nupkg"
     SHOW_PROGRESS
     STATUS DOWNLOAD_STATUS
   )
@@ -39,15 +39,25 @@ if(NOT EXISTS "${ONNXRUNTIME_EXTRACT_DIR}")
   endif()
 
   message(STATUS "Extracting ONNX Runtime...")
+  file(MAKE_DIRECTORY "${ONNXRUNTIME_EXTRACT_DIR}")
   execute_process(
-    COMMAND ${CMAKE_COMMAND} -E tar xzf "${ONNXRUNTIME_DOWNLOAD_DIR}/onnxruntime.tgz"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${CMAKE_COMMAND} -E tar xf "${ONNXRUNTIME_DOWNLOAD_DIR}/onnxruntime.nupkg"
+    WORKING_DIRECTORY ${ONNXRUNTIME_EXTRACT_DIR}
     RESULT_VARIABLE EXTRACT_RESULT
   )
 
   if(NOT EXTRACT_RESULT EQUAL 0)
     message(FATAL_ERROR "Failed to extract ONNX Runtime")
   endif()
+
+  # NuGet's layout differs from the old tarball: move headers and libraries to
+  # include/ and lib/, and add the libonnxruntime.so.1 (SONAME) link it lacks.
+  file(RENAME "${ONNXRUNTIME_EXTRACT_DIR}/build/native/include" "${ONNXRUNTIME_EXTRACT_DIR}/include")
+  file(RENAME "${ONNXRUNTIME_EXTRACT_DIR}/runtimes/linux-x64/native" "${ONNXRUNTIME_EXTRACT_DIR}/lib")
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E create_symlink libonnxruntime.so libonnxruntime.so.1
+    WORKING_DIRECTORY "${ONNXRUNTIME_EXTRACT_DIR}/lib"
+  )
 endif()
 
 # Install headers
